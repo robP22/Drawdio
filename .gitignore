@@ -1,0 +1,18 @@
+# Build artifacts
+Build/
+build/
+bin/
+obj/
+*_artefacts/
+
+# JUCE/IDE specific
+*.jucer
+.vscode/
+.idea/
+*.swp
+*.suo
+*.user
+
+# OS specific
+.DS_Store
+Thumbs.db
