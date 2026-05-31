@@ -1,3 +1,3 @@
-void DrawdioProcessor::colorSelected(PixelCanvasComponent::PixelColor color)  {
+void DrawdioProcessor::colorSelected(PixelCanvasComponent::PixelColor color)   {
     m_currentColor = color;
 }
