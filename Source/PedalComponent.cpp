@@ -420,7 +420,7 @@ void PedalComponent::resized()
 {
     auto bounds = getLocalBounds().reduced(16, 34);
     bounds.removeFromTop(32);
-    bounds.removeFromBottom(static_cast<int>(getHeight() * 0.27f));
+    bounds.removeFromBottom(static_cast<int>(getHeight() * 0.30f));
 
     auto knobArea = bounds.reduced(2, 0);
     const int halfW = knobArea.getWidth() / 2;
