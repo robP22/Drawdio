@@ -196,7 +196,16 @@ PedalComponent::PedalComponent(DrawdioProcessor& processor,
 {
     for (auto& knob : m_knobs)
         initKnob(knob);
+    
+    for (auto& label : m_knobLabels)
+    {
+        addAndMakeVisible(label);
+        label.setFont(juce::Font(14.0f, juce::Font::bold));
+        label.setColour(juce::Label::textColourId, juce::Colour(0xFF2A2A2A));
+        label.setJustificationType(juce::Justification::centred);
+    }
 
+    updateKnobLabels();
     loadSkinTexture();
 }
 
@@ -215,6 +224,14 @@ void PedalComponent::loadSkinTexture()
     if (texturePath.existsAsFile())
     {
         m_skinImage = juce::ImageCache::getFromFile(texturePath);
+    }
+}
+
+void PedalComponent::updateKnobLabels()
+{
+    for (int i = 0; i < 4; ++i)
+    {
+        m_knobLabels[i].setText(knobLabel(m_currentType, i), juce::dontSendNotification);
     }
 }
 
@@ -381,12 +398,20 @@ void PedalComponent::resized()
     // Knob positions relative to component size
     // Simulating positions: (365,430), (758,430), (365,755), (758,755) relative to 900x600 base
     const int knobSize = juce::jmin(w, h) / 5;
+    const int labelHeight = 20;
 
     // Position knobs based on component bounds (centered in each quadrant)
     m_knobs[0].setBounds(w * 26 / 100 - knobSize / 2, h * 33 / 100 - knobSize / 2, knobSize, knobSize);
     m_knobs[1].setBounds(w * 54 / 100 - knobSize / 2, h * 33 / 100 - knobSize / 2, knobSize, knobSize);
     m_knobs[2].setBounds(w * 26 / 100 - knobSize / 2, h * 58 / 100 - knobSize / 2, knobSize, knobSize);
     m_knobs[3].setBounds(w * 54 / 100 - knobSize / 2, h * 58 / 100 - knobSize / 2, knobSize, knobSize);
+
+    // Position labels 10px below each knob
+    for (int i = 0; i < 4; ++i)
+    {
+        auto knobBounds = m_knobs[i].getBounds();
+        m_knobLabels[i].setBounds(knobBounds.getX(), knobBounds.getBottom() + 10, knobSize, labelHeight);
+    }
 }
 
 void PedalComponent::mouseDown(const juce::MouseEvent& event)
@@ -425,6 +450,7 @@ void PedalComponent::showTypePopup()
             {
                 auto type = static_cast<DspModuleType>(result - 1);
                 m_currentType = type;
+                updateKnobLabels();
                 repaint();
                 audioProcessor.setPedalSlot(m_slotIndex, type);
             }
@@ -437,6 +463,7 @@ void PedalComponent::syncFromProcessor()
     if (type != m_currentType)
     {
         m_currentType = type;
+        updateKnobLabels();
         repaint();
     }
 }

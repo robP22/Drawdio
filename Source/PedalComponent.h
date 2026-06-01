@@ -28,11 +28,13 @@ private:
     void showTypePopup();
     void initKnob(juce::Slider& knob);
     void loadSkinTexture();
+    void updateKnobLabels();
 
     DrawdioProcessor& audioProcessor;
     int m_slotIndex;
     DspModuleType m_currentType;
 
     juce::Slider m_knobs[4];
+    juce::Label m_knobLabels[4];
     juce::Image m_skinImage;
 };
