@@ -171,12 +171,12 @@ void PedalComponent::loadSkinTexture()
 {
     auto texturePath = juce::File::getSpecialLocation(juce::File::invokedExecutableFile)
                            .getParentDirectory()
-                           .getChildFile("Contents/Resources/Assets/Skins/pedal_skin_sheet.png");
+                           .getChildFile("Contents/Resources/Assets/Skins/Pedal_Texture_Crayon.png");
 
     if (!texturePath.existsAsFile())
     {
         texturePath = juce::File::getCurrentWorkingDirectory()
-                           .getChildFile("Assets/Skins/pedal_skin_sheet.png");
+                           .getChildFile("Assets/Skins/Pedal_Texture_Crayon.png");
     }
 
     if (texturePath.existsAsFile())
@@ -228,44 +228,17 @@ void PedalComponent::paint(juce::Graphics& g)
     auto body = bounds.reduced(5.0f, 9.0f);
     body.removeFromTop(6.0f);
 
-    // Render order: 1. Shadow, 2. Chassis, 3. Surface texture, 4. Labels, 
-    //               5. LCD cavity, 6. LCD lens, 7. LCD text, 8. Knobs, 9. LED
+    // Render order: 1. Shadow, 2. Texture, 3. LCD, 4. Jacks, 5. LED 
+    //               
 
     // 1. Shadow
     g.setColour(juce::Colours::black.withAlpha(0.45f));
     g.fillRoundedRectangle(body.translated(3.0f, 6.0f), 13.0f);
 
-    // 2. Chassis - from skin image only (no procedural fallback)
-    // 3. Surface texture (skin image)
-    auto face = body.reduced(7.0f, 6.0f);
-
-    // Use loaded skin image if available
+    // 2. Surface texture - draw full pedal image
     if (m_skinImage.isValid())
     {
-        // Extract the skin for this slot from the skin sheet
-        // Skin sheet is arranged horizontally: 6 pedals
-        const float skinWidth = m_skinImage.getWidth() / 6.0f;
-        const float skinHeight = m_skinImage.getHeight();
-        juce::Rectangle<int> skinRegion(
-            static_cast<int>(m_slotIndex * skinWidth), 0,
-            static_cast<int>(skinWidth), static_cast<int>(skinHeight));
-
-        // Extract and resize skin to fit the face area
-        auto skin = m_skinImage.getClippedImage(skinRegion);
-        if (skin.isValid())
-        {
-            auto resizedSkin = skin.rescaled(
-                juce::jlimit(1, 1000, static_cast<int>(face.getWidth())),
-                juce::jlimit(1, 1000, static_cast<int>(face.getHeight())),
-                juce::Graphics::highResamplingQuality);
-            g.drawImage(resizedSkin, face);
-        }
-    }
-    else
-    {
-        // No fallback - just render black if no skin loaded
-        g.setColour(juce::Colours::black);
-        g.fillRoundedRectangle(face, 10.0f);
+        g.drawImage(m_skinImage, body.toNearestInt());
     }
 
     // 5. LCD cavity - appears raised with bevel effect
@@ -360,28 +333,10 @@ void PedalComponent::paint(juce::Graphics& g)
     g.fillEllipse(led.withSizeKeepingCentre(led.getWidth() * 0.35f, led.getHeight() * 0.22f)
                       .translated(-2.0f, -2.0f));
 
-    // Edge highlight for 3D effect
-    g.setColour(juce::Colours::white.withAlpha(0.12f));
-    g.drawRoundedRectangle(face.reduced(1.0f), 9.0f, 1.0f);
-
     // Bottom edge shadow
     g.setColour(juce::Colours::black.withAlpha(0.5f));
     g.drawRoundedRectangle(body, 13.0f, 1.8f);
 
-    // Knob labels with contact shadow
-    g.setFont(juce::FontOptions(9.0f, juce::Font::bold));
-    for (int i = 0; i < 4; ++i)
-    {
-        auto kb = m_knobs[i].getBounds();
-        g.setColour(juce::Colours::black.withAlpha(0.48f));
-        g.drawText(knobLabel(m_currentType, i),
-                   kb.getX(), kb.getY() - 13, kb.getWidth(), 12,
-                   juce::Justification::centred);
-        g.setColour(juce::Colours::white.withAlpha(0.75f));
-        g.drawText(knobLabel(m_currentType, i),
-                   kb.getX(), kb.getY() - 14, kb.getWidth(), 12,
-                   juce::Justification::centred);
-    }
 }
 
 void PedalComponent::resized()
