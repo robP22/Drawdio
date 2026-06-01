@@ -69,6 +69,24 @@ void WorkspaceBackground::rebuildCachedBackground()
     if (bounds.isEmpty())
         return;
 
+    // Try to load texture from file first
+    auto texturePath = juce::File::getCurrentWorkingDirectory()
+                           .getChildFile("Assets/Textures/workspace_background.png");
+
+    if (texturePath.existsAsFile())
+    {
+        m_background = juce::ImageCache::getFromFile(texturePath);
+        if (m_background.isValid())
+        {
+            // Resize texture to fit the background bounds
+            m_background = m_background.rescaled(bounds.getWidth(),
+                                                  bounds.getHeight(),
+                                                  juce::Graphics::highResamplingQuality);
+            return;
+        }
+    }
+
+    // Fallback: Procedural wood texture
     m_background = juce::Image(juce::Image::RGB,
                                bounds.getWidth(),
                                bounds.getHeight(),

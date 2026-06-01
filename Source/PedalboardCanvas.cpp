@@ -119,6 +119,24 @@ void PedalboardCanvas::rebuildFeltImage()
     if (m_feltBounds.isEmpty())
         return;
 
+    // Try to load texture from file first
+    auto texturePath = juce::File::getCurrentWorkingDirectory()
+                           .getChildFile("Assets/Textures/pedalboard_felt.png");
+
+    if (texturePath.existsAsFile())
+    {
+        m_feltImage = juce::ImageCache::getFromFile(texturePath);
+        if (m_feltImage.isValid())
+        {
+            // Resize texture to fit the felt bounds
+            m_feltImage = m_feltImage.rescaled(m_feltBounds.getWidth(),
+                                               m_feltBounds.getHeight(),
+                                               juce::Graphics::highResamplingQuality);
+            return;
+        }
+    }
+
+    // Fallback: Procedural felt texture
     m_feltImage = juce::Image(juce::Image::RGB,
                               m_feltBounds.getWidth(),
                               m_feltBounds.getHeight(),
