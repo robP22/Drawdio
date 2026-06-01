@@ -194,37 +194,84 @@ void ColorPalette::paint(juce::Graphics& g)
             g.drawEllipse(blobBounds.expanded(6.0f), 2.5f);
         }
 
-        // Individual paint shadow
+        // Build splatter shape - irregular blob
+        juce::Path splat;
+        const auto cx = blobBounds.getCentreX();
+        const auto cy = blobBounds.getCentreY();
+        const auto rx = blobBounds.getWidth() * 0.5f;
+        const auto ry = blobBounds.getHeight() * 0.5f;
+
+        // Create irregular splatter with multiple lobes
+        juce::Random random(static_cast<uint32_t>(i * 12345 + 42));
+        juce::Point<float> points[8];
+        for (int j = 0; j < 8; ++j)
+        {
+            float angle = static_cast<float>(j) * 0.7854f; // 45 degrees
+            float radiusVar = 0.6f + random.nextFloat() * 0.5f;
+            points[j] = juce::Point<float>(
+                cx + juce::std::numeric_limits<float>::epsilon() + std::cos(angle) * rx * radiusVar,
+                cy + juce::std::numeric_limits<float>::epsilon() + std::sin(angle) * ry * radiusVar);
+        }
+
+        // Draw main splatter blob
+        splat.startNewSubPath(points[0]);
+        for (int j = 1; j < 8; ++j)
+        {
+            // Cubic bezier to next point with random control points
+            float midX = (points[j - 1].x + points[j].x) * 0.5f;
+            float midY = (points[j - 1].y + points[j].y) * 0.5f;
+            float cp1x = midX + (random.nextFloat() - 0.5f) * rx * 0.4f;
+            float cp1y = midY + (random.nextFloat() - 0.5f) * ry * 0.4f;
+            float cp2x = midX + (random.nextFloat() - 0.5f) * rx * 0.4f;
+            float cp2y = midY + (random.nextFloat() - 0.5f) * ry * 0.4f;
+            splat.cubicTo(cp1x, cp1y, cp2x, cp2y, points[j].x, points[j].y);
+        }
+        splat.closeSubPath();
+
+        // Shadow
         const float shadowOffset = selected ? 4.0f : 7.0f;
         g.setColour(juce::Colours::black.withAlpha(0.38f));
-        g.fillEllipse(blobBounds.translated(0.0f, shadowOffset));
+        juce::Path shadowSplat = splat;
+        juce::AffineTransform shadowTrans = juce::AffineTransform::translation(0.0f, shadowOffset);
+        g.fillPath(shadowSplat, shadowTrans);
 
-        // Thick paint blob body (darker base)
-        auto body = blobBounds.translated(0.0f, selected ? -4.0f : 0.0f);
+        // Dark base
         g.setColour(paintColour.darker(0.35f));
-        g.fillEllipse(body);
+        g.fillPath(splat);
 
-        // Main paint color
+        // Inner splatter (lighter center)
+        auto innerBounds = blobBounds.reduced(rx * 0.3f, ry * 0.3f);
+        juce::Path innerSplat;
+        innerSplat.startNewSubPath(innerBounds.getX() + innerBounds.getWidth() * 0.2f, cy);
+        innerSplat.cubicTo(innerBounds.getX(), cy - innerBounds.getHeight() * 0.3f,
+                           innerBounds.getRight(), cy - innerBounds.getHeight() * 0.3f,
+                           innerBounds.getRight() - innerBounds.getWidth() * 0.2f, cy);
+        innerSplat.cubicTo(innerBounds.getRight(), cy + innerBounds.getHeight() * 0.3f,
+                           innerBounds.getX(), cy + innerBounds.getHeight() * 0.3f,
+                           innerBounds.getX() + innerBounds.getWidth() * 0.2f, cy);
         g.setColour(paintColour);
-        g.fillEllipse(body.reduced(3.0f));
+        g.fillPath(innerSplat);
 
-        // Gloss highlight on top
-        g.setColour(paintColour.brighter(0.5f).withAlpha(
-            blob.color == PixelCanvasComponent::PixelColor::Black ? 0.2f : 0.45f));
-        g.fillEllipse(body.withSizeKeepingCentre(body.getWidth() * 0.5f, body.getHeight() * 0.28f)
-                          .translated(-body.getWidth() * 0.15f, -body.getHeight() * 0.22f));
-
-        // Secondary small highlight
+        // Gloss highlight splat
+        auto highlightBounds = blobBounds.reduced(rx * 0.6f, ry * 0.6f);
         g.setColour(juce::Colours::white.withAlpha(
-            blob.color == PixelCanvasComponent::PixelColor::Black ? 0.1f : 0.25f));
-        g.fillEllipse(body.withSizeKeepingCentre(body.getWidth() * 0.2f, body.getHeight() * 0.12f)
-                          .translated(-body.getWidth() * 0.28f, -body.getHeight() * 0.3f));
+            blob.color == PixelCanvasComponent::PixelColor::Black ? 0.2f : 0.4f));
+        juce::Path highlight;
+        highlight.startNewSubPath(highlightBounds.getX(), highlightBounds.getBottom());
+        highlight.cubicTo(highlightBounds.getX(), highlightBounds.getY(),
+                          highlightBounds.getRight(), highlightBounds.getY(),
+                          highlightBounds.getRight(), highlightBounds.getBottom() - highlightBounds.getHeight() * 0.3f);
+        highlight.cubicTo(highlightBounds.getRight() - highlightBounds.getWidth() * 0.3f, highlightBounds.getBottom(),
+                          highlightBounds.getX() + highlightBounds.getWidth() * 0.3f, highlightBounds.getBottom(),
+                          highlightBounds.getX(), highlightBounds.getBottom());
+        highlight.closeSubPath();
+        g.fillPath(highlight);
 
         // Hover effect
         if (hovered)
         {
             g.setColour(juce::Colours::white.withAlpha(0.2f));
-            g.drawEllipse(body.expanded(2.5f), 1.5f);
+            g.drawPath(splat, 1.5f);
         }
     }
 
@@ -381,18 +428,16 @@ CanvasModule::CanvasModule()
     addAndMakeVisible(m_pixelCanvas);
     addAndMakeVisible(m_palette);
     addAndMakeVisible(m_tools);
-    addAndMakeVisible(m_status);
 
     m_palette.setOnColorSelected([this](auto color)
     {
         m_pixelCanvas.setCurrentColor(color);
-        m_status.setSelectedColor(color);
     });
 
     m_tools.setOnUndo([this]()
     {
         m_pixelCanvas.undo();
-        refreshStatus();
+        m_changedCount.set(m_pixelCanvas.getChangedCellCount());
     });
 
     m_tools.setOnClear([this]()
@@ -401,11 +446,10 @@ CanvasModule::CanvasModule()
             m_onClear();
 
         m_pixelCanvas.clearCanvas();
-        refreshStatus();
+        m_changedCount.set(m_pixelCanvas.getChangedCellCount());
     });
 
-    m_status.setSelectedColor(m_pixelCanvas.getCurrentColor());
-    refreshStatus();
+    m_changedCount.set(m_pixelCanvas.getChangedCellCount());
 }
 
 void CanvasModule::paint(juce::Graphics& g)
@@ -488,17 +532,18 @@ void CanvasModule::resized()
     auto controls = bottom;
     auto toolsArea = controls.removeFromRight(112);
     controls.removeFromRight(10);
-    auto statusArea = controls.removeFromRight(162);
-    controls.removeFromRight(10);
-
     m_palette.setBounds(controls);
-    m_status.setBounds(statusArea);
     m_tools.setBounds(toolsArea);
+}
+
+void CanvasModule::valueChanged(juce::Value&)
+{
+    repaint();
 }
 
 void CanvasModule::refreshStatus()
 {
-    m_status.setChangedCellCount(m_pixelCanvas.getChangedCellCount());
+    m_changedCount.set(m_pixelCanvas.getChangedCellCount());
 }
 
 LevelMeter::LevelMeter(juce::String label)

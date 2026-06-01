@@ -90,7 +90,7 @@ private:
     int m_changedCellCount = 0;
 };
 
-class CanvasModule : public juce::Component
+class CanvasModule : public juce::Component, private juce::Value::Listener
 {
 public:
     CanvasModule();
@@ -102,13 +102,15 @@ public:
     const PixelCanvasComponent& getPixelCanvas() const { return m_pixelCanvas; }
 
     void setOnClear(std::function<void()> cb) { m_onClear = std::move(cb); }
-    void refreshStatus();
 
 private:
+    void valueChanged(juce::Value& value) override;
+    void refreshStatus();
+
     PixelCanvasComponent m_pixelCanvas;
     ColorPalette m_palette;
     CanvasTools m_tools;
-    CanvasStatusDisplay m_status;
+    juce::Value m_changedCount;
 
     std::function<void()> m_onClear;
 };
