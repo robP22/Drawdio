@@ -200,7 +200,7 @@ PedalComponent::PedalComponent(DrawdioProcessor& processor,
     for (auto& label : m_knobLabels)
     {
         addAndMakeVisible(label);
-        label.setFont(juce::Font(14.0f, juce::Font::bold));
+        label.setFont(juce::Font(14.0f));
         label.setColour(juce::Label::textColourId, juce::Colour(0xFF2A2A2A));
         label.setJustificationType(juce::Justification::centred);
     }
@@ -288,7 +288,7 @@ void PedalComponent::paint(juce::Graphics& g)
     // 2. Surface texture - draw full pedal image
     if (m_skinImage.isValid())
     {
-        g.drawImage(m_skinImage, body.toNearestInt());
+        g.drawImage(m_skinImage, body);
     }
 
     // 5. LCD cavity - appears raised with bevel effect
