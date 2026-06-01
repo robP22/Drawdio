@@ -182,18 +182,6 @@ void ColorPalette::paint(juce::Graphics& g)
         const bool selected = blob.color == m_selectedColor;
         const bool hovered = i == m_hoveredBlob;
 
-        // Selection glow ring with elevation
-        if (selected)
-        {
-            // Outer glow
-            g.setColour(paintColour.withAlpha(0.25f));
-            g.fillEllipse(blobBounds.expanded(9.0f));
-
-            // Selection ring
-            g.setColour(juce::Colours::white.withAlpha(0.5f));
-            g.drawEllipse(blobBounds.expanded(6.0f), 2.5f);
-        }
-
         // Build splatter shape - irregular blob
         juce::Path splat;
         const auto cx = blobBounds.getCentreX();
@@ -227,6 +215,18 @@ void ColorPalette::paint(juce::Graphics& g)
             splat.cubicTo(cp1x, cp1y, cp2x, cp2y, points[j].x, points[j].y);
         }
         splat.closeSubPath();
+
+        // Selection glow ring with elevation - use splatter shape
+        if (selected)
+        {
+            // Outer glow
+            g.setColour(paintColour.withAlpha(0.25f));
+            g.fillPath(splat, juce::AffineTransform::scale(1.18f, 1.18f, cx, cy));
+
+            // Selection ring
+            g.setColour(juce::Colours::white.withAlpha(0.5f));
+            g.strokePath(splat, juce::PathStrokeType(2.5f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+        }
 
         // Shadow
         const float shadowOffset = selected ? 4.0f : 7.0f;
