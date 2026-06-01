@@ -6,6 +6,16 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
+# Add Assets directory for textures and skins
+set(ASSETS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/Assets")
+if(EXISTS "${ASSETS_DIR}")
+    message(STATUS "Assets directory found: ${ASSETS_DIR}")
+    file(GLOB_RECURSE ASSET_FILES "${ASSETS_DIR}/*")
+    foreach(file IN LISTS ASSET_FILES)
+        message(STATUS "  Asset: ${file}")
+    endforeach()
+endif()
+
 include(FetchContent)
 FetchContent_Declare(JUCE
     GIT_REPOSITORY https://github.com/juce-framework/JUCE.git
