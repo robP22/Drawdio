@@ -300,18 +300,6 @@ void PedalComponent::paint(juce::Graphics& g)
         }
     }
 
-    // 4. Labels - only show if using procedural skin
-    auto labelTop = face.removeFromTop(24.0f).reduced(8.0f, 2.0f);
-    if (!m_skinImage.isValid())
-    {
-        g.setFont(juce::FontOptions(11.0f, juce::Font::bold));
-        g.setColour(juce::Colours::white.withAlpha(0.78f));
-        g.drawFittedText(typeName(m_currentType),
-                         labelTop.toNearestInt(),
-                         juce::Justification::centred,
-                         1);
-    }
-
     // 5. LCD cavity - appears raised with bevel effect
     auto lcdArea = body.withTrimmedTop(body.getHeight() * 0.67f).reduced(18.0f, 10.0f);
 
@@ -375,10 +363,10 @@ void PedalComponent::paint(juce::Graphics& g)
         g.drawEllipse(jack.x - 6.0f, jack.y - 6.0f, 12.0f, 12.0f, 0.5f);
     }
 
-    // 9. LED with glow - centered horizontally, near top
-    auto led = juce::Rectangle<float>(body.getX() + body.getWidth() * 0.5f - 6.0f,
-                                      body.getY() - 4.0f,
-                                      12.0f, 12.0f);
+    // 9. LED with glow - centered horizontally, below top edge
+    auto led = juce::Rectangle<float>(body.getX() + body.getWidth() * 0.5f - 5.0f,
+                                      body.getY() + 14.0f,
+                                      10.0f, 10.0f);
     const bool active = m_currentType != DspModuleType::BYPASS;
 
     // LED glow
@@ -442,10 +430,12 @@ void PedalComponent::resized()
     {
         const int row = i / 2;
         const int col = i % 2;
-        auto kb = juce::Rectangle<int>(knobArea.getX() + col * halfW,
-                                       knobArea.getY() + row * halfH,
-                                       halfW,
-                                       halfH).reduced(6, 8);
+        // Make knobs square for circular appearance
+        const int knobSize = juce::jmin(halfW, halfH) - 6;
+        auto kb = juce::Rectangle<int>(knobArea.getX() + col * halfW + (halfW - knobSize) / 2,
+                                       knobArea.getY() + row * halfH + (halfH - knobSize) / 2,
+                                       knobSize,
+                                       knobSize);
         m_knobs[i].setBounds(kb);
     }
 }
