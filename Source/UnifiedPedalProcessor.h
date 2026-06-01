@@ -1,9 +1,9 @@
 #pragma once
 #include <vector>
-#include <mutex>
 #include <shared_mutex>
 #include <memory>
 #include <array>
+#include <cstdint>
 #include "PedalStructures.h"
 #include "Effects/DspEffect.h"
 

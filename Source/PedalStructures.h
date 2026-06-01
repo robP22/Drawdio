@@ -1,7 +1,7 @@
 #pragma once
+#include <algorithm>
 #include <cstdint>
 #include <cmath>
-#include <string>
 #include <vector>
 #include <array>
 
@@ -71,12 +71,9 @@ struct ParameterDescriptor
 
 struct PedalAssetPayload
 {
-    uint16_t assetId;
-    std::string displayName;
     std::vector<DspModuleType> activeRoutingChain;
     std::vector<uint8_t> routingSlotOrder; // maps sorted-chain position -> original slot index (0-5)
     std::vector<ParameterDescriptor> parameters;
-    std::vector<uint8_t> pixelArtBitmapBuffer;
 };
 
 struct PedalRowRange

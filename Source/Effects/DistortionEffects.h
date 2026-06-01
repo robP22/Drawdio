@@ -1,5 +1,4 @@
 #pragma once
-#include <cmath>
 #include "Effects/DspEffect.h"
 
 class WaveshaperEffect : public DspEffect

@@ -1,8 +1,6 @@
 #include "CompilerEngine.h"
 #include <algorithm>
 #include <numeric>
-#include <utility>
-#include <memory>
 
 PedalAssetPayload compileCanvas(const uint8_t* gridData,
                                 const std::vector<DspModuleType>& pedalSlots,
@@ -23,9 +21,6 @@ PedalAssetPayload compileCanvas(const uint8_t* gridData,
 
     if (activeChain.empty())
     {
-        result.assetId = 0;
-        result.displayName = "Bypass";
-        result.pixelArtBitmapBuffer.assign(gridData, gridData + TotalCells);
         return result;
     }
 
@@ -106,11 +101,8 @@ PedalAssetPayload compileCanvas(const uint8_t* gridData,
         }
     }
 
-    result.assetId = 0;
-    result.displayName = "Compiled";
     result.activeRoutingChain = sortedChain;
     result.routingSlotOrder = routingSlotOrder;
-    result.pixelArtBitmapBuffer.assign(gridData, gridData + TotalCells);
 
     for (auto& param : paramDescriptors)
     {

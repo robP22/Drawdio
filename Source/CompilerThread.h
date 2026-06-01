@@ -1,10 +1,10 @@
 #pragma once
 #include <thread>
 #include <atomic>
-#include <array>
 #include <cstdint>
 #include <vector>
 #include <memory>
+#include <mutex>
 #include <condition_variable>
 #include "PedalStructures.h"
 #include "CanvasMessageQueue.h"
@@ -27,7 +27,6 @@ public:
 
     bool hasCompiledResult() const;
     std::shared_ptr<PedalAssetPayload> getCompiledPayloadPtr();
-    bool isRunning() const { return m_running.load(); }
 
 private:
     void threadFunc(CanvasMessageQueue& queue, PenDebouncer& debouncer);

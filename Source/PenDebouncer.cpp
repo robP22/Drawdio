@@ -1,5 +1,7 @@
 #include "PenDebouncer.h"
 
+#include <chrono>
+
 void PenDebouncer::penDown()
 {
     m_penIsDown.store(true, std::memory_order_release);

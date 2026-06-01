@@ -69,6 +69,6 @@ target_link_libraries(Drawdio PRIVATE
 )
 
 target_compile_definitions(Drawdio PRIVATE
-    JucePlugin_EditorWidth=1100
-    JucePlugin_EditorHeight=650
+    JucePlugin_EditorWidth=1400
+    JucePlugin_EditorHeight=800
 )

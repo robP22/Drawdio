@@ -17,9 +17,6 @@ void CanvasMessageQueue::pushSnapshot(const uint8_t* gridData)
         return;
 
     std::memcpy(m_queue[writeIdx].gridSnapshot.data(), gridData, PayloadSize);
-    m_queue[writeIdx].timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(
-                                      std::chrono::steady_clock::now().time_since_epoch())
-                                      .count();
 
     m_writeIndex.store(nextWrite, std::memory_order_release);
     m_hasMessage.store(true, std::memory_order_release);

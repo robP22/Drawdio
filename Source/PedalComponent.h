@@ -8,14 +8,13 @@ class PedalComponent : public juce::Component
 {
 public:
     PedalComponent(DrawdioProcessor& processor, int slotIndex, DspModuleType initialType);
-    ~PedalComponent() override = default;
+    ~PedalComponent() override;
 
     void paint(juce::Graphics&) override;
     void resized() override;
     void mouseDown(const juce::MouseEvent&) override;
     void mouseMove(const juce::MouseEvent&) override;
 
-    void setPedalType(DspModuleType type);
     void setKnobValue(int knobIdx, float value);
     void syncFromProcessor();
 

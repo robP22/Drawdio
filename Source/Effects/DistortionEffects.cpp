@@ -1,5 +1,7 @@
 #include "Effects/DistortionEffects.h"
 
+#include <cmath>
+
 void WaveshaperEffect::processSample(float** b, int c, int s, float effectParam)
 {
     float drive = effectParam;

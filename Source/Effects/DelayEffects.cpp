@@ -1,5 +1,8 @@
 #include "Effects/DelayEffects.h"
 
+#include <algorithm>
+#include <cmath>
+
 void ModulatedDelayEffect::prepare(double sampleRate, int numChannels)
 {
     DspEffect::prepare(sampleRate, numChannels);

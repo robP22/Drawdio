@@ -1,5 +1,8 @@
 #include "Effects/PitchEffects.h"
 
+#include <algorithm>
+#include <cmath>
+
 void FrequencyShifterEffect::prepare(double sampleRate, int numChannels)
 {
     DspEffect::prepare(sampleRate, numChannels);

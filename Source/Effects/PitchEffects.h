@@ -1,8 +1,5 @@
 #pragma once
-#include <cmath>
-#include "PedalStructures.h"
 #include "Effects/DspEffect.h"
-
 #include "Effects/GranularBaseEffect.h"
 
 class GranularPitchEffect : public GranularBaseEffect

@@ -5,8 +5,9 @@
 #include "Effects/ReverbEffects.h"
 #include "Effects/PitchEffects.h"
 #include "Effects/MiscEffects.h"
-#include <cmath>
 #include <algorithm>
+#include <mutex>
+#include <utility>
 
 // -------------------------------------------------------------------------
 // Effect registration helper.

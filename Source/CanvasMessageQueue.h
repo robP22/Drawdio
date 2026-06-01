@@ -1,9 +1,7 @@
 #pragma once
 #include <array>
-#include <cstdint>
-#include <mutex>
 #include <atomic>
-#include <chrono>
+#include <cstdint>
 #include "PedalStructures.h"
 
 class CanvasMessageQueue
@@ -14,7 +12,6 @@ public:
     struct CanvasMessage
     {
         std::array<uint8_t, PayloadSize> gridSnapshot;
-        int64_t timestamp;
     };
 
     static constexpr int QueueCapacity = 8;

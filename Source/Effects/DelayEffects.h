@@ -1,7 +1,5 @@
 #pragma once
-#include <cmath>
 #include <vector>
-#include <algorithm>
 #include "PedalStructures.h"
 #include "Effects/DspEffect.h"
 

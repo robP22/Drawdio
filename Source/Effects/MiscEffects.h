@@ -1,6 +1,4 @@
 #pragma once
-#include <cmath>
-#include <algorithm>
 #include "Effects/DspEffect.h"
 
 class VcaCompressorEffect : public DspEffect

@@ -1,5 +1,8 @@
 #include "Effects/FilterEffects.h"
 
+#include <algorithm>
+#include <cmath>
+
 void BiquadFilterEffect::prepare(double sampleRate, int numChannels)
 {
     DspEffect::prepare(sampleRate, numChannels);

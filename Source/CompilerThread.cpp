@@ -1,6 +1,9 @@
 #include "CompilerThread.h"
 #include "CompilerEngine.h"
+#include <chrono>
 #include <memory>
+#include <mutex>
+#include <utility>
 
 CompilerThread::CompilerThread()
     : m_running(false)

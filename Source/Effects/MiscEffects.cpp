@@ -1,5 +1,8 @@
 #include "Effects/MiscEffects.h"
 
+#include <algorithm>
+#include <cmath>
+
 void VcaCompressorEffect::prepare(double sampleRate, int numChannels)
 {
     DspEffect::prepare(sampleRate, numChannels);

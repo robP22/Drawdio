@@ -1,9 +1,10 @@
 #pragma once
 #include <JuceHeader.h>
 #include <array>
+#include <cstdint>
 #include <memory>
+#include <vector>
 #include "PedalComponent.h"
-#include "PedalStructures.h"
 
 class DrawdioProcessor;
 
@@ -32,6 +33,7 @@ public:
     void mouseUp(const juce::MouseEvent& event) override;
 
 private:
+    void rebuildFeltImage();
     void drawRoutingCables(juce::Graphics& g);
     void drawActiveDraggingCable(juce::Graphics& g);
 
@@ -49,6 +51,8 @@ private:
     std::vector<uint8_t> m_routingOrder;
 
     juce::Image m_feltImage;
+    juce::Rectangle<int> m_boardBounds;
+    juce::Rectangle<int> m_feltBounds;
 
     // Cable dragging state
     bool m_isDraggingCable = false;

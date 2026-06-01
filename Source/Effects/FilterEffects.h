@@ -1,7 +1,5 @@
 #pragma once
-#include <cmath>
 #include <vector>
-#include <algorithm>
 #include "Effects/DspEffect.h"
 
 class BiquadFilterEffect : public DspEffect
