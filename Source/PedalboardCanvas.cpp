@@ -119,9 +119,15 @@ void PedalboardCanvas::rebuildFeltImage()
     if (m_feltBounds.isEmpty())
         return;
 
-    // Try to load texture from file first
-    auto texturePath = juce::File::getCurrentWorkingDirectory()
-                           .getChildFile("Assets/Textures/pedalboard_bg.png");
+    // Try to load texture from plugin bundle
+    auto assetDir = juce::File::getSpecialLocation(juce::File::invokedExecutableFile).getParentDirectory();
+    auto texturePath = assetDir.getChildFile("Contents/Resources/Assets/Textures/pedalboard_bg.png");
+
+    if (!texturePath.existsAsFile())
+    {
+        // Fallback for development builds
+        texturePath = juce::File::getCurrentWorkingDirectory().getChildFile("Assets/Textures/pedalboard_bg.png");
+    }
 
     if (texturePath.existsAsFile())
     {
@@ -369,10 +375,14 @@ std::vector<PedalboardCanvas::JackInfo> PedalboardCanvas::getJacks() const
 
 int PedalboardCanvas::findJackAt(juce::Point<float> pos, float radius) const
 {
-    auto jacks = getJacks();
-    for (int i = 0; i < static_cast<int>(jacks.size()); ++i)
-        if (jacks[static_cast<size_t>(i)].pos.getDistanceFrom(pos) <= radius)
+    for (int i = 0; i < 12; ++i)
+    {
+        bool isInput = (i % 2 == 0);
+        int pedalIdx = i / 2;
+        auto jackPos = isInput ? m_pedalComponents[static_cast<size_t>(pedalIdx)]->getInputJackPos()
+                               : m_pedalComponents[static_cast<size_t>(pedalIdx)]->getOutputJackPos();
+        if (jackPos.getDistanceFrom(pos) <= radius)
             return i;
-
+    }
     return -1;
 }
