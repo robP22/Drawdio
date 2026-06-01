@@ -392,10 +392,42 @@ void CanvasStatusDisplay::paint(juce::Graphics& g)
 
     auto content = bounds.reduced(12.0f, 8.0f).toNearestInt();
     auto chip = content.removeFromLeft(34).reduced(0, 7).toFloat();
+
+    // Draw splatter shape for active color
+    juce::Path splat;
+    const auto cx = chip.getCentreX();
+    const auto cy = chip.getCentreY();
+    const auto rx = chip.getWidth() * 0.5f;
+    const auto ry = chip.getHeight() * 0.5f;
+
+    juce::Random random(42);
+    juce::Point<float> points[8];
+    for (int j = 0; j < 8; ++j)
+    {
+        float angle = static_cast<float>(j) * 0.7854f;
+        float radiusVar = 0.65f + random.nextFloat() * 0.45f;
+        points[j] = juce::Point<float>(
+            cx + std::cos(angle) * rx * radiusVar,
+            cy + std::sin(angle) * ry * radiusVar);
+    }
+
+    splat.startNewSubPath(points[0]);
+    for (int j = 1; j < 8; ++j)
+    {
+        float midX = (points[j - 1].x + points[j].x) * 0.5f;
+        float midY = (points[j - 1].y + points[j].y) * 0.5f;
+        float cp1x = midX + (random.nextFloat() - 0.5f) * rx * 0.35f;
+        float cp1y = midY + (random.nextFloat() - 0.5f) * ry * 0.35f;
+        float cp2x = midX + (random.nextFloat() - 0.5f) * rx * 0.35f;
+        float cp2y = midY + (random.nextFloat() - 0.5f) * ry * 0.35f;
+        splat.cubicTo(cp1x, cp1y, cp2x, cp2y, points[j].x, points[j].y);
+    }
+    splat.closeSubPath();
+
     g.setColour(PixelCanvasComponent::colourForPixel(m_selectedColor));
-    g.fillEllipse(chip);
+    g.fillPath(splat);
     g.setColour(juce::Colours::white.withAlpha(0.34f));
-    g.drawEllipse(chip, 1.2f);
+    g.strokePath(splat, juce::PathStrokeType(1.2f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
 
     g.setFont(juce::FontOptions(12.0f, juce::Font::bold));
     g.setColour(juce::Colours::whitesmoke.withAlpha(0.88f));
