@@ -192,7 +192,7 @@ PedalComponent::PedalComponent(DrawdioProcessor& processor,
     for (auto& label : m_knobLabels)
     {
         addAndMakeVisible(label);
-        label.setFont(juce::Font(14.0f));
+        label.setFont(juce::FontOptions(14.0f));
         label.setColour(juce::Label::textColourId, juce::Colour(0xFF2A2A2A));
         label.setJustificationType(juce::Justification::centred);
     }
@@ -476,5 +476,4 @@ juce::Point<float> PedalComponent::getOutputJackPos() const
 {
     auto bounds = getBounds().toFloat();
     return { bounds.getRight() - 42.0f, bounds.getY() + 15.0f };
-}
 }
