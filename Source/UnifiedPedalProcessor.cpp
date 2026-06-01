@@ -48,7 +48,6 @@ void registerAllEffects(std::array<std::unique_ptr<DspEffect>, 19>& effects)
 UnifiedPedalProcessor::UnifiedPedalProcessor()
     : m_sampleRate(44100.0),
       m_maxChannels(2),
-      m_crossfadeCounter(0),
       m_currentNodeIndex(0)
 {
     registerAllEffects(m_effects);
@@ -79,7 +78,7 @@ void UnifiedPedalProcessor::reset()
         if (effect)
             effect->reset();
 
-    m_crossfadeCounter = 0;
+    m_crossfadeCounter.store(0, std::memory_order_release);
 }
 
 void UnifiedPedalProcessor::loadPedalConfiguration(std::shared_ptr<PedalAssetPayload> config)
@@ -90,7 +89,7 @@ void UnifiedPedalProcessor::loadPedalConfiguration(std::shared_ptr<PedalAssetPay
     if (m_currentConfig && !m_currentConfig->activeRoutingChain.empty())
     {
         m_nextConfig = std::move(config);
-        m_crossfadeCounter = 0;
+        m_crossfadeCounter.store(0, std::memory_order_release);
     }
     else
     {
@@ -188,7 +187,7 @@ void UnifiedPedalProcessor::processAudioBlock(float** buffer, int numChannels, i
         std::shared_lock<std::shared_mutex> lock(m_dspMutex);
         if (m_currentConfig)
             current = m_currentConfig;
-        if (m_nextConfig && m_crossfadeCounter < kCrossfadeLength)
+        if (m_nextConfig && m_crossfadeCounter.load(std::memory_order_acquire) < kCrossfadeLength)
             next = m_nextConfig;
     }
 
@@ -202,12 +201,16 @@ void UnifiedPedalProcessor::processAudioBlock(float** buffer, int numChannels, i
     if (m_crossfadeOldOut.size() < neededCh)
         m_crossfadeOldOut.resize(neededCh);
 
+    // Safety: Clamp numSamples to prevent buffer overflow
+    int maxSamplesForTempBuf = m_crossfadeTempBuf.empty() ? 0 : static_cast<int>(m_crossfadeTempBuf[0].size());
+    int samplesToProcess = std::min(numSamples, maxSamplesForTempBuf);
+
     // --- Processing phase (no mutex held) ---
     m_activeConfig = current.get();
 
-    for (int sample = 0; sample < numSamples; ++sample)
+    for (int sample = 0; sample < samplesToProcess; ++sample)
     {
-        if (next && m_crossfadeCounter < kCrossfadeLength)
+        if (next && m_crossfadeCounter.load(std::memory_order_acquire) < kCrossfadeLength)
         {
             int crossCh = std::min(numChannels, m_maxChannels);
             for (int ch = 0; ch < crossCh; ++ch)
@@ -225,11 +228,11 @@ void UnifiedPedalProcessor::processAudioBlock(float** buffer, int numChannels, i
             m_activeConfig = next.get();
             processWithConfig(buffer, numChannels, sample, *next);
 
-            float g = static_cast<float>(m_crossfadeCounter) / static_cast<float>(kCrossfadeLength);
+            float g = static_cast<float>(m_crossfadeCounter.load(std::memory_order_acquire)) / static_cast<float>(kCrossfadeLength);
             for (int ch = 0; ch < crossCh; ++ch)
                 buffer[ch][sample] = m_crossfadeOldOut[static_cast<size_t>(ch)] * (1.0f - g) + buffer[ch][sample] * g;
 
-            ++m_crossfadeCounter;
+            m_crossfadeCounter.fetch_add(1, std::memory_order_acq_rel);
         }
         else
         {
@@ -241,12 +244,12 @@ void UnifiedPedalProcessor::processAudioBlock(float** buffer, int numChannels, i
     m_activeConfig = nullptr;
 
     // --- Commit crossfade completion under mutex (microseconds) ---
-    if (next && m_crossfadeCounter >= kCrossfadeLength)
+    if (next && m_crossfadeCounter.load(std::memory_order_acquire) >= kCrossfadeLength)
     {
         std::unique_lock<std::shared_mutex> lock(m_dspMutex);
         m_currentConfig = std::move(m_nextConfig);
         m_nextConfig.reset();
-        m_crossfadeCounter = 0;
+        m_crossfadeCounter.store(0, std::memory_order_release);
         reset();
     }
 }

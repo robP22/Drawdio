@@ -69,7 +69,6 @@ void SimpleDelayEffect::processSample(float** b, int c, int s, float effectParam
     if (c > 0)
     {
         float in = b[0][s];
-        m_delay.buf[m_delay.writePtr] = in;
         size_t readPtr = (m_delay.writePtr + bufSize - static_cast<size_t>(delaySamples)) % bufSize;
         float delayed = m_delay.buf[readPtr];
         m_delay.buf[m_delay.writePtr] = in + delayed * feedback;

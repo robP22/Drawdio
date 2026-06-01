@@ -27,6 +27,9 @@ juce_add_plugin(Drawdio
     FORMATS VST3 AU Standalone
 
     PLUGIN_CHANNEL_CONFIGS "0 1" "1 1" "2 2"
+
+    DEFINITIONS
+        JUCE_WEB_BROWSER=0
 )
 
 juce_generate_juce_header(Drawdio)

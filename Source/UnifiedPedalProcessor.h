@@ -3,6 +3,7 @@
 #include <shared_mutex>
 #include <memory>
 #include <array>
+#include <atomic>
 #include <cstdint>
 #include "PedalStructures.h"
 #include "Effects/DspEffect.h"
@@ -32,7 +33,7 @@ private:
     mutable std::shared_mutex m_dspMutex;
     std::shared_ptr<PedalAssetPayload> m_currentConfig;
     std::shared_ptr<PedalAssetPayload> m_nextConfig;
-    int m_crossfadeCounter;
+    std::atomic<int> m_crossfadeCounter{0};
     int m_currentNodeIndex;
 
     const PedalAssetPayload* m_activeConfig = nullptr;
