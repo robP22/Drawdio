@@ -120,6 +120,8 @@ PedalKnobLookAndFeel& knobLookAndFeel()
     return lookAndFeel;
 }
 
+} // anonymous namespace
+
 const char* PedalComponent::typeName(DspModuleType t)
 {
     switch (t)
