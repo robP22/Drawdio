@@ -169,8 +169,15 @@ PedalComponent::PedalComponent(DrawdioProcessor& processor,
 
 void PedalComponent::loadSkinTexture()
 {
-    auto texturePath = juce::File::getCurrentWorkingDirectory()
+    auto texturePath = juce::File::getSpecialLocation(juce::File::invokedExecutableFile)
+                           .getParentDirectory()
+                           .getChildFile("Contents/Resources/Assets/Skins/pedal_skin_sheet.png");
+
+    if (!texturePath.existsAsFile())
+    {
+        texturePath = juce::File::getCurrentWorkingDirectory()
                            .getChildFile("Assets/Skins/pedal_skin_sheet.png");
+    }
 
     if (texturePath.existsAsFile())
     {
@@ -228,20 +235,8 @@ void PedalComponent::paint(juce::Graphics& g)
     g.setColour(juce::Colours::black.withAlpha(0.45f));
     g.fillRoundedRectangle(body.translated(3.0f, 6.0f), 13.0f);
 
-    // 2. Chassis - rounded metal enclosure with visible side walls
-    juce::ColourGradient sideGradient(skinColourForSlot(m_slotIndex).darker(0.65f),
-                                      body.getX(), body.getY(),
-                                      juce::Colour(0xFF0F1113),
-                                      body.getX(), body.getBottom(),
-                                      false);
-    g.setGradientFill(sideGradient);
-    g.fillRoundedRectangle(body, 13.0f);
-
-    // 2b. Side wall depth - left edge
-    g.setColour(juce::Colours::black.withAlpha(0.3f));
-    g.fillRect(body.getX(), body.getY() + 10.0f, 4.0f, body.getHeight() - 20.0f);
-
-    // 3. Surface texture (paintable skin layer)
+    // 2. Chassis - from skin image only (no procedural fallback)
+    // 3. Surface texture (skin image)
     auto face = body.reduced(7.0f, 6.0f);
 
     // Use loaded skin image if available
@@ -265,39 +260,12 @@ void PedalComponent::paint(juce::Graphics& g)
                 juce::Graphics::highResamplingQuality);
             g.drawImage(resizedSkin, face);
         }
-        else
-        {
-            // Fallback to procedural
-            juce::Colour skinColor = skinColourForSlot(m_slotIndex);
-            juce::ColourGradient faceGradient(skinColor.brighter(0.12f), face.getX(), face.getY(),
-                                              skinColor.darker(0.55f), face.getX(), face.getBottom(),
-                                              false);
-            g.setGradientFill(faceGradient);
-            g.fillRoundedRectangle(face, 10.0f);
-        }
     }
     else
     {
-        // Procedural fallback
-        juce::Colour skin = skinColourForSlot(m_slotIndex);
-        juce::ColourGradient faceGradient(skin.brighter(0.12f), face.getX(), face.getY(),
-                                          skin.darker(0.55f), face.getX(), face.getBottom(),
-                                          false);
-        g.setGradientFill(faceGradient);
+        // No fallback - just render black if no skin loaded
+        g.setColour(juce::Colours::black);
         g.fillRoundedRectangle(face, 10.0f);
-    }
-
-    // Texture noise for realistic paint (only with procedural skin)
-    if (!m_skinImage.isValid())
-    {
-        juce::Random random(0xD0A0 + m_slotIndex);
-        for (int i = 0; i < 120; ++i)
-        {
-            const auto x = face.getX() + random.nextFloat() * face.getWidth();
-            const auto y = face.getY() + random.nextFloat() * face.getHeight();
-            g.setColour(juce::Colours::white.withAlpha(random.nextFloat() * 0.04f));
-            g.fillRect(x, y, 1.0f + random.nextFloat() * 2.5f, 0.7f + random.nextFloat());
-        }
     }
 
     // 5. LCD cavity - appears raised with bevel effect
@@ -418,26 +386,19 @@ void PedalComponent::paint(juce::Graphics& g)
 
 void PedalComponent::resized()
 {
-    auto bounds = getLocalBounds().reduced(16, 34);
-    bounds.removeFromTop(32);
-    bounds.removeFromBottom(static_cast<int>(getHeight() * 0.30f));
+    auto bounds = getLocalBounds();
+    const int w = bounds.getWidth();
+    const int h = bounds.getHeight();
 
-    auto knobArea = bounds.reduced(2, 0);
-    const int halfW = knobArea.getWidth() / 2;
-    const int halfH = knobArea.getHeight() / 2;
+    // Knob positions relative to component size
+    // Simulating positions: (365,430), (758,430), (365,755), (758,755) relative to 900x600 base
+    const int knobSize = juce::jmin(w, h) / 5;
 
-    for (int i = 0; i < 4; ++i)
-    {
-        const int row = i / 2;
-        const int col = i % 2;
-        // Make knobs square for circular appearance
-        const int knobSize = juce::jmin(halfW, halfH) - 6;
-        auto kb = juce::Rectangle<int>(knobArea.getX() + col * halfW + (halfW - knobSize) / 2,
-                                       knobArea.getY() + row * halfH + (halfH - knobSize) / 2,
-                                       knobSize,
-                                       knobSize);
-        m_knobs[i].setBounds(kb);
-    }
+    // Position knobs based on component bounds (centered in each quadrant)
+    m_knobs[0].setBounds(w * 26 / 100 - knobSize / 2, h * 33 / 100 - knobSize / 2, knobSize, knobSize);
+    m_knobs[1].setBounds(w * 54 / 100 - knobSize / 2, h * 33 / 100 - knobSize / 2, knobSize, knobSize);
+    m_knobs[2].setBounds(w * 26 / 100 - knobSize / 2, h * 58 / 100 - knobSize / 2, knobSize, knobSize);
+    m_knobs[3].setBounds(w * 54 / 100 - knobSize / 2, h * 58 / 100 - knobSize / 2, knobSize, knobSize);
 }
 
 void PedalComponent::mouseDown(const juce::MouseEvent& event)
