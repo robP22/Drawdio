@@ -476,9 +476,9 @@ void CanvasModule::paint(juce::Graphics& g)
     g.setColour(juce::Colours::black.withAlpha(0.4f));
     g.drawRoundedRectangle(bounds.reduced(2.5f), 15.5f, 1.5f);
 
-    // Recessed canvas pocket with soft inner shadow
+    // Recessed canvas pocket - pure black for future texture background
     auto canvasPocket = m_pixelCanvas.getBounds().toFloat().expanded(12.0f);
-    g.setColour(juce::Colours::black.withAlpha(0.72f));
+    g.setColour(juce::Colours::black);
     g.fillRoundedRectangle(canvasPocket, 12.0f);
 
     // Recessed inner highlight (upper-left soft lighting)
