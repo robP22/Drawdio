@@ -120,16 +120,6 @@ PedalKnobLookAndFeel& knobLookAndFeel()
     return lookAndFeel;
 }
 
-juce::Colour skinColourForSlot(int slot)
-{
-    static constexpr uint32_t colours[] {
-        0xFF3B5A74, 0xFF6E3E49, 0xFF4D6846,
-        0xFF6B603A, 0xFF584E75, 0xFF5E6266
-    };
-    return juce::Colour(colours[static_cast<size_t>(slot % 6)]);
-}
-}
-
 const char* PedalComponent::typeName(DspModuleType t)
 {
     switch (t)
@@ -484,4 +474,5 @@ juce::Point<float> PedalComponent::getOutputJackPos() const
 {
     auto bounds = getBounds().toFloat();
     return { bounds.getRight() - 42.0f, bounds.getY() + 15.0f };
+}
 }
