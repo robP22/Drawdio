@@ -94,23 +94,15 @@ void PedalboardCanvas::resized()
     m_feltBounds = m_boardBounds.reduced(21, 19);
     rebuildFeltImage();
 
-    const int colW = m_feltBounds.getWidth() / 3;
-    const int rowH = m_feltBounds.getHeight() / 2;
-    const int pedalW = juce::jlimit(142, 180, colW - 20);
-    const int pedalH = juce::jlimit(194, 240, rowH - 26);
+    // Large rounded-rectangle pedal enclosure: x=60-1062, y=45-1360 relative to frame
+    const int pedalX = 60;
+    const int pedalY = 45;
+    const int pedalW = 1002;  // 1062 - 60
+    const int pedalH = 1315;  // 1360 - 45
 
-    for (int row = 0; row < 2; ++row)
+    for (int slot = 0; slot < 6; ++slot)
     {
-        for (int col = 0; col < 3; ++col)
-        {
-            const int slot = row * 3 + col;
-            auto slotBounds = juce::Rectangle<int>(m_feltBounds.getX() + col * colW,
-                                                   m_feltBounds.getY() + row * rowH,
-                                                   colW,
-                                                   rowH).reduced(6, 8);
-            auto pedalBounds = slotBounds.withSizeKeepingCentre(pedalW, pedalH);
-            m_pedalComponents[static_cast<size_t>(slot)]->setBounds(pedalBounds);
-        }
+        m_pedalComponents[static_cast<size_t>(slot)]->setBounds(pedalX, pedalY, pedalW, pedalH);
     }
 }
 
