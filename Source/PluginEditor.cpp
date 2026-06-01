@@ -209,8 +209,8 @@ void ColorPalette::paint(juce::Graphics& g)
             float angle = static_cast<float>(j) * 0.7854f; // 45 degrees
             float radiusVar = 0.6f + random.nextFloat() * 0.5f;
             points[j] = juce::Point<float>(
-                cx + juce::std::numeric_limits<float>::epsilon() + std::cos(angle) * rx * radiusVar,
-                cy + juce::std::numeric_limits<float>::epsilon() + std::sin(angle) * ry * radiusVar);
+                cx + std::cos(angle) * rx * radiusVar,
+                cy + std::sin(angle) * ry * radiusVar);
         }
 
         // Draw main splatter blob
@@ -271,7 +271,7 @@ void ColorPalette::paint(juce::Graphics& g)
         if (hovered)
         {
             g.setColour(juce::Colours::white.withAlpha(0.2f));
-            g.drawPath(splat, 1.5f);
+            g.strokePath(splat, juce::PathStrokeType(1.5f));
         }
     }
 
@@ -437,7 +437,7 @@ CanvasModule::CanvasModule()
     m_tools.setOnUndo([this]()
     {
         m_pixelCanvas.undo();
-        m_changedCount.set(m_pixelCanvas.getChangedCellCount());
+        refreshStatus();
     });
 
     m_tools.setOnClear([this]()
@@ -446,10 +446,10 @@ CanvasModule::CanvasModule()
             m_onClear();
 
         m_pixelCanvas.clearCanvas();
-        m_changedCount.set(m_pixelCanvas.getChangedCellCount());
+        refreshStatus();
     });
 
-    m_changedCount.set(m_pixelCanvas.getChangedCellCount());
+    refreshStatus();
 }
 
 void CanvasModule::paint(juce::Graphics& g)
@@ -536,14 +536,9 @@ void CanvasModule::resized()
     m_tools.setBounds(toolsArea);
 }
 
-void CanvasModule::valueChanged(juce::Value&)
-{
-    repaint();
-}
-
 void CanvasModule::refreshStatus()
 {
-    m_changedCount.set(m_pixelCanvas.getChangedCellCount());
+    m_changedCount = m_pixelCanvas.getChangedCellCount();
 }
 
 LevelMeter::LevelMeter(juce::String label)

@@ -58,6 +58,7 @@ void PixelCanvasComponent::paint(juce::Graphics& g)
     g.drawImage(m_pixelImage, bounds);
     g.setImageResamplingQuality(juce::Graphics::mediumResamplingQuality);
 
+    const float cellW = bounds.getWidth() / static_cast<float>(GridSize);
     const float cellH = bounds.getHeight() / static_cast<float>(GridSize);
     const auto gridAlpha = (m_mouseInside || m_drawing) ? 0.18f : 0.07f;
 
