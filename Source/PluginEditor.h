@@ -70,7 +70,6 @@ public:
 private:
     void styleButton(juce::TextButton& button, juce::Colour accent);
 
-    juce::TextButton m_drawButton { "Draw" };
     juce::TextButton m_undoButton { "Undo" };
     juce::TextButton m_clearButton { "Clear" };
 

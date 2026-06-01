@@ -36,12 +36,12 @@ juce::Colour PixelCanvasComponent::colourForPixel(PixelColor color)
 {
     switch (color)
     {
-        case PixelColor::White: return juce::Colour(0xFFE8E5DC);
-        case PixelColor::Red:   return juce::Colour(0xFFE54235);
-        case PixelColor::Green: return juce::Colour(0xFF2BBE65);
-        case PixelColor::Blue:  return juce::Colour(0xFF2F73D8);
+        case PixelColor::White: return juce::Colour(0xFFFFFFFF);
+        case PixelColor::Red:   return juce::Colour(0xFFDD3322);
+        case PixelColor::Green: return juce::Colour(0xFF22BB55);
+        case PixelColor::Blue:  return juce::Colour(0xFF2255CC);
         case PixelColor::Black:
-        default:                return juce::Colour(0xFF121212);
+        default:                return juce::Colour(0xFF000000);
     }
 }
 

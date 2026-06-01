@@ -297,15 +297,9 @@ int ColorPalette::hitTestBlob(juce::Point<float> position) const
 
 CanvasTools::CanvasTools()
 {
-    styleButton(m_drawButton, juce::Colour(0xFF47C9A2));
     styleButton(m_undoButton, juce::Colour(0xFFC7B067));
     styleButton(m_clearButton, juce::Colour(0xFFD75B4F));
 
-    m_drawButton.setClickingTogglesState(true);
-    m_drawButton.setToggleState(true, juce::dontSendNotification);
-    m_drawButton.setEnabled(false);
-
-    addAndMakeVisible(m_drawButton);
     addAndMakeVisible(m_undoButton);
     addAndMakeVisible(m_clearButton);
 
@@ -330,9 +324,7 @@ void CanvasTools::paint(juce::Graphics& g)
 void CanvasTools::resized()
 {
     auto area = getLocalBounds().reduced(10, 8);
-    const auto buttonH = juce::jmax(24, (area.getHeight() - 8) / 3);
-    m_drawButton.setBounds(area.removeFromTop(buttonH));
-    area.removeFromTop(4);
+    const auto buttonH = juce::jmax(24, (area.getHeight() - 4) / 2);
     m_undoButton.setBounds(area.removeFromTop(buttonH));
     area.removeFromTop(4);
     m_clearButton.setBounds(area.removeFromTop(buttonH));
