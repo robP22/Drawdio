@@ -35,6 +35,7 @@ public:
 private:
     void rebuildFeltImage();
     void drawRoutingCables(juce::Graphics& g);
+    void drawCablePlug(juce::Graphics& g, juce::Point<float> pos, bool isInput);
     void drawActiveDraggingCable(juce::Graphics& g);
 
     // Helpers for jack detection

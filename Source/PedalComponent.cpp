@@ -189,9 +189,14 @@ void PedalComponent::paint(juce::Graphics& g)
     auto body = bounds.reduced(5.0f, 9.0f);
     body.removeFromTop(6.0f);
 
-    g.setColour(juce::Colours::black.withAlpha(0.45f));
-    g.fillRoundedRectangle(body.translated(2.0f, 5.0f), 13.0f);
+    // Render order: 1. Shadow, 2. Chassis, 3. Surface texture, 4. Labels, 
+    //               5. LCD cavity, 6. LCD lens, 7. LCD text, 8. Knobs, 9. LED
 
+    // 1. Shadow
+    g.setColour(juce::Colours::black.withAlpha(0.45f));
+    g.fillRoundedRectangle(body.translated(3.0f, 6.0f), 13.0f);
+
+    // 2. Chassis - rounded metal enclosure with visible side walls
     juce::ColourGradient sideGradient(skinColourForSlot(m_slotIndex).darker(0.65f),
                                       body.getX(), body.getY(),
                                       juce::Colour(0xFF0F1113),
@@ -200,43 +205,48 @@ void PedalComponent::paint(juce::Graphics& g)
     g.setGradientFill(sideGradient);
     g.fillRoundedRectangle(body, 13.0f);
 
+    // 2b. Side wall depth - left edge
+    g.setColour(juce::Colours::black.withAlpha(0.3f));
+    g.fillRect(body.getX(), body.getY() + 10.0f, 4.0f, body.getHeight() - 20.0f);
+
+    // 3. Surface texture (paintable skin layer)
     auto face = body.reduced(7.0f, 6.0f);
     juce::Colour skin = skinColourForSlot(m_slotIndex);
-    juce::ColourGradient faceGradient(skin.brighter(0.08f), face.getX(), face.getY(),
-                                      skin.darker(0.52f), face.getX(), face.getBottom(),
+    juce::ColourGradient faceGradient(skin.brighter(0.12f), face.getX(), face.getY(),
+                                      skin.darker(0.55f), face.getX(), face.getBottom(),
                                       false);
     g.setGradientFill(faceGradient);
     g.fillRoundedRectangle(face, 10.0f);
 
+    // Texture noise for realistic paint
     juce::Random random(0xD0A0 + m_slotIndex);
-    for (int i = 0; i < 90; ++i)
+    for (int i = 0; i < 120; ++i)
     {
         const auto x = face.getX() + random.nextFloat() * face.getWidth();
         const auto y = face.getY() + random.nextFloat() * face.getHeight();
-        g.setColour(juce::Colours::white.withAlpha(random.nextFloat() * 0.035f));
-        g.fillRect(x, y, 1.0f + random.nextFloat() * 2.0f, 0.7f);
+        g.setColour(juce::Colours::white.withAlpha(random.nextFloat() * 0.04f));
+        g.fillRect(x, y, 1.0f + random.nextFloat() * 2.5f, 0.7f + random.nextFloat());
     }
 
-    g.setColour(juce::Colours::white.withAlpha(0.15f));
-    g.drawRoundedRectangle(face.reduced(1.0f), 9.0f, 1.0f);
-    g.setColour(juce::Colours::black.withAlpha(0.56f));
-    g.drawRoundedRectangle(body, 13.0f, 1.8f);
-
+    // 4. Labels
     auto labelTop = face.removeFromTop(24.0f).reduced(8.0f, 2.0f);
     g.setFont(juce::FontOptions(11.0f, juce::Font::bold));
-    g.setColour(juce::Colours::white.withAlpha(0.76f));
+    g.setColour(juce::Colours::white.withAlpha(0.78f));
     g.drawFittedText("DRAWDIO " + juce::String(m_slotIndex + 1),
                      labelTop.toNearestInt(),
                      juce::Justification::centred,
                      1);
 
+    // 5. LCD cavity
     auto lcdArea = body.withTrimmedTop(body.getHeight() * 0.67f).reduced(18.0f, 10.0f);
     g.setColour(juce::Colours::black.withAlpha(0.60f));
     g.fillRoundedRectangle(lcdArea.expanded(3.0f), 6.0f);
+
+    // 6. LCD lens - smoked glass
     g.setColour(juce::Colour(0xFF050707));
     g.fillRoundedRectangle(lcdArea, 5.0f);
 
-    juce::ColourGradient lens(juce::Colour(0xFF233034).withAlpha(0.70f),
+    juce::ColourGradient lens(juce::Colour(0xFF283034).withAlpha(0.75f),
                               lcdArea.getX(), lcdArea.getY(),
                               juce::Colour(0xFF070909).withAlpha(0.96f),
                               lcdArea.getRight(), lcdArea.getBottom(),
@@ -244,54 +254,95 @@ void PedalComponent::paint(juce::Graphics& g)
     g.setGradientFill(lens);
     g.fillRoundedRectangle(lcdArea.reduced(2.0f), 4.0f);
 
-    g.setColour(juce::Colours::white.withAlpha(0.88f));
+    // Lens reflection
+    g.setColour(juce::Colours::white.withAlpha(0.06f));
+    g.fillRect(lcdArea.getX() + 4.0f, lcdArea.getY() + 2.0f, 
+               lcdArea.getWidth() - 8.0f, lcdArea.getHeight() * 0.3f);
+
+    // 7. LCD text - fluorescent white
+    g.setColour(juce::Colour(0xFFA8F0B8));
     g.setFont(juce::FontOptions(11.0f, juce::Font::bold));
     g.drawFittedText(typeName(m_currentType),
                      lcdArea.reduced(5.0f, 2.0f).toNearestInt(),
                      juce::Justification::centred,
                      1);
 
+    // Draw input/output jacks with proper depth
     auto inJack = getInputJackPos() - getPosition().toFloat();
     auto outJack = getOutputJackPos() - getPosition().toFloat();
+
     for (auto jack : { inJack, outJack })
     {
-        g.setColour(juce::Colours::black.withAlpha(0.42f));
-        g.fillEllipse(jack.x - 9.0f, jack.y - 5.0f, 18.0f, 12.0f);
+        // Jack socket shadow
+        g.setColour(juce::Colours::black.withAlpha(0.5f));
+        g.fillEllipse(jack.x - 10.0f, jack.y - 6.0f, 20.0f, 14.0f);
 
-        juce::ColourGradient jackGradient(juce::Colour(0xFFC4C9CB),
-                                          jack.x - 7.0f, jack.y - 7.0f,
-                                          juce::Colour(0xFF3E4447),
-                                          jack.x + 7.0f, jack.y + 7.0f,
-                                          false);
-        g.setGradientFill(jackGradient);
-        g.fillEllipse(jack.x - 7.0f, jack.y - 7.0f, 14.0f, 14.0f);
-        g.setColour(juce::Colours::black);
-        g.fillEllipse(jack.x - 3.2f, jack.y - 3.2f, 6.4f, 6.4f);
+        // Jack ring
+        juce::ColourGradient jackGrad(juce::Colour(0xFFD4D9DB),
+                                      jack.x - 8.0f, jack.y - 8.0f,
+                                      juce::Colour(0xFF4E5457),
+                                      jack.x + 8.0f, jack.y + 8.0f,
+                                      false);
+        g.setGradientFill(jackGrad);
+        g.fillEllipse(jack.x - 8.0f, jack.y - 8.0f, 16.0f, 16.0f);
+
+        // Jack hole
+        g.setColour(juce::Colours::black.withAlpha(0.9f));
+        g.fillEllipse(jack.x - 4.0f, jack.y - 4.0f, 8.0f, 8.0f);
+
+        // Jack inner highlight
+        g.setColour(juce::Colours::white.withAlpha(0.15f));
+        g.drawEllipse(jack.x - 6.0f, jack.y - 6.0f, 12.0f, 12.0f, 0.5f);
     }
 
+    // 9. LED with glow
     auto led = body.reduced(18.0f, 24.0f).withTrimmedBottom(body.getHeight() * 0.70f)
                    .removeFromRight(20.0f);
     const bool active = m_currentType != DspModuleType::BYPASS;
-    g.setColour(active ? juce::Colour(0xFF50F07E).withAlpha(0.22f)
-                       : juce::Colours::black.withAlpha(0.26f));
-    g.fillEllipse(led.expanded(active ? 5.0f : 1.0f));
-    g.setColour(active ? juce::Colour(0xFF50F07E) : juce::Colour(0xFF344039));
+
+    // LED glow
+    if (active)
+    {
+        g.setColour(juce::Colour(0xFF50F07E).withAlpha(0.25f));
+        g.fillEllipse(led.expanded(6.0f));
+        g.setColour(juce::Colour(0xFF50F07E).withAlpha(0.15f));
+        g.fillEllipse(led.expanded(10.0f));
+    }
+    else
+    {
+        g.setColour(juce::Colours::black.withAlpha(0.28f));
+        g.fillEllipse(led.expanded(2.0f));
+    }
+
+    // LED body
+    g.setColour(active ? juce::Colour(0xFF50F07E) : juce::Colour(0xFF304030));
     g.fillEllipse(led);
-    g.setColour(juce::Colours::white.withAlpha(active ? 0.42f : 0.12f));
+
+    // LED specular highlight
+    g.setColour(juce::Colours::white.withAlpha(active ? 0.5f : 0.1f));
     g.fillEllipse(led.withSizeKeepingCentre(led.getWidth() * 0.35f, led.getHeight() * 0.22f)
                       .translated(-2.0f, -2.0f));
 
+    // Edge highlight for 3D effect
+    g.setColour(juce::Colours::white.withAlpha(0.12f));
+    g.drawRoundedRectangle(face.reduced(1.0f), 9.0f, 1.0f);
+
+    // Bottom edge shadow
+    g.setColour(juce::Colours::black.withAlpha(0.5f));
+    g.drawRoundedRectangle(body, 13.0f, 1.8f);
+
+    // Knob labels with contact shadow
     g.setFont(juce::FontOptions(9.0f, juce::Font::bold));
     for (int i = 0; i < 4; ++i)
     {
         auto kb = m_knobs[i].getBounds();
-        g.setColour(juce::Colours::black.withAlpha(0.46f));
+        g.setColour(juce::Colours::black.withAlpha(0.48f));
+        g.drawText(knobLabel(m_currentType, i),
+                   kb.getX(), kb.getY() - 13, kb.getWidth(), 12,
+                   juce::Justification::centred);
+        g.setColour(juce::Colours::white.withAlpha(0.75f));
         g.drawText(knobLabel(m_currentType, i),
                    kb.getX(), kb.getY() - 14, kb.getWidth(), 12,
-                   juce::Justification::centred);
-        g.setColour(juce::Colours::white.withAlpha(0.72f));
-        g.drawText(knobLabel(m_currentType, i),
-                   kb.getX(), kb.getY() - 15, kb.getWidth(), 12,
                    juce::Justification::centred);
     }
 }

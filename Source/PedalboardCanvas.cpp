@@ -188,13 +188,65 @@ void PedalboardCanvas::drawRoutingCables(juce::Graphics& g)
                      p2.x - curve, p2.y - lift,
                      p2.x, p2.y);
 
+        // Anti-aliased shadow layer
         auto shadow = path;
-        shadow.applyTransform(juce::AffineTransform::translation(3.0f, 7.0f));
-        strokeCable(g, shadow, juce::Colours::black.withAlpha(0.45f), 8.0f);
-        strokeCable(g, path, kCableColour.darker(0.18f), 6.2f);
-        strokeCable(g, path, kCableColour, 4.8f);
-        strokeCable(g, path, juce::Colours::white.withAlpha(0.14f), 1.4f);
+        shadow.applyTransform(juce::AffineTransform::translation(4.0f, 8.0f));
+        g.setColour(juce::Colours::black.withAlpha(0.35f));
+        g.strokePath(shadow, juce::PathStrokeType(12.0f,
+                                                  juce::PathStrokeType::curved,
+                                                  juce::PathStrokeType::rounded));
+
+        // Secondary shadow for depth
+        auto shadow2 = path;
+        shadow2.applyTransform(juce::AffineTransform::translation(2.0f, 4.0f));
+        g.setColour(juce::Colours::black.withAlpha(0.5f));
+        g.strokePath(shadow2, juce::PathStrokeType(8.0f,
+                                                   juce::PathStrokeType::curved,
+                                                   juce::PathStrokeType::rounded));
+
+        // Cable body - darker base
+        g.setColour(kCableColour.darker(0.25f));
+        g.strokePath(path, juce::PathStrokeType(6.4f,
+                                                juce::PathStrokeType::curved,
+                                                juce::PathStrokeType::rounded));
+
+        // Cable main color
+        g.setColour(kCableColour);
+        g.strokePath(path, juce::PathStrokeType(5.0f,
+                                                juce::PathStrokeType::curved,
+                                                juce::PathStrokeType::rounded));
+
+        // Cable highlight for 3D effect
+        g.setColour(juce::Colours::white.withAlpha(0.12f));
+        g.strokePath(path, juce::PathStrokeType(1.6f,
+                                                juce::PathStrokeType::curved,
+                                                juce::PathStrokeType::rounded));
+
+        // Connector plugs at jacks
+        drawCablePlug(g, p1, false);
+        drawCablePlug(g, p2, true);
     }
+}
+
+void PedalboardCanvas::drawCablePlug(juce::Graphics& g, juce::Point<float> pos, bool isInput)
+{
+    // Plug shadow
+    g.setColour(juce::Colours::black.withAlpha(0.4f));
+    g.fillEllipse(juce::Rectangle<float>(10.0f, 6.0f).withCentre(pos.translated(1.0f, 2.0f)));
+
+    // Plug body
+    juce::ColourGradient plugGrad(juce::Colour(0xFF8B8B8B),
+                                   pos.x - 4.0f, pos.y - 3.0f,
+                                   juce::Colour(0xFF3A3A3A),
+                                   pos.x + 4.0f, pos.y + 3.0f,
+                                   false);
+    g.setGradientFill(plugGrad);
+    g.fillEllipse(juce::Rectangle<float>(8.0f, 4.0f).withCentre(pos));
+
+    // Plug highlight
+    g.setColour(juce::Colours::white.withAlpha(0.2f));
+    g.fillEllipse(juce::Rectangle<float>(3.0f, 2.0f)
+                      .withCentre(pos.translated(-1.0f, -1.0f)));
 }
 
 void PedalboardCanvas::drawActiveDraggingCable(juce::Graphics& g)

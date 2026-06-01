@@ -145,8 +145,16 @@ ColorPalette::ColorPalette()
 void ColorPalette::paint(juce::Graphics& g)
 {
     auto bounds = getLocalBounds().toFloat();
-    g.setColour(juce::Colours::black.withAlpha(0.18f));
-    g.fillRoundedRectangle(bounds.reduced(2.0f).translated(0.0f, 2.0f), 7.0f);
+
+    // Panel background with inset shadow
+    g.setColour(juce::Colours::black.withAlpha(0.2f));
+    g.fillRoundedRectangle(bounds.reduced(2.0f).translated(0.0f, 2.0f), 8.0f);
+
+    // Metal panel
+    juce::ColourGradient panelGrad(juce::Colour(0xFF2A2D2F), bounds.getX(), bounds.getY(),
+                                    juce::Colour(0xFF141618), bounds.getX(), bounds.getBottom(), false);
+    g.setGradientFill(panelGrad);
+    g.fillRoundedRectangle(bounds.reduced(2.0f), 7.0f);
 
     for (int i = 0; i < static_cast<int>(m_blobs.size()); ++i)
     {
@@ -156,34 +164,55 @@ void ColorPalette::paint(juce::Graphics& g)
         const bool selected = blob.color == m_selectedColor;
         const bool hovered = i == m_hoveredBlob;
 
+        // Selection glow ring with elevation
         if (selected)
         {
-            g.setColour(paintColour.withAlpha(0.30f));
-            g.fillEllipse(blobBounds.expanded(7.0f));
-            g.setColour(juce::Colours::white.withAlpha(0.42f));
-            g.drawEllipse(blobBounds.expanded(5.0f), 2.0f);
+            // Outer glow
+            g.setColour(paintColour.withAlpha(0.25f));
+            g.fillEllipse(blobBounds.expanded(9.0f));
+
+            // Selection ring
+            g.setColour(juce::Colours::white.withAlpha(0.5f));
+            g.drawEllipse(blobBounds.expanded(6.0f), 2.5f);
         }
 
-        g.setColour(juce::Colours::black.withAlpha(0.32f));
-        g.fillEllipse(blobBounds.translated(0.0f, selected ? 5.0f : 7.0f));
+        // Individual paint shadow
+        const float shadowOffset = selected ? 4.0f : 7.0f;
+        g.setColour(juce::Colours::black.withAlpha(0.38f));
+        g.fillEllipse(blobBounds.translated(0.0f, shadowOffset));
 
-        auto body = blobBounds.translated(0.0f, selected ? -3.0f : 0.0f);
-        g.setColour(paintColour.darker(0.25f));
+        // Thick paint blob body (darker base)
+        auto body = blobBounds.translated(0.0f, selected ? -4.0f : 0.0f);
+        g.setColour(paintColour.darker(0.35f));
         g.fillEllipse(body);
 
-        g.setColour(paintColour.brighter(0.08f));
-        g.fillEllipse(body.reduced(body.getWidth() * 0.07f, body.getHeight() * 0.12f));
+        // Main paint color
+        g.setColour(paintColour);
+        g.fillEllipse(body.reduced(3.0f));
 
-        g.setColour(paintColour.brighter(0.45f).withAlpha(blob.color == PixelCanvasComponent::PixelColor::Black ? 0.18f : 0.42f));
-        g.fillEllipse(body.withSizeKeepingCentre(body.getWidth() * 0.42f, body.getHeight() * 0.22f)
-                          .translated(-body.getWidth() * 0.12f, -body.getHeight() * 0.18f));
+        // Gloss highlight on top
+        g.setColour(paintColour.brighter(0.5f).withAlpha(
+            blob.color == PixelCanvasComponent::PixelColor::Black ? 0.2f : 0.45f));
+        g.fillEllipse(body.withSizeKeepingCentre(body.getWidth() * 0.5f, body.getHeight() * 0.28f)
+                          .translated(-body.getWidth() * 0.15f, -body.getHeight() * 0.22f));
 
+        // Secondary small highlight
+        g.setColour(juce::Colours::white.withAlpha(
+            blob.color == PixelCanvasComponent::PixelColor::Black ? 0.1f : 0.25f));
+        g.fillEllipse(body.withSizeKeepingCentre(body.getWidth() * 0.2f, body.getHeight() * 0.12f)
+                          .translated(-body.getWidth() * 0.28f, -body.getHeight() * 0.3f));
+
+        // Hover effect
         if (hovered)
         {
-            g.setColour(juce::Colours::white.withAlpha(0.16f));
-            g.drawEllipse(body.expanded(2.0f), 1.2f);
+            g.setColour(juce::Colours::white.withAlpha(0.2f));
+            g.drawEllipse(body.expanded(2.5f), 1.5f);
         }
     }
+
+    // Panel border
+    g.setColour(juce::Colours::white.withAlpha(0.08f));
+    g.drawRoundedRectangle(bounds.reduced(3.0f), 6.0f, 1.0f);
 }
 
 void ColorPalette::resized()
@@ -373,18 +402,67 @@ void CanvasModule::paint(juce::Graphics& g)
 {
     auto bounds = getLocalBounds().toFloat().reduced(2.0f);
 
-    g.setColour(juce::Colours::black.withAlpha(0.48f));
-    g.fillRoundedRectangle(bounds.translated(0.0f, 9.0f), 14.0f);
+    // Drop shadow beneath module
+    g.setColour(juce::Colours::black.withAlpha(0.52f));
+    g.fillRoundedRectangle(bounds.translated(0.0f, 14.0f), 18.0f);
 
-    fillVerticalGloss(g, bounds, juce::Colour(0xFF34393D), juce::Colour(0xFF181B1E));
-    g.setColour(metalEdge());
-    g.drawRoundedRectangle(bounds.reduced(1.0f), 12.0f, 2.0f);
+    // Dark industrial metal housing with visible thickness
+    juce::ColourGradient housingGradient(juce::Colour(0xFF4A5054), bounds.getX(), bounds.getY(),
+                                          juce::Colour(0xFF1A1D1F), bounds.getX(), bounds.getBottom(), false);
+    housingGradient.addColour(0.3f, juce::Colour(0xFF3A3F43));
+    housingGradient.addColour(0.7f, juce::Colour(0xFF25292C));
+    g.setGradientFill(housingGradient);
+    g.fillRoundedRectangle(bounds, 18.0f);
 
-    auto canvasPocket = m_pixelCanvas.getBounds().toFloat().expanded(10.0f);
-    g.setColour(juce::Colours::black.withAlpha(0.62f));
-    g.fillRoundedRectangle(canvasPocket, 9.0f);
-    g.setColour(juce::Colours::white.withAlpha(0.16f));
-    g.drawRoundedRectangle(canvasPocket.reduced(1.0f), 8.0f, 1.0f);
+    // Metal edge highlight (upper-left)
+    g.setColour(juce::Colours::white.withAlpha(0.12f));
+    g.drawRoundedRectangle(bounds.reduced(1.5f), 16.5f, 2.0f);
+
+    // Inner bevel
+    g.setColour(juce::Colours::black.withAlpha(0.4f));
+    g.drawRoundedRectangle(bounds.reduced(2.5f), 15.5f, 1.5f);
+
+    // Recessed canvas pocket with soft inner shadow
+    auto canvasPocket = m_pixelCanvas.getBounds().toFloat().expanded(12.0f);
+    g.setColour(juce::Colours::black.withAlpha(0.72f));
+    g.fillRoundedRectangle(canvasPocket, 12.0f);
+
+    // Recessed inner highlight (upper-left soft lighting)
+    g.setColour(juce::Colours::white.withAlpha(0.08f));
+    g.drawRoundedRectangle(canvasPocket.reduced(1.5f), 10.5f, 1.0f);
+
+    // Metal rivets/bolts at corners
+    juce::Random rivetRandom(0xC0FFEE);
+    float rivetRadius = 5.0f;
+    juce::Point<float> rivetPositions[] = {
+        { bounds.getX() + 16.0f, bounds.getY() + 16.0f },
+        { bounds.getRight() - 16.0f, bounds.getY() + 16.0f },
+        { bounds.getX() + 16.0f, bounds.getBottom() - 16.0f },
+        { bounds.getRight() - 16.0f, bounds.getBottom() - 16.0f }
+    };
+
+    for (const auto& pos : rivetPositions)
+    {
+        // Rivet shadow
+        g.setColour(juce::Colours::black.withAlpha(0.5f));
+        g.fillEllipse(juce::Rectangle<float>(rivetRadius * 2.0f, rivetRadius * 2.0f)
+                          .withCentre(pos.translated(1.0f, 2.0f)));
+
+        // Rivet body
+        juce::ColourGradient rivetGrad(juce::Colour(0xFF6A7074), pos.x - rivetRadius, pos.y - rivetRadius,
+                                        juce::Colour(0xFF3A3F43), pos.x + rivetRadius, pos.y + rivetRadius, false);
+        g.setGradientFill(rivetGrad);
+        g.fillEllipse(juce::Rectangle<float>(rivetRadius * 2.0f, rivetRadius * 2.0f).withCentre(pos));
+
+        // Rivet highlight
+        g.setColour(juce::Colours::white.withAlpha(0.3f));
+        g.fillEllipse(juce::Rectangle<float>(rivetRadius, rivetRadius * 0.6f)
+                          .withCentre(pos.translated(-rivetRadius * 0.3f, -rivetRadius * 0.3f)));
+    }
+
+    // Bottom edge shadow for depth
+    g.setColour(juce::Colours::black.withAlpha(0.25f));
+    g.fillRect(bounds.getX() + 20.0f, bounds.getBottom() - 8.0f, bounds.getWidth() - 40.0f, 6.0f);
 }
 
 void CanvasModule::resized()
