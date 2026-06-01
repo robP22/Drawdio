@@ -244,7 +244,7 @@ void PedalComponent::paint(juce::Graphics& g)
                 juce::jlimit(1, 1000, static_cast<int>(face.getWidth())),
                 juce::jlimit(1, 1000, static_cast<int>(face.getHeight())),
                 juce::Graphics::highResamplingQuality);
-            g.drawImage(resizedSkin, face.toNearestInt());
+            g.drawImage(resizedSkin, face);
         }
         else
         {
