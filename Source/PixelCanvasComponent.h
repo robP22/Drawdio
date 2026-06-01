@@ -20,13 +20,7 @@ public:
         White = 4,
         Red = 3,
         Green = 2,
-        Blue = 1,
-
-        BLACK = Black,
-        WHITE = White,
-        RED = Red,
-        GREEN = Green,
-        BLUE = Blue
+        Blue = 1
     };
 
     struct PixelChange
