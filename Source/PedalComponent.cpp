@@ -301,7 +301,7 @@ void PedalComponent::paint(juce::Graphics& g)
     }
 
     // 5. LCD cavity - appears raised with bevel effect
-    auto lcdArea = body.withTrimmedTop(body.getHeight() * 0.67f).reduced(18.0f, 10.0f);
+    auto lcdArea = body.withTrimmedTop(body.getHeight() * 0.62f).reduced(18.0f, 10.0f);
 
     // LCD raised outer frame (bevel)
     g.setColour(juce::Colours::black.withAlpha(0.45f));
@@ -420,7 +420,7 @@ void PedalComponent::resized()
 {
     auto bounds = getLocalBounds().reduced(16, 34);
     bounds.removeFromTop(32);
-    bounds.removeFromBottom(static_cast<int>(getHeight() * 0.30f));
+    bounds.removeFromBottom(static_cast<int>(getHeight() * 0.27f));
 
     auto knobArea = bounds.reduced(2, 0);
     const int halfW = knobArea.getWidth() / 2;
