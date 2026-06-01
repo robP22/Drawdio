@@ -236,11 +236,15 @@ void PedalComponent::paint(juce::Graphics& g)
             static_cast<int>(m_slotIndex * skinWidth), 0,
             static_cast<int>(skinWidth), static_cast<int>(skinHeight));
 
-        // Resize skin to fit the face area
+        // Extract and resize skin to fit the face area
         auto skin = m_skinImage.getClippedImage(skinRegion);
         if (skin.isValid())
         {
-            g.drawImage(skin, face.toNearestInt());
+            auto resizedSkin = skin.rescaled(
+                juce::jlimit(1, 1000, face.getWidth()),
+                juce::jlimit(1, 1000, face.getHeight()),
+                juce::Graphics::highResamplingQuality);
+            g.drawImage(resizedSkin, face.toNearestInt());
         }
         else
         {
