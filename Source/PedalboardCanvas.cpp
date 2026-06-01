@@ -121,7 +121,7 @@ void PedalboardCanvas::rebuildFeltImage()
 
     // Try to load texture from file first
     auto texturePath = juce::File::getCurrentWorkingDirectory()
-                           .getChildFile("Assets/Textures/pedalboard_felt.png");
+                           .getChildFile("Assets/Textures/pedalboard_bg.png");
 
     if (texturePath.existsAsFile())
     {

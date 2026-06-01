@@ -144,6 +144,19 @@ PedalComponent::PedalComponent(DrawdioProcessor& processor,
 {
     for (auto& knob : m_knobs)
         initKnob(knob);
+
+    loadSkinTexture();
+}
+
+void PedalComponent::loadSkinTexture()
+{
+    auto texturePath = juce::File::getCurrentWorkingDirectory()
+                           .getChildFile("Assets/Skins/pedal_skin_sheet.png");
+
+    if (texturePath.existsAsFile())
+    {
+        m_skinImage = juce::ImageCache::getFromFile(texturePath);
+    }
 }
 
 PedalComponent::~PedalComponent()
@@ -211,21 +224,57 @@ void PedalComponent::paint(juce::Graphics& g)
 
     // 3. Surface texture (paintable skin layer)
     auto face = body.reduced(7.0f, 6.0f);
-    juce::Colour skin = skinColourForSlot(m_slotIndex);
-    juce::ColourGradient faceGradient(skin.brighter(0.12f), face.getX(), face.getY(),
-                                      skin.darker(0.55f), face.getX(), face.getBottom(),
-                                      false);
-    g.setGradientFill(faceGradient);
-    g.fillRoundedRectangle(face, 10.0f);
 
-    // Texture noise for realistic paint
-    juce::Random random(0xD0A0 + m_slotIndex);
-    for (int i = 0; i < 120; ++i)
+    // Use loaded skin image if available
+    if (m_skinImage.isValid())
     {
-        const auto x = face.getX() + random.nextFloat() * face.getWidth();
-        const auto y = face.getY() + random.nextFloat() * face.getHeight();
-        g.setColour(juce::Colours::white.withAlpha(random.nextFloat() * 0.04f));
-        g.fillRect(x, y, 1.0f + random.nextFloat() * 2.5f, 0.7f + random.nextFloat());
+        // Extract the skin for this slot from the skin sheet
+        // Skin sheet is arranged horizontally: 6 pedals
+        const float skinWidth = m_skinImage.getWidth() / 6.0f;
+        const float skinHeight = m_skinImage.getHeight();
+        juce::Rectangle<int> skinRegion(
+            static_cast<int>(m_slotIndex * skinWidth), 0,
+            static_cast<int>(skinWidth), static_cast<int>(skinHeight));
+
+        // Resize skin to fit the face area
+        auto skin = m_skinImage.getClippedImage(skinRegion);
+        if (skin.isValid())
+        {
+            g.drawImage(skin, face.toNearestInt());
+        }
+        else
+        {
+            // Fallback to procedural
+            juce::Colour skinColor = skinColourForSlot(m_slotIndex);
+            juce::ColourGradient faceGradient(skinColor.brighter(0.12f), face.getX(), face.getY(),
+                                              skinColor.darker(0.55f), face.getX(), face.getBottom(),
+                                              false);
+            g.setGradientFill(faceGradient);
+            g.fillRoundedRectangle(face, 10.0f);
+        }
+    }
+    else
+    {
+        // Procedural fallback
+        juce::Colour skin = skinColourForSlot(m_slotIndex);
+        juce::ColourGradient faceGradient(skin.brighter(0.12f), face.getX(), face.getY(),
+                                          skin.darker(0.55f), face.getX(), face.getBottom(),
+                                          false);
+        g.setGradientFill(faceGradient);
+        g.fillRoundedRectangle(face, 10.0f);
+    }
+
+    // Texture noise for realistic paint (only with procedural skin)
+    if (!m_skinImage.isValid())
+    {
+        juce::Random random(0xD0A0 + m_slotIndex);
+        for (int i = 0; i < 120; ++i)
+        {
+            const auto x = face.getX() + random.nextFloat() * face.getWidth();
+            const auto y = face.getY() + random.nextFloat() * face.getHeight();
+            g.setColour(juce::Colours::white.withAlpha(random.nextFloat() * 0.04f));
+            g.fillRect(x, y, 1.0f + random.nextFloat() * 2.5f, 0.7f + random.nextFloat());
+        }
     }
 
     // 4. Labels
