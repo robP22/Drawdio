@@ -13,52 +13,71 @@ public:
         auto bounds = juce::Rectangle<float>(static_cast<float>(x),
                                              static_cast<float>(y),
                                              static_cast<float>(width),
-                                             static_cast<float>(height)).reduced(7.0f);
+                                             static_cast<float>(height)).reduced(4.0f);
         const auto radius = juce::jmin(bounds.getWidth(), bounds.getHeight()) * 0.5f;
         const auto centre = bounds.getCentre();
         const auto angle = rotaryStartAngle
             + sliderPosProportional * (rotaryEndAngle - rotaryStartAngle);
 
-        g.setColour(juce::Colours::black.withAlpha(0.42f));
-        g.fillEllipse(bounds.translated(0.0f, 3.0f));
+        // Shadow
+        g.setColour(juce::Colours::black.withAlpha(0.4f));
+        g.fillEllipse(bounds.translated(0.0f, 2.0f));
 
-        juce::ColourGradient body(juce::Colour(0xFFB8BEC0),
-                                  centre.x - radius, centre.y - radius,
-                                  juce::Colour(0xFF3C4144),
-                                  centre.x + radius, centre.y + radius,
-                                  false);
-        body.addColour(0.45, juce::Colour(0xFF777E82));
-        g.setGradientFill(body);
+        // Outer ring - dark metallic base
+        juce::ColourGradient outerGrad(juce::Colour(0xFF3C4144),
+                                      centre.x - radius, centre.y - radius,
+                                      juce::Colour(0xFF1A1C1E),
+                                      centre.x + radius, centre.y + radius,
+                                      false);
+        g.setGradientFill(outerGrad);
         g.fillEllipse(bounds);
 
-        g.setColour(juce::Colours::black.withAlpha(0.58f));
-        g.drawEllipse(bounds, 1.4f);
+        // Grip grooves on the skirt
+        g.setColour(juce::Colours::black.withAlpha(0.3f));
+        for (int i = 0; i < 12; ++i)
+        {
+            float grooveRadius = radius * (0.72f + i * 0.022f);
+            g.drawEllipse(
+                centre.x - grooveRadius,
+                centre.y - grooveRadius,
+                grooveRadius * 2.0f,
+                grooveRadius * 2.0f,
+                0.5f);
+        }
 
-        auto cap = bounds.reduced(radius * 0.25f);
-        juce::ColourGradient capGradient(juce::Colour(0xFFD9DEE0),
-                                         cap.getX(), cap.getY(),
-                                         juce::Colour(0xFF5B6265),
-                                         cap.getRight(), cap.getBottom(),
-                                         false);
-        g.setGradientFill(capGradient);
+        // Inner cap - lighter aluminum top
+        auto cap = bounds.reduced(radius * 0.35f);
+        juce::ColourGradient capGrad(juce::Colour(0xFFE8ECEE),
+                                    cap.getX(), cap.getY(),
+                                    juce::Colour(0xFF5B6265),
+                                    cap.getRight(), cap.getBottom(),
+                                    false);
+        capGrad.addColour(0.3f, juce::Colour(0xFFC0C6CA));
+        g.setGradientFill(capGrad);
         g.fillEllipse(cap);
 
-        g.setColour(juce::Colours::white.withAlpha(0.34f));
-        g.fillEllipse(cap.withSizeKeepingCentre(cap.getWidth() * 0.46f,
-                                                cap.getHeight() * 0.22f)
-                          .translated(-cap.getWidth() * 0.12f, -cap.getHeight() * 0.18f));
+        // Specular highlight on cap
+        g.setColour(juce::Colours::white.withAlpha(0.45f));
+        g.fillEllipse(juce::Rectangle<float>(
+            cap.getX() + cap.getWidth() * 0.2f,
+            cap.getY() + cap.getHeight() * 0.15f,
+            cap.getWidth() * 0.35f,
+            cap.getHeight() * 0.3f));
 
+        // Indicator line
         juce::Path indicator;
-        const auto lineStart = centre.getPointOnCircumference(radius * 0.18f, angle);
-        const auto lineEnd = centre.getPointOnCircumference(radius * 0.72f, angle);
+        const auto lineStart = centre.getPointOnCircumference(radius * 0.52f, angle);
+        const auto lineEnd = centre.getPointOnCircumference(radius * 0.78f, angle);
         indicator.startNewSubPath(lineStart);
         indicator.lineTo(lineEnd);
 
         g.setColour(juce::Colour(0xFF101214));
-        g.strokePath(indicator, juce::PathStrokeType(2.1f, juce::PathStrokeType::curved,
+        g.strokePath(indicator, juce::PathStrokeType(2.5f, juce::PathStrokeType::curved,
                                                     juce::PathStrokeType::rounded));
-        g.setColour(juce::Colours::white.withAlpha(0.30f));
-        g.drawEllipse(bounds.reduced(2.0f), 1.0f);
+
+        // Outer ring edge highlight
+        g.setColour(juce::Colours::white.withAlpha(0.15f));
+        g.drawEllipse(bounds.reduced(1.0f), 1.0f);
     }
 };
 
@@ -281,42 +300,50 @@ void PedalComponent::paint(juce::Graphics& g)
         }
     }
 
-    // 4. Labels
+    // 4. Labels - only show if using procedural skin
     auto labelTop = face.removeFromTop(24.0f).reduced(8.0f, 2.0f);
-    g.setFont(juce::FontOptions(11.0f, juce::Font::bold));
-    g.setColour(juce::Colours::white.withAlpha(0.78f));
-    g.drawFittedText("DRAWDIO " + juce::String(m_slotIndex + 1),
-                     labelTop.toNearestInt(),
-                     juce::Justification::centred,
-                     1);
+    if (!m_skinImage.isValid())
+    {
+        g.setFont(juce::FontOptions(11.0f, juce::Font::bold));
+        g.setColour(juce::Colours::white.withAlpha(0.78f));
+        g.drawFittedText(typeName(m_currentType),
+                         labelTop.toNearestInt(),
+                         juce::Justification::centred,
+                         1);
+    }
 
-    // 5. LCD cavity
+    // 5. LCD cavity - appears raised with bevel effect
     auto lcdArea = body.withTrimmedTop(body.getHeight() * 0.67f).reduced(18.0f, 10.0f);
-    g.setColour(juce::Colours::black.withAlpha(0.60f));
-    g.fillRoundedRectangle(lcdArea.expanded(3.0f), 6.0f);
 
-    // 6. LCD lens - smoked glass
-    g.setColour(juce::Colour(0xFF050707));
+    // LCD raised outer frame (bevel)
+    g.setColour(juce::Colours::black.withAlpha(0.45f));
+    g.fillRoundedRectangle(lcdArea.expanded(4.0f), 6.0f);
+
+    // LCD raised highlight (top-left bevel)
+    g.setColour(juce::Colour(0xFF888888));
+    g.drawLine(lcdArea.getX() + 4.0f, lcdArea.getY() + 1.0f,
+               lcdArea.getRight() - 4.0f, lcdArea.getY() + 1.0f, 2.0f);
+    g.drawLine(lcdArea.getX() + 1.0f, lcdArea.getY() + 4.0f,
+               lcdArea.getX() + 1.0f, lcdArea.getBottom() - 4.0f, 2.0f);
+
+    // LCD dark cavity
+    g.setColour(juce::Colour(0xFF080A09));
     g.fillRoundedRectangle(lcdArea, 5.0f);
 
-    juce::ColourGradient lens(juce::Colour(0xFF283034).withAlpha(0.75f),
+    // 6. LCD lens - recessed glass
+    juce::ColourGradient lens(juce::Colour(0xFF182018),
                               lcdArea.getX(), lcdArea.getY(),
-                              juce::Colour(0xFF070909).withAlpha(0.96f),
+                              juce::Colour(0xFF020402),
                               lcdArea.getRight(), lcdArea.getBottom(),
                               false);
     g.setGradientFill(lens);
-    g.fillRoundedRectangle(lcdArea.reduced(2.0f), 4.0f);
+    g.fillRoundedRectangle(lcdArea.reduced(3.0f), 4.0f);
 
-    // Lens reflection
-    g.setColour(juce::Colours::white.withAlpha(0.06f));
-    g.fillRect(lcdArea.getX() + 4.0f, lcdArea.getY() + 2.0f, 
-               lcdArea.getWidth() - 8.0f, lcdArea.getHeight() * 0.3f);
-
-    // 7. LCD text - fluorescent white
+    // 7. LCD text - fluorescent green
     g.setColour(juce::Colour(0xFFA8F0B8));
     g.setFont(juce::FontOptions(11.0f, juce::Font::bold));
     g.drawFittedText(typeName(m_currentType),
-                     lcdArea.reduced(5.0f, 2.0f).toNearestInt(),
+                     lcdArea.reduced(6.0f, 3.0f).toNearestInt(),
                      juce::Justification::centred,
                      1);
 
@@ -348,9 +375,10 @@ void PedalComponent::paint(juce::Graphics& g)
         g.drawEllipse(jack.x - 6.0f, jack.y - 6.0f, 12.0f, 12.0f, 0.5f);
     }
 
-    // 9. LED with glow
-    auto led = body.reduced(18.0f, 24.0f).withTrimmedBottom(body.getHeight() * 0.70f)
-                   .removeFromRight(20.0f);
+    // 9. LED with glow - centered horizontally, near top
+    auto led = juce::Rectangle<float>(body.getX() + body.getWidth() * 0.5f - 6.0f,
+                                      body.getY() - 4.0f,
+                                      12.0f, 12.0f);
     const bool active = m_currentType != DspModuleType::BYPASS;
 
     // LED glow
