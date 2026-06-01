@@ -6,6 +6,25 @@ namespace
 class PedalKnobLookAndFeel : public juce::LookAndFeel_V4
 {
 public:
+    juce::Image knobImage;
+
+    PedalKnobLookAndFeel()
+    {
+        // Try to load knob image
+        auto texturePath = juce::File::getSpecialLocation(juce::File::invokedExecutableFile)
+                               .getParentDirectory()
+                               .getChildFile("Contents/Resources/Assets/Skins/knob__generic.png");
+
+        if (!texturePath.existsAsFile())
+        {
+            texturePath = juce::File::getCurrentWorkingDirectory()
+                               .getChildFile("Assets/Skins/knob__generic.png");
+        }
+
+        if (texturePath.existsAsFile())
+            knobImage = juce::ImageCache::getFromFile(texturePath);
+    }
+
     void drawRotarySlider(juce::Graphics& g, int x, int y, int width, int height,
                           float sliderPosProportional, float rotaryStartAngle,
                           float rotaryEndAngle, juce::Slider&) override
@@ -13,7 +32,7 @@ public:
         auto bounds = juce::Rectangle<float>(static_cast<float>(x),
                                              static_cast<float>(y),
                                              static_cast<float>(width),
-                                             static_cast<float>(height)).reduced(4.0f);
+                                             static_cast<float>(height));
         const auto radius = juce::jmin(bounds.getWidth(), bounds.getHeight()) * 0.5f;
         const auto centre = bounds.getCentre();
         const auto angle = rotaryStartAngle
@@ -21,63 +40,79 @@ public:
 
         // Shadow
         g.setColour(juce::Colours::black.withAlpha(0.4f));
-        g.fillEllipse(bounds.translated(0.0f, 2.0f));
+        g.fillEllipse(bounds.reduced(2.0f).translated(0.0f, 2.0f));
 
-        // Outer ring - dark metallic base
-        juce::ColourGradient outerGrad(juce::Colour(0xFF3C4144),
-                                      centre.x - radius, centre.y - radius,
-                                      juce::Colour(0xFF1A1C1E),
-                                      centre.x + radius, centre.y + radius,
-                                      false);
-        g.setGradientFill(outerGrad);
-        g.fillEllipse(bounds);
-
-        // Grip grooves on the skirt
-        g.setColour(juce::Colours::black.withAlpha(0.3f));
-        for (int i = 0; i < 12; ++i)
+        if (knobImage.isValid())
         {
-            float grooveRadius = radius * (0.72f + i * 0.022f);
-            g.drawEllipse(
-                centre.x - grooveRadius,
-                centre.y - grooveRadius,
-                grooveRadius * 2.0f,
-                grooveRadius * 2.0f,
-                0.5f);
+            // Draw off-white background circle (outer ring)
+            juce::ColourGradient bgGrad(juce::Colour(0xFFF5F5F0),
+                                        centre.x - radius, centre.y - radius,
+                                        juce::Colour(0xFFD8D8D0),
+                                        centre.x + radius, centre.y + radius,
+                                        false);
+            g.setGradientFill(bgGrad);
+            g.fillEllipse(bounds);
+
+            // Draw black knob center
+            auto knobBounds = bounds.reduced(radius * 0.25f);
+            g.setColour(juce::Colours::black);
+            g.fillEllipse(knobBounds);
+
+            // Draw indicator line
+            juce::Path indicator;
+            const auto lineStart = centre.getPointOnCircumference(radius * 0.35f, angle);
+            const auto lineEnd = centre.getPointOnCircumference(radius * 0.72f, angle);
+            indicator.startNewSubPath(lineStart);
+            indicator.lineTo(lineEnd);
+
+            g.setColour(juce::Colours::white);
+            g.strokePath(indicator, juce::PathStrokeType(2.5f, juce::PathStrokeType::curved,
+                                                        juce::PathStrokeType::rounded));
+
+            // Specular highlight
+            g.setColour(juce::Colours::white.withAlpha(0.3f));
+            g.fillEllipse(juce::Rectangle<float>(
+                centre.x - radius * 0.3f,
+                centre.y - radius * 0.5f,
+                radius * 0.4f,
+                radius * 0.25f));
         }
+        else
+        {
+            // Fallback: simple procedural knob
+            // Off-white outer ring
+            juce::ColourGradient outerGrad(juce::Colour(0xFFF5F5F0),
+                                          centre.x - radius, centre.y - radius,
+                                          juce::Colour(0xFFD8D8D0),
+                                          centre.x + radius, centre.y + radius,
+                                          false);
+            g.setGradientFill(outerGrad);
+            g.fillEllipse(bounds);
 
-        // Inner cap - lighter aluminum top
-        auto cap = bounds.reduced(radius * 0.35f);
-        juce::ColourGradient capGrad(juce::Colour(0xFFE8ECEE),
-                                    cap.getX(), cap.getY(),
-                                    juce::Colour(0xFF5B6265),
-                                    cap.getRight(), cap.getBottom(),
-                                    false);
-        capGrad.addColour(0.3f, juce::Colour(0xFFC0C6CA));
-        g.setGradientFill(capGrad);
-        g.fillEllipse(cap);
+            // Black knob center
+            auto knobBounds = bounds.reduced(radius * 0.25f);
+            g.setColour(juce::Colours::black);
+            g.fillEllipse(knobBounds);
 
-        // Specular highlight on cap
-        g.setColour(juce::Colours::white.withAlpha(0.45f));
-        g.fillEllipse(juce::Rectangle<float>(
-            cap.getX() + cap.getWidth() * 0.2f,
-            cap.getY() + cap.getHeight() * 0.15f,
-            cap.getWidth() * 0.35f,
-            cap.getHeight() * 0.3f));
+            // Indicator line
+            juce::Path indicator;
+            const auto lineStart = centre.getPointOnCircumference(radius * 0.35f, angle);
+            const auto lineEnd = centre.getPointOnCircumference(radius * 0.72f, angle);
+            indicator.startNewSubPath(lineStart);
+            indicator.lineTo(lineEnd);
 
-        // Indicator line
-        juce::Path indicator;
-        const auto lineStart = centre.getPointOnCircumference(radius * 0.52f, angle);
-        const auto lineEnd = centre.getPointOnCircumference(radius * 0.78f, angle);
-        indicator.startNewSubPath(lineStart);
-        indicator.lineTo(lineEnd);
+            g.setColour(juce::Colours::white);
+            g.strokePath(indicator, juce::PathStrokeType(2.5f, juce::PathStrokeType::curved,
+                                                        juce::PathStrokeType::rounded));
 
-        g.setColour(juce::Colour(0xFF101214));
-        g.strokePath(indicator, juce::PathStrokeType(2.5f, juce::PathStrokeType::curved,
-                                                    juce::PathStrokeType::rounded));
-
-        // Outer ring edge highlight
-        g.setColour(juce::Colours::white.withAlpha(0.15f));
-        g.drawEllipse(bounds.reduced(1.0f), 1.0f);
+            // Specular highlight
+            g.setColour(juce::Colours::white.withAlpha(0.3f));
+            g.fillEllipse(juce::Rectangle<float>(
+                centre.x - radius * 0.3f,
+                centre.y - radius * 0.5f,
+                radius * 0.4f,
+                radius * 0.25f));
+        }
     }
 };
 
