@@ -711,8 +711,8 @@ DrawdioProcessorEditor::DrawdioProcessorEditor(DrawdioProcessor& p)
       m_pedalboardCanvas(p)
 {
     addAndMakeVisible(m_workspaceBackground);
-    addAndMakeVisible(m_pedalboardCanvas);
     addAndMakeVisible(m_canvasModule);
+    addAndMakeVisible(m_pedalboardCanvas);
     addAndMakeVisible(m_bottomControlBar);
     m_workspaceBackground.toBack();
 
