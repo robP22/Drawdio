@@ -49,41 +49,15 @@ void PixelCanvasComponent::paint(juce::Graphics& g)
 {
     auto bounds = getLocalBounds().toFloat();
 
-    // Canvas background with subtle woven texture
-    g.setColour(juce::Colour(0xFFD8D5CC));
+    // Dark grey canvas background (drawing surface)
+    g.setColour(juce::Colour(0xFF404040));
     g.fillRoundedRectangle(bounds, 4.0f);
-
-    // Subtle woven canvas texture pattern
-    g.setColour(juce::Colours::black.withAlpha(0.025f));
-    const float texSize = 4.0f;
-    for (float y = 0.0f; y < bounds.getHeight(); y += texSize)
-    {
-        for (float x = 0.0f; x < bounds.getWidth(); x += texSize)
-        {
-            bool offsetRow = (static_cast<int>(y / texSize) % 2 == 1);
-            float lineX = x + (offsetRow ? texSize * 0.5f : 0.0f);
-            if (lineX < bounds.getRight())
-                g.drawVerticalLine(lineX, y, y + texSize);
-        }
-    }
 
     // Draw pixel data
     g.setImageResamplingQuality(juce::Graphics::lowResamplingQuality);
     g.drawImage(m_pixelImage, bounds);
     g.setImageResamplingQuality(juce::Graphics::mediumResamplingQuality);
 
-    // Subtle horizontal weave lines
-    g.setColour(juce::Colours::white.withAlpha(0.04f));
-    for (int y = 2; y < getHeight(); y += 5)
-        g.drawHorizontalLine(y, 0.0f, static_cast<float>(getWidth()));
-
-    // Subtle vertical weave lines
-    g.setColour(juce::Colours::black.withAlpha(0.025f));
-    for (int x = 2; x < getWidth(); x += 6)
-        g.drawVerticalLine(x, 0.0f, static_cast<float>(getHeight()));
-
-    // Grid lines
-    const float cellW = bounds.getWidth() / static_cast<float>(GridSize);
     const float cellH = bounds.getHeight() / static_cast<float>(GridSize);
     const auto gridAlpha = (m_mouseInside || m_drawing) ? 0.18f : 0.07f;
 
