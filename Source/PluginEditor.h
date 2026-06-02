@@ -11,20 +11,6 @@
 #include "PixelCanvasComponent.h"
 #include "PluginProcessor.h"
 
-class WorkspaceBackground : public juce::Component
-{
-public:
-    WorkspaceBackground();
-
-    void paint(juce::Graphics& g) override;
-    void resized() override;
-
-private:
-    void rebuildCachedBackground();
-
-    juce::Image m_background;
-};
-
 class ColorPalette : public juce::Component
 {
 public:
@@ -77,19 +63,6 @@ private:
     std::function<void()> m_onClear;
 };
 
-class CanvasStatusDisplay : public juce::Component
-{
-public:
-    void paint(juce::Graphics& g) override;
-
-    void setSelectedColor(PixelCanvasComponent::PixelColor color);
-    void setChangedCellCount(int count);
-
-private:
-    PixelCanvasComponent::PixelColor m_selectedColor = PixelCanvasComponent::PixelColor::Red;
-    int m_changedCellCount = 0;
-};
-
 class CanvasModule : public juce::Component
 {
 public:
@@ -102,50 +75,16 @@ public:
     const PixelCanvasComponent& getPixelCanvas() const { return m_pixelCanvas; }
 
     void setOnClear(std::function<void()> cb) { m_onClear = std::move(cb); }
-    void refreshStatus();
 
 private:
     PixelCanvasComponent m_pixelCanvas;
     ColorPalette m_palette;
     CanvasTools m_tools;
-    int m_changedCount = 0;
 
     std::function<void()> m_onClear;
 };
 
-class LevelMeter : public juce::Component
-{
-public:
-    explicit LevelMeter(juce::String label);
-
-    void paint(juce::Graphics& g) override;
-    void setLevel(float level);
-
-private:
-    juce::String m_label;
-    float m_level = 0.0f;
-};
-
-class BottomControlBar : public juce::Component
-{
-public:
-    BottomControlBar();
-
-    void paint(juce::Graphics& g) override;
-    void resized() override;
-
-    void setMeterLevels(float inputLevel, float outputLevel);
-
-private:
-    LevelMeter m_inputMeter { "IN" };
-    LevelMeter m_outputMeter { "OUT" };
-    juce::Slider m_dryWetSlider;
-    juce::ComboBox m_oversamplingSelector;
-    juce::ComboBox m_qualitySelector;
-};
-
-class DrawdioProcessorEditor : public juce::AudioProcessorEditor,
-                                private juce::Timer
+class DrawdioProcessorEditor : public juce::AudioProcessorEditor
 {
 public:
     explicit DrawdioProcessorEditor(DrawdioProcessor&);
@@ -156,13 +95,8 @@ public:
 
 private:
     void triggerRecompile();
-    void timerCallback() override;
 
     DrawdioProcessor& audioProcessor;
-    WorkspaceBackground m_workspaceBackground;
     CanvasModule m_canvasModule;
     PedalboardCanvas m_pedalboardCanvas;
-    BottomControlBar m_bottomControlBar;
-    std::vector<uint8_t> m_lastRoutingOrder;
-    uint32_t m_seenConfigRevision = 0;
 };
