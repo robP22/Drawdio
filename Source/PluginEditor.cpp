@@ -92,8 +92,8 @@ void PaletteTools::resized()
         const float colorAreaWidth = bounds.getWidth() * 0.6f;
         const int slotCount = 5;
         const float slotW = colorAreaWidth / slotCount;
-        const float slotH = juce::jmin(bounds.getHeight() - 20, 40.0f);
-        const float yOffset = (bounds.getHeight() - slotH) / 2.0f;
+        const float slotH = juce::jmin(static_cast<float>(bounds.getHeight()) - 20.0f, 40.0f);
+        const float yOffset = (static_cast<float>(bounds.getHeight()) - slotH) / 2.0f;
 
         for (int i = 0; i < slotCount; ++i)
         {
@@ -108,7 +108,7 @@ void PaletteTools::resized()
         auto buttonArea = bounds.withX(bounds.getX() + colorAreaWidth);
         buttonArea = buttonArea.reduced(15, 25);
 
-        const auto buttonH = juce::jmin(buttonArea.getHeight() - 10, 24.0f);
+        const auto buttonH = juce::jmin(static_cast<float>(buttonArea.getHeight()) - 10.0f, 24.0f);
         m_undoButton.setBounds(buttonArea.removeFromTop(buttonH).toNearestInt());
         buttonArea.removeFromTop(20);
         m_clearButton.setBounds(buttonArea.removeFromTop(buttonH).toNearestInt());
