@@ -157,6 +157,12 @@ void PedalComponent::PedalKnobLookAndFeel::drawRotarySlider(juce::Graphics& g, i
     g.strokePath(bodyEdgePath, juce::PathStrokeType(1.0f, juce::PathStrokeType::curved));
 }
 
+PedalComponent::PedalKnobLookAndFeel& PedalComponent::PedalKnobLookAndFeel::getInstance()
+{
+    static PedalKnobLookAndFeel instance;
+    return instance;
+}
+
 PedalComponent::PedalComponent(DrawdioProcessor& processor, int slotIndex, int spriteFrameX, int spriteFrameY)
     : audioProcessor(processor),
       m_slotIndex(slotIndex),
