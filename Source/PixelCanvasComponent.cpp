@@ -49,8 +49,7 @@ void PixelCanvasComponent::paint(juce::Graphics& g)
 {
     auto bounds = getLocalBounds().toFloat();
 
-    // Medium-dark grey canvas background (drawing surface)
-    // Allows black (#000) and white (#FFF) pixels to be clearly visible
+    // Dark grey canvas background (drawing surface)
     g.setColour(juce::Colour(0xFF484848));
     g.fillRoundedRectangle(bounds, 4.0f);
 
@@ -72,10 +71,6 @@ void PixelCanvasComponent::paint(juce::Graphics& g)
         g.drawLine(x, bounds.getY(), x, bounds.getBottom(), thickness);
         g.drawLine(bounds.getX(), y, bounds.getRight(), y, thickness);
     }
-
-    // Border highlight
-    g.setColour(juce::Colours::white.withAlpha(0.22f));
-    g.drawRoundedRectangle(bounds.reduced(0.5f), 4.0f, 1.0f);
 }
 
 void PixelCanvasComponent::resized()

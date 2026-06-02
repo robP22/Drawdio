@@ -26,17 +26,10 @@ ColorPalette::ColorPalette()
 
 void ColorPalette::paint(juce::Graphics& g)
 {
+    // Simple flat dark background
+    g.fillAll(juce::Colour(0xFF141618));
+
     auto bounds = getLocalBounds().toFloat();
-
-    // Panel background with inset shadow
-    g.setColour(juce::Colours::black.withAlpha(0.2f));
-    g.fillRoundedRectangle(bounds.reduced(2.0f).translated(0.0f, 2.0f), 8.0f);
-
-    // Metal panel
-    juce::ColourGradient panelGrad(juce::Colour(0xFF2A2D2F), bounds.getX(), bounds.getY(),
-                                    juce::Colour(0xFF141618), bounds.getX(), bounds.getBottom(), false);
-    g.setGradientFill(panelGrad);
-    g.fillRoundedRectangle(bounds.reduced(2.0f), 7.0f);
 
     for (int i = 0; i < static_cast<int>(m_blobs.size()); ++i)
     {
@@ -138,10 +131,6 @@ void ColorPalette::paint(juce::Graphics& g)
             g.strokePath(splat, juce::PathStrokeType(1.5f));
         }
     }
-
-    // Panel border
-    g.setColour(juce::Colours::white.withAlpha(0.08f));
-    g.drawRoundedRectangle(bounds.reduced(3.0f), 6.0f, 1.0f);
 }
 
 void ColorPalette::resized()
@@ -229,13 +218,8 @@ CanvasTools::CanvasTools()
 
 void CanvasTools::paint(juce::Graphics& g)
 {
-    auto bounds = getLocalBounds().toFloat().reduced(1.0f);
-    g.setColour(juce::Colours::black.withAlpha(0.3f));
-    g.fillRoundedRectangle(bounds.reduced(1.0f).translated(0.0f, 2.0f), 7.0f);
-    juce::ColourGradient panelGrad(juce::Colour(0xFF2A2D2F), bounds.getX(), bounds.getY(),
-                                  juce::Colour(0xFF141618), bounds.getX(), bounds.getBottom(), false);
-    g.setGradientFill(panelGrad);
-    g.fillRoundedRectangle(bounds.reduced(1.0f), 7.0f);
+    // Simple flat dark background
+    g.fillAll(juce::Colour(0xFF141618));
 }
 
 void CanvasTools::resized()
@@ -282,57 +266,23 @@ CanvasModule::CanvasModule()
 
 void CanvasModule::paint(juce::Graphics& g)
 {
-    auto bounds = getLocalBounds().toFloat().reduced(2.0f);
-
-    // Drop shadow beneath module
-    g.setColour(juce::Colours::black.withAlpha(0.52f));
-    g.fillRoundedRectangle(bounds.translated(0.0f, 14.0f), 18.0f);
-
-    // Dark industrial metal housing with visible thickness
-    juce::ColourGradient housingGradient(juce::Colour(0xFF4A5054), bounds.getX(), bounds.getY(),
-                                          juce::Colour(0xFF1A1D1F), bounds.getX(), bounds.getBottom(), false);
-    housingGradient.addColour(0.3f, juce::Colour(0xFF3A3F43));
-    housingGradient.addColour(0.7f, juce::Colour(0xFF25292C));
-    g.setGradientFill(housingGradient);
-    g.fillRoundedRectangle(bounds, 17.0f);
-
-    // Top highlight edge
-    g.setColour(juce::Colours::white.withAlpha(0.12f));
-    g.drawRoundedRectangle(bounds.reduced(1.5f), 16.0f, 1.5f);
-
-    // Bottom shadow edge
-    g.setColour(juce::Colours::black.withAlpha(0.68f));
-    g.drawRoundedRectangle(bounds, 17.0f, 2.0f);
-
-    // Corner screws (decorative)
-    const float screwRadius = 7.0f;
-    const float screwInset = 18.0f;
-    g.setColour(juce::Colour(0xFF6A7074));
-    for (const auto& corner : {
-        juce::Point<float>(bounds.getX() + screwInset, bounds.getY() + screwInset),
-        juce::Point<float>(bounds.getRight() - screwInset, bounds.getY() + screwInset),
-        juce::Point<float>(bounds.getX() + screwInset, bounds.getBottom() - screwInset),
-        juce::Point<float>(bounds.getRight() - screwInset, bounds.getBottom() - screwInset)
-    })
-    {
-        g.fillEllipse(juce::Rectangle<float>(screwRadius * 2.0f, screwRadius * 2.0f)
-                          .withCentre(corner));
-    }
+    // Simple dark background
+    g.fillAll(juce::Colour(0xFF1A1D1F));
 }
 
 void CanvasModule::resized()
 {
-    auto area = getLocalBounds().reduced(22, 20);
-    auto bottom = area.removeFromBottom(82);
-    area.removeFromBottom(14);
+    auto area = getLocalBounds().reduced(12, 10);
+    auto bottom = area.removeFromBottom(70);
+    area.removeFromBottom(10);
 
     const auto square = juce::jmin(area.getWidth(), area.getHeight());
     auto canvasArea = area.withSizeKeepingCentre(square, square);
-    m_pixelCanvas.setBounds(canvasArea.reduced(8));
+    m_pixelCanvas.setBounds(canvasArea.reduced(4));
 
     auto controls = bottom;
-    auto toolsArea = controls.removeFromRight(112);
-    controls.removeFromRight(10);
+    auto toolsArea = controls.removeFromRight(100);
+    controls.removeFromRight(8);
     m_palette.setBounds(controls);
     m_tools.setBounds(toolsArea);
 }
