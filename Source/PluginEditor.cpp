@@ -89,7 +89,7 @@ void PaletteTools::resized()
 
     if (!bounds.isEmpty())
     {
-        const float colorAreaWidth = bounds.getWidth() * 0.6f;
+        const float colorAreaWidth = bounds.getWidth() * 0.75f;
         const int slotCount = 5;
         const float slotW = colorAreaWidth / slotCount;
         const float slotH = juce::jmin(static_cast<float>(bounds.getHeight()) - 20.0f, 40.0f);
@@ -268,10 +268,9 @@ void DrawdioProcessorEditor::resized()
     const auto gap = 18;
     const auto totalWidth = content.getWidth();
 
-    // Balance left/right: left is 75px wider
-    const int leftBias = 75;
-    const int leftW = (totalWidth - gap) / 2 + leftBias;
-    const int rightW = totalWidth - leftW;
+    // Balance left/right: right is 100px wider than left
+    const int leftW = (totalWidth - gap - 100) / 2;
+    const int rightW = leftW + 100;
 
     auto leftArea = content.removeFromLeft(leftW);
     content.removeFromRight(gap);
