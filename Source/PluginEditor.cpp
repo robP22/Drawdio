@@ -115,9 +115,9 @@ void PaletteTools::resized()
         m_undoButton.setBounds(buttonArea.removeFromTop(buttonH).toNearestInt());
         buttonArea.removeFromTop(30);
         m_clearButton.setBounds(buttonArea.removeFromTop(buttonH).toNearestInt());
-    }
 
-    repaint();
+        repaint();
+    }
 }
 
 void PaletteTools::mouseDown(const juce::MouseEvent& event)
@@ -253,13 +253,13 @@ DrawdioProcessorEditor::~DrawdioProcessorEditor() = default;
 void DrawdioProcessorEditor::paint(juce::Graphics& g)
 {
     auto bounds = getLocalBounds().toFloat();
+
+    // Fill background first in case image has transparent alpha
+    g.fillAll(juce::Colour(0xFF2A2A2A));
+
     if (m_woodBackground.isValid())
     {
         g.drawImage(m_woodBackground, bounds);
-    }
-    else
-    {
-        g.fillAll(juce::Colour(0xFF1A1A1A));
     }
 }
 
@@ -273,6 +273,7 @@ void DrawdioProcessorEditor::resized()
         m_woodBackground = m_woodBackground.rescaled(bounds.getWidth(),
                                                      bounds.getHeight(),
                                                      juce::Graphics::highResamplingQuality);
+        repaint();
     }
 
     auto content = bounds.reduced(18, 16);
