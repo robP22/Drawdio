@@ -74,7 +74,7 @@ void PedalComponent::PedalKnobLookAndFeel::drawRotarySlider(juce::Graphics& g, i
     innerShadowPath.addEllipse(centerX - radius, centerY - radius, diameter, diameter);
 
     g.setColour(juce::Colour(0xFF050505));
-    g.fillPath(innerShadowPath, juce::PathStrokeType(innerShadowWidth, juce::PathStrokeType::curved));
+    g.fillPath(innerShadowPath);
 
     // === BRUSHED ALUMINUM CAP ===
     const float capDiameter = capRadius * 2.0f;
