@@ -94,15 +94,30 @@ void PedalboardCanvas::resized()
     m_feltBounds = m_boardBounds.reduced(21, 19);
     rebuildFeltImage();
 
-    // Large rounded-rectangle pedal enclosure: x=60-1062, y=45-1360 relative to frame
-    const int pedalX = 60;
-    const int pedalY = 45;
-    const int pedalW = 1002;  // 1062 - 60
-    const int pedalH = 1315;  // 1360 - 45
+    // Calculate positions for 6 pedals in 2 columns x 3 rows
+    const int numCols = 2;
+    const int numRows = 3;
+    const int spacing = 8;
+
+    const int availW = m_feltBounds.getWidth();
+    const int availH = m_feltBounds.getHeight();
+
+    // Calculate pedal dimensions to fit all 6 with spacing
+    const int pedalW = (availW - (numCols + 1) * spacing) / numCols;
+    const int pedalH = (availH - (numRows + 1) * spacing) / numRows;
+
+    // Ensure minimum size
+    const int minSize = juce::jmin(availW / 3, availH / 2, 280);
+    const int actualPedalW = juce::jmax(120, juce::jmin(pedalW, minSize));
+    const int actualPedalH = juce::jmax(100, juce::jmin(pedalH, minSize));
 
     for (int slot = 0; slot < 6; ++slot)
     {
-        m_pedalComponents[static_cast<size_t>(slot)]->setBounds(pedalX, pedalY, pedalW, pedalH);
+        const int col = slot % numCols;
+        const int row = slot / numCols;
+        const int x = m_feltBounds.getX() + spacing + col * (actualPedalW + spacing);
+        const int y = m_feltBounds.getY() + spacing + row * (actualPedalH + spacing);
+        m_pedalComponents[static_cast<size_t>(slot)]->setBounds(x, y, actualPedalW, actualPedalH);
     }
 }
 
