@@ -5,6 +5,13 @@ PedalboardBackground::PedalboardBackground(DrawdioProcessor& processor)
     : audioProcessor(processor)
 {
     loadTexture();
+
+    for (int i = 0; i < 6; ++i)
+    {
+        auto type = audioProcessor.getPedalSlot(i);
+        m_pedals[i] = std::make_unique<PedalComponent>(processor, i, type);
+        addAndMakeVisible(*m_pedals[i]);
+    }
 }
 
 void PedalboardBackground::loadTexture()
@@ -52,4 +59,41 @@ void PedalboardBackground::resized()
                                                         juce::Graphics::highResamplingQuality);
         repaint();
     }
+
+    if (m_pedals[0])
+    {
+        const int cols = 2;
+        const int rows = 3;
+        const int gap = 12;
+        const auto cellW = (bounds.getWidth() - gap * (cols + 1)) / cols;
+        const auto cellH = (bounds.getHeight() - gap * (rows + 1)) / rows;
+
+        for (int row = 0; row < rows; ++row)
+        {
+            for (int col = 0; col < cols; ++col)
+            {
+                const int idx = row * cols + col;
+                const auto x = bounds.getX() + gap + col * (cellW + gap);
+                const auto y = bounds.getY() + gap + row * (cellH + gap);
+                m_pedals[idx]->setBounds(static_cast<int>(x), static_cast<int>(y),
+                                         static_cast<int>(cellW), static_cast<int>(cellH));
+            }
+        }
+    }
+}
+
+void PedalboardBackground::syncFromProcessor()
+{
+    for (int i = 0; i < 6; ++i)
+    {
+        if (m_pedals[i])
+            m_pedals[i]->syncFromProcessor();
+    }
+}
+
+PedalComponent* PedalboardBackground::getPedalComponent(int slot) const
+{
+    if (slot >= 0 && slot < 6)
+        return m_pedals[slot].get();
+    return nullptr;
 }
