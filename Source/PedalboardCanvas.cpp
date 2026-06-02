@@ -4,6 +4,27 @@
 PedalboardCanvas::PedalboardCanvas(DrawdioProcessor& processor)
     : audioProcessor(processor)
 {
+    // Load texture immediately
+    loadTexture();
+}
+
+void PedalboardCanvas::loadTexture()
+{
+    // Try development path first
+    auto texturePath = juce::File::getCurrentWorkingDirectory()
+                           .getChildFile("Assets/Textures/pedalboard_bg.png");
+
+    if (!texturePath.existsAsFile())
+    {
+        // Try plugin bundle path
+        auto assetDir = juce::File::getSpecialLocation(juce::File::invokedExecutableFile).getParentDirectory();
+        texturePath = assetDir.getChildFile("Contents/Resources/Assets/Textures/pedalboard_bg.png");
+    }
+
+    if (texturePath.existsAsFile())
+    {
+        m_pedalboardImage = juce::ImageCache::getFromFile(texturePath);
+    }
 }
 
 void PedalboardCanvas::paint(juce::Graphics& g)
@@ -12,6 +33,7 @@ void PedalboardCanvas::paint(juce::Graphics& g)
 
     if (m_pedalboardImage.isValid())
     {
+        // Don't rescale every paint - use the pre-scaled image
         g.drawImage(m_pedalboardImage, bounds);
     }
     else
@@ -24,38 +46,14 @@ void PedalboardCanvas::paint(juce::Graphics& g)
 void PedalboardCanvas::resized()
 {
     auto bounds = getLocalBounds();
-    rebuildPedalboardImage();
-}
-
-void PedalboardCanvas::rebuildPedalboardImage()
-{
-    auto bounds = getLocalBounds();
     if (bounds.isEmpty())
         return;
 
-    // Try to load texture from plugin bundle
-    auto assetDir = juce::File::getSpecialLocation(juce::File::invokedExecutableFile).getParentDirectory();
-    auto texturePath = assetDir.getChildFile("Contents/Resources/Assets/Textures/pedalboard_bg.png");
-
-    if (!texturePath.existsAsFile())
+    // Rescale image to fit bounds
+    if (m_pedalboardImage.isValid())
     {
-        // Fallback for development builds
-        texturePath = juce::File::getCurrentWorkingDirectory().getChildFile("Assets/Textures/pedalboard_bg.png");
+        m_pedalboardImage = m_pedalboardImage.rescaled(bounds.getWidth(),
+                                                        bounds.getHeight(),
+                                                        juce::Graphics::highResamplingQuality);
     }
-
-    if (texturePath.existsAsFile())
-    {
-        m_pedalboardImage = juce::ImageCache::getFromFile(texturePath);
-        if (m_pedalboardImage.isValid())
-        {
-            // Resize texture to fit the component bounds
-            m_pedalboardImage = m_pedalboardImage.rescaled(bounds.getWidth(),
-                                                          bounds.getHeight(),
-                                                          juce::Graphics::highResamplingQuality);
-            return;
-        }
-    }
-
-    // No fallback - just leave image invalid and paint() will draw dark background
-    m_pedalboardImage = juce::Image();
 }

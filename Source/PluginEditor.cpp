@@ -213,17 +213,17 @@ void CanvasModule::paint(juce::Graphics& g)
 
 void CanvasModule::resized()
 {
-    auto area = getLocalBounds().reduced(12, 10);
+    auto area = getLocalBounds().reduced(10, 10);
 
-    // Palette tools on the right side, canvas takes the rest
-    auto paletteW = area.getWidth() / 4;  // Palette is about 1/4 of width
-    m_paletteTools.setBounds(area.removeFromRight(paletteW));
-    area.removeFromRight(10);
+    // Canvas on top, taking most of the height
+    const int canvasHeight = area.getHeight() * 3 / 4;
+    m_pixelCanvas.setBounds(area.removeFromTop(canvasHeight));
 
-    // Canvas fills remaining space, but keep it square-ish
-    const auto square = juce::jmin(area.getWidth(), area.getHeight());
-    auto canvasArea = area.withSizeKeepingCentre(square, square);
-    m_pixelCanvas.setBounds(canvasArea.reduced(4));
+    // Palette/tools below, centered and constrained to canvas width
+    const int paletteHeight = area.getHeight();
+    const int paletteWidth = juce::jmin(area.getWidth(), m_pixelCanvas.getWidth());
+    const int paletteX = area.getX() + (area.getWidth() - paletteWidth) / 2;
+    m_paletteTools.setBounds(paletteX, area.getY(), paletteWidth, paletteHeight);
 }
 
 DrawdioProcessorEditor::DrawdioProcessorEditor(DrawdioProcessor& p)
@@ -289,12 +289,19 @@ void DrawdioProcessorEditor::resized()
 
     auto content = bounds.reduced(18, 16);
     const auto gap = 18;
-    const auto pedalW = juce::jlimit(560, 620, content.getWidth() - 760);
-    auto pedalArea = content.removeFromRight(pedalW);
-    content.removeFromRight(gap);
+    const auto totalWidth = content.getWidth();
 
-    m_canvasModule.setBounds(content);
-    m_pedalboardCanvas.setBounds(pedalArea);
+    // Balance left/right: left is 75px wider
+    const int leftBias = 75;
+    const int leftW = (totalWidth - gap) / 2 + leftBias;
+    const int rightW = totalWidth - leftW;
+
+    auto leftArea = content.removeFromLeft(leftW);
+    content.removeFromRight(gap);
+    auto rightArea = content;  // Remaining is right side
+
+    m_canvasModule.setBounds(leftArea);
+    m_pedalboardCanvas.setBounds(rightArea);
 }
 
 void DrawdioProcessorEditor::triggerRecompile()

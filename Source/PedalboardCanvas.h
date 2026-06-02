@@ -1,4 +1,5 @@
 #pragma once
+
 #include <JuceHeader.h>
 
 class DrawdioProcessor;
@@ -13,7 +14,7 @@ public:
     void resized() override;
 
 private:
-    void rebuildPedalboardImage();
+    void loadTexture();
 
     DrawdioProcessor& audioProcessor;
     juce::Image m_pedalboardImage;
