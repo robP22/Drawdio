@@ -32,8 +32,12 @@ void ModulatedDelayEffect::processSample(float** b, int c, int s, float effectPa
     int delayRange = static_cast<int>((maxDelay - minDelay) * 0.5f);
     int delaySamples = minDelay + static_cast<int>((lfo * 0.5f + 0.5f) * delayRange);
 
-    if (c > 0)
-        m_delay.buf[m_delay.writePtr] = b[0][s];
+    // Mix stereo input for feedback write into delay line
+    float monoIn = 0.0f;
+    for (int ch = 0; ch < c; ++ch)
+        monoIn += b[ch][s];
+    monoIn /= static_cast<float>(c > 0 ? c : 1);
+    m_delay.buf[m_delay.writePtr] = monoIn;
 
     int readPtr = (static_cast<int>(m_delay.writePtr) - delaySamples) % static_cast<int>(bufSize);
     if (readPtr < 0) readPtr += static_cast<int>(bufSize);

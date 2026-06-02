@@ -4,11 +4,11 @@
 
 class DrawdioProcessor;
 
-class PedalboardCanvas : public juce::Component
+class PedalboardBackground : public juce::Component
 {
 public:
-    PedalboardCanvas(DrawdioProcessor& processor);
-    ~PedalboardCanvas() override = default;
+    PedalboardBackground(DrawdioProcessor& processor);
+    ~PedalboardBackground() override = default;
 
     void paint(juce::Graphics& g) override;
     void resized() override;
@@ -17,5 +17,5 @@ private:
     void loadTexture();
 
     DrawdioProcessor& audioProcessor;
-    juce::Image m_pedalboardImage;
+    juce::Image m_backgroundImage;
 };

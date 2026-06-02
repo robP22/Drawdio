@@ -3,6 +3,7 @@
 PaletteTools::PaletteTools()
 {
     loadTexture();
+    repaint();
 
     addAndMakeVisible(m_undoButton);
     addAndMakeVisible(m_clearButton);
@@ -22,8 +23,17 @@ PaletteTools::PaletteTools()
 
 void PaletteTools::loadTexture()
 {
-    auto texturePath = juce::File::getCurrentWorkingDirectory()
+    juce::File texturePath;
+
+    // Try plugin bundle path first
+    auto assetDir = juce::File::getSpecialLocation(juce::File::invokedExecutableFile).getParentDirectory();
+    texturePath = assetDir.getChildFile("Contents/Resources/Assets/Textures/palette_body.png");
+    if (!texturePath.existsAsFile())
+    {
+        texturePath = juce::File::getCurrentWorkingDirectory()
                            .getChildFile("Assets/Textures/palette_body.png");
+    }
+
     if (texturePath.existsAsFile())
     {
         m_texture = juce::ImageCache::getFromFile(texturePath);
@@ -57,9 +67,10 @@ void PaletteTools::paint(juce::Graphics& g)
     }
     else
     {
+        // Fallback if texture not loaded
         g.fillAll(juce::Colour(0xFF1A1A1A));
 
-        // Fallback: draw color slots
+        // Draw color slots
         for (int i = 0; i < 5; ++i)
         {
             if (!m_colorSlots[static_cast<size_t>(i)].isEmpty())
@@ -76,13 +87,11 @@ void PaletteTools::resized()
 {
     auto bounds = getLocalBounds();
 
-    if (m_texture.isValid())
+    if (!bounds.isEmpty())
     {
-        // Resize texture to fit
         m_texture = m_texture.rescaled(bounds.getWidth(), bounds.getHeight(),
-                                       juce::Graphics::highResamplingQuality);
+                                      juce::Graphics::highResamplingQuality);
 
-        // Calculate color slot positions (left 60% of texture)
         const float colorAreaWidth = bounds.getWidth() * 0.6f;
         const int slotCount = 5;
         const float slotW = colorAreaWidth / slotCount;
@@ -99,7 +108,6 @@ void PaletteTools::resized()
             );
         }
 
-        // Buttons go in right portion (right 40%)
         auto buttonArea = bounds.withX(bounds.getX() + colorAreaWidth);
         buttonArea = buttonArea.reduced(15, 25);
 
@@ -108,36 +116,8 @@ void PaletteTools::resized()
         buttonArea.removeFromTop(30);
         m_clearButton.setBounds(buttonArea.removeFromTop(buttonH).toNearestInt());
     }
-    else
-    {
-        // Fallback layout
-        auto area = bounds.reduced(10, 20);
-        const auto buttonH = (area.getHeight() - 30) / 2;
 
-        // Color slots in left portion
-        const float colorAreaWidth = area.getWidth() * 0.6f;
-        const int slotCount = 5;
-        const float slotW = colorAreaWidth / slotCount;
-        const float slotH = area.getHeight() * 0.7f;
-        const float yOffset = (area.getHeight() - slotH) / 2.0f;
-
-        for (int i = 0; i < slotCount; ++i)
-        {
-            m_colorSlots[static_cast<size_t>(i)] = juce::Rectangle<float>(
-                static_cast<float>(i) * slotW + slotW * 0.1f,
-                yOffset,
-                slotW * 0.8f,
-                slotH
-            );
-        }
-
-        // Buttons in right portion
-        auto buttonArea = area.withX(area.getX() + colorAreaWidth);
-        buttonArea = buttonArea.reduced(15, 25);
-        m_undoButton.setBounds(buttonArea.removeFromTop(buttonH).toNearestInt());
-        buttonArea.removeFromTop(30);
-        m_clearButton.setBounds(buttonArea.removeFromTop(buttonH).toNearestInt());
-    }
+    repaint();
 }
 
 void PaletteTools::mouseDown(const juce::MouseEvent& event)
@@ -229,18 +209,26 @@ void CanvasModule::resized()
 DrawdioProcessorEditor::DrawdioProcessorEditor(DrawdioProcessor& p)
     : AudioProcessorEditor(&p),
       audioProcessor(p),
-      m_pedalboardCanvas(p)
+      m_pedalboardBackground(p)
 {
-    // Load wood texture
-    auto texturePath = juce::File::getCurrentWorkingDirectory()
+    juce::File texturePath;
+
+    // Try plugin bundle path first
+    auto assetDir = juce::File::getSpecialLocation(juce::File::invokedExecutableFile).getParentDirectory();
+    texturePath = assetDir.getChildFile("Contents/Resources/Assets/Textures/wood_texture_generic.png");
+    if (!texturePath.existsAsFile())
+    {
+        texturePath = juce::File::getCurrentWorkingDirectory()
                            .getChildFile("Assets/Textures/wood_texture_generic.png");
+    }
+
     if (texturePath.existsAsFile())
     {
         m_woodBackground = juce::ImageCache::getFromFile(texturePath);
     }
 
     addAndMakeVisible(m_canvasModule);
-    addAndMakeVisible(m_pedalboardCanvas);
+    addAndMakeVisible(m_pedalboardBackground);
 
     auto& pixelCanvas = m_canvasModule.getPixelCanvas();
     pixelCanvas.setGridData(audioProcessor.getGridData());
@@ -279,7 +267,7 @@ void DrawdioProcessorEditor::resized()
 {
     auto bounds = getLocalBounds();
 
-    // Resize wood background if needed
+    // Rescale wood background to fill the component
     if (m_woodBackground.isValid())
     {
         m_woodBackground = m_woodBackground.rescaled(bounds.getWidth(),
@@ -301,7 +289,9 @@ void DrawdioProcessorEditor::resized()
     auto rightArea = content;  // Remaining is right side
 
     m_canvasModule.setBounds(leftArea);
-    m_pedalboardCanvas.setBounds(rightArea);
+    m_canvasModule.resized();
+    m_pedalboardBackground.setBounds(rightArea);
+    m_pedalboardBackground.resized();
 }
 
 void DrawdioProcessorEditor::triggerRecompile()

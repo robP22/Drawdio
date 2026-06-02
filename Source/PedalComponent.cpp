@@ -205,12 +205,12 @@ void PedalComponent::loadSkinTexture()
 {
     auto texturePath = juce::File::getSpecialLocation(juce::File::invokedExecutableFile)
                            .getParentDirectory()
-                           .getChildFile("Contents/Resources/Assets/Skins/Pedal_Texture_Crayon.png");
+                           .getChildFile("Contents/Resources/Assets/Skins/p_texture_crayon.png");
 
     if (!texturePath.existsAsFile())
     {
         texturePath = juce::File::getCurrentWorkingDirectory()
-                           .getChildFile("Assets/Skins/Pedal_Texture_Crayon.png");
+                           .getChildFile("Assets/Skins/p_texture_crayon.png");
     }
 
     if (texturePath.existsAsFile())

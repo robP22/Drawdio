@@ -7,7 +7,7 @@
 #include <utility>
 #include <vector>
 
-#include "PedalboardCanvas.h"
+#include "PedalboardBackground.h"
 #include "PixelCanvasComponent.h"
 #include "PluginProcessor.h"
 
@@ -80,5 +80,5 @@ private:
     DrawdioProcessor& audioProcessor;
     juce::Image m_woodBackground;
     CanvasModule m_canvasModule;
-    PedalboardCanvas m_pedalboardCanvas;
+    PedalboardBackground m_pedalboardBackground;
 };
