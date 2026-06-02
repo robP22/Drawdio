@@ -11,41 +11,10 @@
 #include "PixelCanvasComponent.h"
 #include "PluginProcessor.h"
 
-class ColorPalette : public juce::Component
+class PaletteTools : public juce::Component
 {
 public:
-    using ColorCallback = std::function<void(PixelCanvasComponent::PixelColor)>;
-
-    ColorPalette();
-
-    void paint(juce::Graphics& g) override;
-    void resized() override;
-    void mouseDown(const juce::MouseEvent& event) override;
-    void mouseMove(const juce::MouseEvent& event) override;
-    void mouseExit(const juce::MouseEvent& event) override;
-
-    void setSelectedColor(PixelCanvasComponent::PixelColor color);
-    void setOnColorSelected(ColorCallback cb) { m_onColorSelected = std::move(cb); }
-
-private:
-    struct PaintBlob
-    {
-        PixelCanvasComponent::PixelColor color;
-        juce::Rectangle<float> bounds;
-    };
-
-    int hitTestBlob(juce::Point<float> position) const;
-
-    std::array<PaintBlob, 5> m_blobs;
-    PixelCanvasComponent::PixelColor m_selectedColor = PixelCanvasComponent::PixelColor::Red;
-    int m_hoveredBlob = -1;
-    ColorCallback m_onColorSelected;
-};
-
-class CanvasTools : public juce::Component
-{
-public:
-    CanvasTools();
+    PaletteTools();
 
     void paint(juce::Graphics& g) override;
     void resized() override;
@@ -54,8 +23,9 @@ public:
     void setOnClear(std::function<void()> cb) { m_onClear = std::move(cb); }
 
 private:
-    void styleButton(juce::TextButton& button, juce::Colour accent);
+    void loadTexture();
 
+    juce::Image m_texture;
     juce::TextButton m_undoButton { "Undo" };
     juce::TextButton m_clearButton { "Clear" };
 
@@ -78,8 +48,7 @@ public:
 
 private:
     PixelCanvasComponent m_pixelCanvas;
-    ColorPalette m_palette;
-    CanvasTools m_tools;
+    PaletteTools m_paletteTools;
 
     std::function<void()> m_onClear;
 };
