@@ -53,7 +53,6 @@ target_sources(Drawdio PRIVATE
     Source/PixelCanvasComponent.cpp
     Source/PenDebouncer.cpp
     Source/CompilerEngine.cpp
-    Source/PedalComponent.cpp
     Source/PedalboardBackground.cpp
     Source/Effects/GranularBaseEffect.cpp
     Source/Effects/DistortionEffects.cpp

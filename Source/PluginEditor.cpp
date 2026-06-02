@@ -292,7 +292,6 @@ void DrawdioProcessorEditor::resized()
     m_canvasModule.resized();
     m_pedalboardBackground.setBounds(rightArea);
     m_pedalboardBackground.resized();
-    m_pedalboardBackground.syncFromProcessor();
 }
 
 void DrawdioProcessorEditor::triggerRecompile()
