@@ -222,9 +222,18 @@ DrawdioProcessorEditor::DrawdioProcessorEditor(DrawdioProcessor& p)
                            .getChildFile("Assets/Textures/wood_texture_generic.png");
     }
 
+    DBG("=== DrawdioProcessorEditor Texture Loading ===");
+    DBG("Wood texture path: " << texturePath.getFullPathName());
+    DBG("File exists: " << (texturePath.existsAsFile() ? "YES" : "NO"));
+
     if (texturePath.existsAsFile())
     {
         m_woodBackground = juce::ImageCache::getFromFile(texturePath);
+        DBG("Wood image valid: " << (m_woodBackground.isValid() ? "YES" : "NO"));
+        if (m_woodBackground.isValid())
+        {
+            DBG("Wood image size: " << m_woodBackground.getWidth() << "x" << m_woodBackground.getHeight());
+        }
     }
 
     addAndMakeVisible(m_canvasModule);
@@ -253,6 +262,10 @@ DrawdioProcessorEditor::~DrawdioProcessorEditor() = default;
 void DrawdioProcessorEditor::paint(juce::Graphics& g)
 {
     auto bounds = getLocalBounds().toFloat();
+
+    DBG("=== DrawdioProcessorEditor::paint ===");
+    DBG("Bounds: " << bounds.getWidth() << "x" << bounds.getHeight());
+    DBG("Wood image valid: " << (m_woodBackground.isValid() ? "YES" : "NO"));
 
     // Fill background first in case image has transparent alpha
     g.fillAll(juce::Colour(0xFF2A2A2A));
