@@ -1,6 +1,5 @@
 #pragma once
 #include <JuceHeader.h>
-#include <cstdint>
 
 class DrawdioProcessor;
 
@@ -14,11 +13,8 @@ public:
     void resized() override;
 
 private:
-    void rebuildFeltImage();
+    void rebuildPedalboardImage();
 
     DrawdioProcessor& audioProcessor;
-
-    juce::Image m_feltImage;
-    juce::Rectangle<int> m_boardBounds;
-    juce::Rectangle<int> m_feltBounds;
+    juce::Image m_pedalboardImage;
 };
