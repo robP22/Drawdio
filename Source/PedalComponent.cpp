@@ -4,178 +4,158 @@
 #include <cmath>
 
 // ============================================================================
-// 8-Lobe Scalloped Knob LookAndFeel
+// 8-Lobe Scalloped Knob LookAndFeel - Method Implementation
 // ============================================================================
 
-class PedalComponent::PedalKnobLookAndFeel : public juce::LookAndFeel_V4
+void PedalComponent::PedalKnobLookAndFeel::drawRotarySlider(juce::Graphics& g, int x, int y, int w, int h,
+                                                           float sliderPos, float rotaryStartAngle, float rotaryEndAngle,
+                                                           juce::Slider& slider)
 {
-public:
-    void drawRotarySlider(juce::Graphics& g, int x, int y, int w, int h,
-                         float sliderPos, float rotaryStartAngle, float rotaryEndAngle,
-                         juce::Slider& slider) override
+    const float diameter = static_cast<float>(juce::jmin(w, h));
+    const float radius = diameter * 0.5f;
+    const float centerX = static_cast<float>(x) + radius;
+    const float centerY = static_cast<float>(y) + radius;
+
+    const float value = static_cast<float>(slider.getValue());
+    const float normalizedValue = (value - slider.getMinimum()) / (slider.getMaximum() - slider.getMinimum());
+
+    // 270-degree arc: from ~7 o'clock to ~5 o'clock
+    const float startAngle = rotaryStartAngle;
+    const float endAngle = rotaryEndAngle;
+    const float angleRange = endAngle - startAngle;
+    const float currentAngle = startAngle + normalizedValue * angleRange;
+
+    // === KNOB SHADOW (static, offset slightly down-right) ===
+    const float shadowOffsetX = 2.0f;
+    const float shadowOffsetY = 3.0f;
+
+    juce::Path shadowPath;
+    shadowPath.addEllipse(centerX - radius + shadowOffsetX,
+                          centerY - radius + shadowOffsetY,
+                          diameter, diameter);
+    g.setColour(juce::Colour(0x40000000));
+    g.fillPath(shadowPath);
+
+    // === KNOB BODY (8-lobe scalloped) ===
+    const int numLobes = 8;
+    const float lobeDepth = radius * 0.08f;  // Scallop depth
+
+    juce::Path bodyPath;
+    for (int i = 0; i <= numLobes * 2; ++i)
     {
-        const float diameter = static_cast<float>(juce::jmin(w, h));
-        const float radius = diameter * 0.5f;
-        const float centerX = static_cast<float>(x) + radius;
-        const float centerY = static_cast<float>(y) + radius;
+        const float angle = (static_cast<float>(i) / static_cast<float>(numLobes * 2)) * 2.0f * juce::MathConstants<float>::pi;
+        const float lobeRadius = radius - (i % 2 == 0 ? 0.0f : lobeDepth);
+        const float px = centerX + std::cos(angle) * lobeRadius;
+        const float py = centerY + std::sin(angle) * lobeRadius;
 
-        const float value = static_cast<float>(slider.getValue());
-        const float normalizedValue = (value - slider.getMinimum()) / (slider.getMaximum() - slider.getMinimum());
+        if (i == 0)
+            bodyPath.startNewSubPath(px, py);
+        else
+            bodyPath.lineTo(px, py);
+    }
+    bodyPath.closeSubPath();
 
-        // 270-degree arc: from ~7 o'clock to ~5 o'clock
-        const float startAngle = rotaryStartAngle;
-        const float endAngle = rotaryEndAngle;
-        const float angleRange = endAngle - startAngle;
-        const float currentAngle = startAngle + normalizedValue * angleRange;
+    // Body gradient (matte black plastic)
+    juce::ColourGradient bodyGradient;
+    bodyGradient.addColour(0.0, juce::Colour(0xFF2A2A2A));
+    bodyGradient.addColour(0.5, juce::Colour(0xFF1A1A1A));
+    bodyGradient.addColour(1.0, juce::Colour(0xFF0A0A0A));
+    bodyGradient.point1 = juce::Point<float>(centerX - radius, centerY - radius);
+    bodyGradient.point2 = juce::Point<float>(centerX + radius, centerY + radius);
 
-        // === KNOB SHADOW (static, offset slightly down-right) ===
-        const float shadowOffsetX = 2.0f;
-        const float shadowOffsetY = 3.0f;
+    g.setGradientFill(bodyGradient);
+    g.fillPath(bodyPath);
 
-        juce::Path shadowPath;
-        shadowPath.addEllipse(centerX - radius + shadowOffsetX,
-                             centerY - radius + shadowOffsetY,
-                             diameter, diameter);
-        g.setColour(juce::Colour(0x40000000));
-        g.fillPath(shadowPath);
+    // === INNER SHADOW RING (recessed edge around cap) ===
+    const float capRadius = radius * 0.78f;
+    const float innerShadowWidth = radius * 0.08f;
 
-        // === KNOB BODY (8-lobe scalloped) ===
-        const int numLobes = 8;
-        const float lobeDepth = radius * 0.08f;  // Scallop depth
+    juce::Path innerShadowPath;
+    innerShadowPath.addEllipse(centerX - radius, centerY - radius, diameter, diameter);
 
-        juce::Path bodyPath;
-        for (int i = 0; i <= numLobes * 2; ++i)
-        {
-            const float angle = (static_cast<float>(i) / static_cast<float>(numLobes * 2)) * 2.0f * juce::MathConstants<float>::pi;
-            const float lobeRadius = radius - (i % 2 == 0 ? 0.0f : lobeDepth);
-            const float px = centerX + std::cos(angle) * lobeRadius;
-            const float py = centerY + std::sin(angle) * lobeRadius;
+    g.setColour(juce::Colour(0xFF050505));
+    g.fillPath(innerShadowPath, juce::PathStrokeType(innerShadowWidth, juce::PathStrokeType::curved));
 
-            if (i == 0)
-                bodyPath.startNewSubPath(px, py);
-            else
-                bodyPath.lineTo(px, py);
-        }
-        bodyPath.closeSubPath();
+    // === BRUSHED ALUMINUM CAP ===
+    const float capDiameter = capRadius * 2.0f;
 
-        // Body gradient (matte black plastic)
-        juce::ColourGradient bodyGradient;
-        bodyGradient.addColour(0.0, juce::Colour(0xFF2A2A2A));
-        bodyGradient.addColour(0.5, juce::Colour(0xFF1A1A1A));
-        bodyGradient.addColour(1.0, juce::Colour(0xFF0A0A0A));
-        bodyGradient.point1 = juce::Point<float>(centerX - radius, centerY - radius);
-        bodyGradient.point2 = juce::Point<float>(centerX + radius, centerY + radius);
+    // Cap base gradient
+    juce::ColourGradient capGradient;
+    capGradient.addColour(0.0, juce::Colour(0xFFD0D0D0));
+    capGradient.addColour(0.3, juce::Colour(0xFFB8B8B8));
+    capGradient.addColour(0.5, juce::Colour(0xFFC8C8C8));
+    capGradient.addColour(1.0, juce::Colour(0xFF909090));
+    capGradient.point1 = juce::Point<float>(centerX - capRadius, centerY - capRadius);
+    capGradient.point2 = juce::Point<float>(centerX + capRadius, centerY + capRadius);
 
-        g.setGradientFill(bodyGradient);
-        g.fillPath(bodyPath);
+    g.setGradientFill(capGradient);
+    g.fillEllipse(centerX - capRadius, centerY - capRadius, capDiameter, capDiameter);
 
-        // === INNER SHADOW RING (recessed edge around cap) ===
-        const float capRadius = radius * 0.78f;
-        const float innerShadowWidth = radius * 0.08f;
+    // === CONCENTRIC LATHE RINGS (6 rings) ===
+    const int numRings = 6;
+    const float ringStartRadius = capRadius * 0.2f;
+    const float ringEndRadius = capRadius * 0.95f;
+    const float ringGap = (ringEndRadius - ringStartRadius) / static_cast<float>(numRings);
 
-        juce::Path innerShadowPath;
-        innerShadowPath.addEllipse(centerX - radius, centerY - radius, diameter, diameter);
-        juce::Path innerCapPath;
-        innerCapPath.addEllipse(centerX - capRadius, centerY - capRadius, capRadius * 2.0f, capRadius * 2.0f);
-
-        g.setColour(juce::Colour(0xFF050505));
-        g.fillPath(innerShadowPath, juce::PathStrokeType(innerShadowWidth, juce::PathStrokeType::curved);
-
-        // === BRUSHED ALUMINUM CAP ===
-        const float capDiameter = capRadius * 2.0f;
-
-        // Cap base gradient
-        juce::ColourGradient capGradient;
-        capGradient.addColour(0.0, juce::Colour(0xFFD0D0D0));
-        capGradient.addColour(0.3, juce::Colour(0xFFB8B8B8));
-        capGradient.addColour(0.5, juce::Colour(0xFFC8C8C8));
-        capGradient.addColour(1.0, juce::Colour(0xFF909090));
-        capGradient.point1 = juce::Point<float>(centerX - capRadius, centerY - capRadius);
-        capGradient.point2 = juce::Point<float>(centerX + capRadius, centerY + capRadius);
-
-        g.setGradientFill(capGradient);
-        g.fillEllipse(centerX - capRadius, centerY - capRadius, capDiameter, capDiameter);
-
-        // === CONCENTRIC LATHE RINGS (6 rings) ===
-        const int numRings = 6;
-        const float ringStartRadius = capRadius * 0.2f;
-        const float ringEndRadius = capRadius * 0.95f;
-        const float ringGap = (ringEndRadius - ringStartRadius) / static_cast<float>(numRings);
-
-        for (int i = 0; i < numRings; ++i)
-        {
-            const float ringRadius = ringStartRadius + i * ringGap;
-            const float brightness = 0.85f + 0.15f * std::sin(static_cast<float>(i) * 0.8f);
-            g.setColour(juce::Colour(static_cast<uint8_t>(brightness * 255.0f),
-                                     static_cast<uint8_t>(brightness * 255.0f),
-                                     static_cast<uint8_t>(brightness * 255.0f)));
-            g.drawEllipse(centerX - ringRadius, centerY - ringRadius,
-                         ringRadius * 2.0f, ringRadius * 2.0f, 0.5f);
-        }
-
-        // === ROTATING INDICATOR LINE (at 12 o'clock, relative to cap angle) ===
-        // The indicator is at 12 o'clock in the knob's visual space
-        // It rotates as the knob value changes
-        const float indicatorLength = capRadius * 0.7f;
-        const float indicatorWidth = 2.0f;
-        const float indicatorOffset = capRadius * 0.15f;  // Start from near center
-
-        // Calculate indicator position based on currentAngle
-        // We want the indicator at 12 o'clock (top) to rotate to match the angle
-        const float indicatorAngle = currentAngle - juce::MathConstants<float>::pi / 2.0f;  // Offset so 12 o'clock matches
-
-        juce::Path indicatorPath;
-
-        // Start point (near center, offset to create pivot feel)
-        const float startX = centerX + std::cos(indicatorAngle) * indicatorOffset;
-        const float startY = centerY + std::sin(indicatorAngle) * indicatorOffset;
-
-        // End point (at edge of cap)
-        const float endX = centerX + std::cos(indicatorAngle) * (capRadius * 0.85f);
-        const float endY = centerY + std::sin(indicatorAngle) * (capRadius * 0.85f);
-
-        // Perpendicular offset for width
-        const float perpX = -std::sin(indicatorAngle);
-        const float perpY = std::cos(indicatorAngle);
-
-        indicatorPath.startNewSubPath(startX - perpX * indicatorWidth, startY - perpY * indicatorWidth);
-        indicatorPath.lineTo(startX + perpX * indicatorWidth, startY + perpY * indicatorWidth);
-        indicatorPath.lineTo(endX + perpX * indicatorWidth, endY + perpY * indicatorWidth);
-        indicatorPath.lineTo(endX - perpX * indicatorWidth, endY - perpY * indicatorWidth);
-        indicatorPath.closeSubPath();
-
-        g.setColour(juce::Colour(0xFFFFFFFF));
-        g.fillPath(indicatorPath);
-
-        // === SPECULAR HIGHLIGHT (top-left quadrant) ===
-        juce::Path highlightPath;
-        highlightPath.addEllipse(centerX - capRadius * 0.5f,
-                                 centerY - capRadius - capRadius * 0.2f,
-                                 capRadius * 0.6f,
-                                 capRadius * 0.5f);
-
-        juce::ColourGradient highlightGrad;
-        highlightGrad.addColour(0.0, juce::Colour(0x40FFFFFF));
-        highlightGrad.addColour(1.0, juce::Colour(0x00FFFFFF));
-        highlightGrad.point1 = juce::Point<float>(centerX - capRadius, centerY - capRadius);
-        highlightGrad.point2 = juce::Point<float>(centerX, centerY);
-
-        g.setGradientFill(highlightGrad);
-        g.fillPath(highlightPath);
-
-        // === BODY EDGE HIGHLIGHT ===
-        juce::Path bodyEdgePath;
-        bodyEdgePath.addEllipse(centerX - radius, centerY - radius, diameter, diameter);
-        g.setColour(juce::Colour(0x30FFFFFF));
-        g.strokePath(bodyEdgePath, juce::PathStrokeType(1.0f, juce::PathStrokeType::curved));
+    for (int i = 0; i < numRings; ++i)
+    {
+        const float ringRadius = ringStartRadius + i * ringGap;
+        const float brightness = 0.85f + 0.15f * std::sin(static_cast<float>(i) * 0.8f);
+        g.setColour(juce::Colour(static_cast<uint8_t>(brightness * 255.0f),
+                                 static_cast<uint8_t>(brightness * 255.0f),
+                                 static_cast<uint8_t>(brightness * 255.0f)));
+        g.drawEllipse(centerX - ringRadius, centerY - ringRadius,
+                      ringRadius * 2.0f, ringRadius * 2.0f, 0.5f);
     }
 
-    static PedalKnobLookAndFeel& getInstance()
-    {
-        static PedalKnobLookAndFeel instance;
-        return instance;
-    }
-};
+    // === ROTATING INDICATOR LINE (at 12 o'clock, relative to cap angle) ===
+    const float indicatorWidth = 2.0f;
+    const float indicatorOffset = capRadius * 0.15f;
+
+    const float indicatorAngle = currentAngle - juce::MathConstants<float>::pi / 2.0f;
+
+    juce::Path indicatorPath;
+
+    const float startX = centerX + std::cos(indicatorAngle) * indicatorOffset;
+    const float startY = centerY + std::sin(indicatorAngle) * indicatorOffset;
+
+    const float endX = centerX + std::cos(indicatorAngle) * (capRadius * 0.85f);
+    const float endY = centerY + std::sin(indicatorAngle) * (capRadius * 0.85f);
+
+    const float perpX = -std::sin(indicatorAngle);
+    const float perpY = std::cos(indicatorAngle);
+
+    indicatorPath.startNewSubPath(startX - perpX * indicatorWidth, startY - perpY * indicatorWidth);
+    indicatorPath.lineTo(startX + perpX * indicatorWidth, startY + perpY * indicatorWidth);
+    indicatorPath.lineTo(endX + perpX * indicatorWidth, endY + perpY * indicatorWidth);
+    indicatorPath.lineTo(endX - perpX * indicatorWidth, endY - perpY * indicatorWidth);
+    indicatorPath.closeSubPath();
+
+    g.setColour(juce::Colour(0xFFFFFFFF));
+    g.fillPath(indicatorPath);
+
+    // === SPECULAR HIGHLIGHT (top-left quadrant) ===
+    juce::Path highlightPath;
+    highlightPath.addEllipse(centerX - capRadius * 0.5f,
+                             centerY - capRadius - capRadius * 0.2f,
+                             capRadius * 0.6f,
+                             capRadius * 0.5f);
+
+    juce::ColourGradient highlightGrad;
+    highlightGrad.addColour(0.0, juce::Colour(0x40FFFFFF));
+    highlightGrad.addColour(1.0, juce::Colour(0x00FFFFFF));
+    highlightGrad.point1 = juce::Point<float>(centerX - capRadius, centerY - capRadius);
+    highlightGrad.point2 = juce::Point<float>(centerX, centerY);
+
+    g.setGradientFill(highlightGrad);
+    g.fillPath(highlightPath);
+
+    // === BODY EDGE HIGHLIGHT ===
+    juce::Path bodyEdgePath;
+    bodyEdgePath.addEllipse(centerX - radius, centerY - radius, diameter, diameter);
+    g.setColour(juce::Colour(0x30FFFFFF));
+    g.strokePath(bodyEdgePath, juce::PathStrokeType(1.0f, juce::PathStrokeType::curved));
+}
 
 PedalComponent::PedalComponent(DrawdioProcessor& processor, int slotIndex, int spriteFrameX, int spriteFrameY)
     : audioProcessor(processor),
