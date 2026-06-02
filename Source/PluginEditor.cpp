@@ -35,50 +35,162 @@ void PaletteTools::paint(juce::Graphics& g)
     if (m_texture.isValid())
     {
         g.drawImage(m_texture, getLocalBounds().toFloat());
+
+        // Draw hover highlight on selected color slot
+        if (m_hoveredColor >= 0 && m_hoveredColor < 5)
+        {
+            auto& slot = m_colorSlots[static_cast<size_t>(m_hoveredColor)];
+            if (slot.isEmpty())
+                return;
+
+            // Subtle highlight
+            g.setColour(juce::Colours::white.withAlpha(0.3f));
+            g.drawRoundedRectangle(slot.reduced(2.0f), 6.0f, 2.0f);
+
+            // Selection indicator
+            if (static_cast<int>(m_selectedColor) == m_hoveredColor)
+            {
+                g.setColour(juce::Colours::white.withAlpha(0.5f));
+                g.drawRoundedRectangle(slot.expanded(-2.0f), 8.0f, 3.0f);
+            }
+        }
     }
     else
     {
         g.fillAll(juce::Colour(0xFF1A1A1A));
+
+        // Fallback: draw color slots
+        for (int i = 0; i < 5; ++i)
+        {
+            if (!m_colorSlots[static_cast<size_t>(i)].isEmpty())
+            {
+                auto color = static_cast<PixelCanvasComponent::PixelColor>(i);
+                g.setColour(PixelCanvasComponent::colourForPixel(color));
+                g.fillRoundedRectangle(m_colorSlots[static_cast<size_t>(i)], 8.0f);
+            }
+        }
     }
 }
 
 void PaletteTools::resized()
 {
+    auto bounds = getLocalBounds();
+
     if (m_texture.isValid())
     {
-        // Texture has 5 color slots on left, buttons on right
-        // Assuming texture is ~600px wide with ~350px for colors, ~250px for buttons
-        const int textureW = m_texture.getWidth();
-        const int colorAreaW = textureW * 350 / 600;
-        const int buttonAreaW = textureW - colorAreaW;
-
-        auto bounds = getLocalBounds();
+        // Resize texture to fit
         m_texture = m_texture.rescaled(bounds.getWidth(), bounds.getHeight(),
                                        juce::Graphics::highResamplingQuality);
 
-        // Buttons go in right portion
-        auto buttonArea = bounds.removeFromRight(buttonAreaW * bounds.getWidth() / textureW);
-        buttonArea = buttonArea.reduced(10, 20);
+        // Calculate color slot positions (left 60% of texture)
+        const float colorAreaWidth = bounds.getWidth() * 0.6f;
+        const int slotCount = 5;
+        const float slotW = colorAreaWidth / slotCount;
+        const float slotH = bounds.getHeight() * 0.7f;
+        const float yOffset = (bounds.getHeight() - slotH) / 2.0f;
 
-        const auto buttonH = buttonArea.getHeight() / 2 - 10;
-        m_undoButton.setBounds(buttonArea.removeFromTop(buttonH));
-        buttonArea.removeFromTop(20);
-        m_clearButton.setBounds(buttonArea.removeFromTop(buttonH));
+        for (int i = 0; i < slotCount; ++i)
+        {
+            m_colorSlots[static_cast<size_t>(i)] = juce::Rectangle<float>(
+                static_cast<float>(i) * slotW + slotW * 0.1f,
+                yOffset,
+                slotW * 0.8f,
+                slotH
+            );
+        }
+
+        // Buttons go in right portion (right 40%)
+        auto buttonArea = bounds.withX(bounds.getX() + colorAreaWidth);
+        buttonArea = buttonArea.reduced(15, 25);
+
+        const auto buttonH = buttonArea.getHeight() / 2 - 15;
+        m_undoButton.setBounds(buttonArea.removeFromTop(buttonH).toNearestInt());
+        buttonArea.removeFromTop(30);
+        m_clearButton.setBounds(buttonArea.removeFromTop(buttonH).toNearestInt());
     }
     else
     {
-        auto area = getLocalBounds().reduced(10, 20);
+        // Fallback layout
+        auto area = bounds.reduced(10, 20);
         const auto buttonH = (area.getHeight() - 30) / 2;
-        m_undoButton.setBounds(area.removeFromTop(buttonH));
-        area.removeFromTop(30);
-        m_clearButton.setBounds(area.removeFromTop(buttonH));
+
+        // Color slots in left portion
+        const float colorAreaWidth = area.getWidth() * 0.6f;
+        const int slotCount = 5;
+        const float slotW = colorAreaWidth / slotCount;
+        const float slotH = area.getHeight() * 0.7f;
+        const float yOffset = (area.getHeight() - slotH) / 2.0f;
+
+        for (int i = 0; i < slotCount; ++i)
+        {
+            m_colorSlots[static_cast<size_t>(i)] = juce::Rectangle<float>(
+                static_cast<float>(i) * slotW + slotW * 0.1f,
+                yOffset,
+                slotW * 0.8f,
+                slotH
+            );
+        }
+
+        // Buttons in right portion
+        auto buttonArea = area.withX(area.getX() + colorAreaWidth);
+        buttonArea = buttonArea.reduced(15, 25);
+        m_undoButton.setBounds(buttonArea.removeFromTop(buttonH).toNearestInt());
+        buttonArea.removeFromTop(30);
+        m_clearButton.setBounds(buttonArea.removeFromTop(buttonH).toNearestInt());
     }
+}
+
+void PaletteTools::mouseDown(const juce::MouseEvent& event)
+{
+    const int colorIdx = hitTestColor(event.position);
+    if (colorIdx >= 0)
+    {
+        m_selectedColor = static_cast<PixelCanvasComponent::PixelColor>(colorIdx);
+        repaint();
+
+        if (m_onColorSelected)
+            m_onColorSelected(m_selectedColor);
+    }
+}
+
+void PaletteTools::mouseMove(const juce::MouseEvent& event)
+{
+    const int hit = hitTestColor(event.position);
+    if (hit != m_hoveredColor)
+    {
+        m_hoveredColor = hit;
+        setMouseCursor(hit >= 0 ? juce::MouseCursor::PointingHandCursor
+                                : juce::MouseCursor::NormalCursor);
+        repaint();
+    }
+}
+
+void PaletteTools::mouseExit(const juce::MouseEvent&)
+{
+    m_hoveredColor = -1;
+    setMouseCursor(juce::MouseCursor::NormalCursor);
+    repaint();
+}
+
+int PaletteTools::hitTestColor(juce::Point<float> pos) const
+{
+    for (int i = 0; i < 5; ++i)
+    {
+        if (m_colorSlots[static_cast<size_t>(i)].expanded(6.0f).contains(pos))
+            return i;
+    }
+    return -1;
 }
 
 CanvasModule::CanvasModule()
 {
     addAndMakeVisible(m_pixelCanvas);
     addAndMakeVisible(m_paletteTools);
+
+    m_paletteTools.setOnColorSelected([this](auto color)
+    {
+        m_pixelCanvas.setCurrentColor(color);
+    });
 
     m_paletteTools.setOnUndo([this]()
     {

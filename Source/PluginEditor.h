@@ -14,21 +14,33 @@
 class PaletteTools : public juce::Component
 {
 public:
+    using ColorCallback = std::function<void(PixelCanvasComponent::PixelColor)>;
+
     PaletteTools();
 
     void paint(juce::Graphics& g) override;
     void resized() override;
+    void mouseDown(const juce::MouseEvent& event) override;
+    void mouseMove(const juce::MouseEvent& event) override;
+    void mouseExit(const juce::MouseEvent& event) override;
 
+    void setOnColorSelected(ColorCallback cb) { m_onColorSelected = std::move(cb); }
     void setOnUndo(std::function<void()> cb) { m_onUndo = std::move(cb); }
     void setOnClear(std::function<void()> cb) { m_onClear = std::move(cb); }
 
 private:
     void loadTexture();
+    int hitTestColor(juce::Point<float> pos) const;
 
     juce::Image m_texture;
+    std::array<juce::Rectangle<float>, 5> m_colorSlots;
+    PixelCanvasComponent::PixelColor m_selectedColor = PixelCanvasComponent::PixelColor::Red;
+    int m_hoveredColor = -1;
+
     juce::TextButton m_undoButton { "Undo" };
     juce::TextButton m_clearButton { "Clear" };
 
+    ColorCallback m_onColorSelected;
     std::function<void()> m_onUndo;
     std::function<void()> m_onClear;
 };
