@@ -97,6 +97,7 @@ private:
     void triggerRecompile();
 
     DrawdioProcessor& audioProcessor;
+    juce::Image m_woodBackground;
     CanvasModule m_canvasModule;
     PedalboardCanvas m_pedalboardCanvas;
 };

@@ -26,9 +26,7 @@ ColorPalette::ColorPalette()
 
 void ColorPalette::paint(juce::Graphics& g)
 {
-    // Simple flat dark background
-    g.fillAll(juce::Colour(0xFF141618));
-
+    // Transparent background - show wood texture
     auto bounds = getLocalBounds().toFloat();
 
     for (int i = 0; i < static_cast<int>(m_blobs.size()); ++i)
@@ -218,8 +216,7 @@ CanvasTools::CanvasTools()
 
 void CanvasTools::paint(juce::Graphics& g)
 {
-    // Simple flat dark background
-    g.fillAll(juce::Colour(0xFF141618));
+    // Transparent - show wood background
 }
 
 void CanvasTools::resized()
@@ -266,8 +263,7 @@ CanvasModule::CanvasModule()
 
 void CanvasModule::paint(juce::Graphics& g)
 {
-    // Simple dark background
-    g.fillAll(juce::Colour(0xFF1A1D1F));
+    // Transparent - show wood background underneath
 }
 
 void CanvasModule::resized()
@@ -292,6 +288,14 @@ DrawdioProcessorEditor::DrawdioProcessorEditor(DrawdioProcessor& p)
       audioProcessor(p),
       m_pedalboardCanvas(p)
 {
+    // Load wood texture
+    auto texturePath = juce::File::getCurrentWorkingDirectory()
+                           .getChildFile("Assets/Textures/wood_texture_generic.png");
+    if (texturePath.existsAsFile())
+    {
+        m_woodBackground = juce::ImageCache::getFromFile(texturePath);
+    }
+
     addAndMakeVisible(m_canvasModule);
     addAndMakeVisible(m_pedalboardCanvas);
 
@@ -322,12 +326,29 @@ DrawdioProcessorEditor::~DrawdioProcessorEditor() = default;
 
 void DrawdioProcessorEditor::paint(juce::Graphics& g)
 {
-    g.fillAll(juce::Colour(0xFF151719));
+    auto bounds = getLocalBounds().toFloat();
+    if (m_woodBackground.isValid())
+    {
+        g.drawImage(m_woodBackground, bounds);
+    }
+    else
+    {
+        g.fillAll(juce::Colour(0xFF1A1A1A));
+    }
 }
 
 void DrawdioProcessorEditor::resized()
 {
     auto bounds = getLocalBounds();
+
+    // Resize wood background if needed
+    if (m_woodBackground.isValid())
+    {
+        m_woodBackground = m_woodBackground.rescaled(bounds.getWidth(),
+                                                     bounds.getHeight(),
+                                                     juce::Graphics::highResamplingQuality);
+    }
+
     auto content = bounds.reduced(18, 16);
     const auto gap = 18;
     const auto pedalW = juce::jlimit(560, 620, content.getWidth() - 760);
