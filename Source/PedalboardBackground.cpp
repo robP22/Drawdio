@@ -31,28 +31,15 @@ void PedalboardBackground::loadTexture()
                            .getChildFile("Assets/Textures/pedalboard_bg.png");
     }
 
-    DBG("=== PedalboardBackground Texture Loading ===");
-    DBG("Pedalboard texture path: " << texturePath.getFullPathName());
-    DBG("File exists: " << (texturePath.existsAsFile() ? "YES" : "NO"));
-
     if (texturePath.existsAsFile())
     {
         m_backgroundImage = juce::ImageCache::getFromFile(texturePath);
-        DBG("Background image valid: " << (m_backgroundImage.isValid() ? "YES" : "NO"));
-        if (m_backgroundImage.isValid())
-        {
-            DBG("Background image size: " << m_backgroundImage.getWidth() << "x" << m_backgroundImage.getHeight());
-        }
     }
 }
 
 void PedalboardBackground::paint(juce::Graphics& g)
 {
     auto bounds = getLocalBounds().toFloat();
-
-    DBG("=== PedalboardBackground::paint ===");
-    DBG("Bounds: " << bounds.getWidth() << "x" << bounds.getHeight());
-    DBG("Background image valid: " << (m_backgroundImage.isValid() ? "YES" : "NO"));
 
     if (m_backgroundImage.isValid())
     {
@@ -69,14 +56,6 @@ void PedalboardBackground::resized()
     auto bounds = getLocalBounds();
     if (bounds.isEmpty())
         return;
-
-    if (m_backgroundImage.isValid())
-    {
-        m_backgroundImage = m_backgroundImage.rescaled(bounds.getWidth(),
-                                                        bounds.getHeight(),
-                                                        juce::Graphics::highResamplingQuality);
-        repaint();
-    }
 
     if (m_pedals[0])
     {

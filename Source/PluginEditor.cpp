@@ -89,13 +89,10 @@ void PaletteTools::resized()
 
     if (!bounds.isEmpty())
     {
-        m_texture = m_texture.rescaled(bounds.getWidth(), bounds.getHeight(),
-                                      juce::Graphics::highResamplingQuality);
-
         const float colorAreaWidth = bounds.getWidth() * 0.6f;
         const int slotCount = 5;
         const float slotW = colorAreaWidth / slotCount;
-        const float slotH = bounds.getHeight() * 0.7f;
+        const float slotH = juce::jmin(bounds.getHeight() - 20, 40.0f);
         const float yOffset = (bounds.getHeight() - slotH) / 2.0f;
 
         for (int i = 0; i < slotCount; ++i)
@@ -111,9 +108,9 @@ void PaletteTools::resized()
         auto buttonArea = bounds.withX(bounds.getX() + colorAreaWidth);
         buttonArea = buttonArea.reduced(15, 25);
 
-        const auto buttonH = buttonArea.getHeight() / 2 - 15;
+        const auto buttonH = juce::jmin(buttonArea.getHeight() - 10, 24.0f);
         m_undoButton.setBounds(buttonArea.removeFromTop(buttonH).toNearestInt());
-        buttonArea.removeFromTop(30);
+        buttonArea.removeFromTop(20);
         m_clearButton.setBounds(buttonArea.removeFromTop(buttonH).toNearestInt());
 
         repaint();
@@ -222,18 +219,9 @@ DrawdioProcessorEditor::DrawdioProcessorEditor(DrawdioProcessor& p)
                            .getChildFile("Assets/Textures/wood_texture_generic.png");
     }
 
-    DBG("=== DrawdioProcessorEditor Texture Loading ===");
-    DBG("Wood texture path: " << texturePath.getFullPathName());
-    DBG("File exists: " << (texturePath.existsAsFile() ? "YES" : "NO"));
-
     if (texturePath.existsAsFile())
     {
         m_woodBackground = juce::ImageCache::getFromFile(texturePath);
-        DBG("Wood image valid: " << (m_woodBackground.isValid() ? "YES" : "NO"));
-        if (m_woodBackground.isValid())
-        {
-            DBG("Wood image size: " << m_woodBackground.getWidth() << "x" << m_woodBackground.getHeight());
-        }
     }
 
     addAndMakeVisible(m_canvasModule);
@@ -263,10 +251,6 @@ void DrawdioProcessorEditor::paint(juce::Graphics& g)
 {
     auto bounds = getLocalBounds().toFloat();
 
-    DBG("=== DrawdioProcessorEditor::paint ===");
-    DBG("Bounds: " << bounds.getWidth() << "x" << bounds.getHeight());
-    DBG("Wood image valid: " << (m_woodBackground.isValid() ? "YES" : "NO"));
-
     // Fill background first in case image has transparent alpha
     g.fillAll(juce::Colour(0xFF2A2A2A));
 
@@ -279,15 +263,6 @@ void DrawdioProcessorEditor::paint(juce::Graphics& g)
 void DrawdioProcessorEditor::resized()
 {
     auto bounds = getLocalBounds();
-
-    // Rescale wood background to fill the component
-    if (m_woodBackground.isValid())
-    {
-        m_woodBackground = m_woodBackground.rescaled(bounds.getWidth(),
-                                                     bounds.getHeight(),
-                                                     juce::Graphics::highResamplingQuality);
-        repaint();
-    }
 
     auto content = bounds.reduced(18, 16);
     const auto gap = 18;
