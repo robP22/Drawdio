@@ -67,6 +67,11 @@ target_sources(Drawdio PRIVATE
     Source/Effects/ReverbEffects.cpp
     Source/Effects/PitchEffects.cpp
     Source/Effects/MiscEffects.cpp
+    Source/RenderUtils.cpp
+    Source/ResourceManager.cpp
+    Source/ThemeManager.cpp
+    Source/PedalDefinition.cpp
+    Source/CanvasRoutingManager.cpp
 )
 
 target_include_directories(Drawdio PRIVATE Source)
