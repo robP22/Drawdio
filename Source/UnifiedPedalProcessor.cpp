@@ -99,16 +99,16 @@ void UnifiedPedalProcessor::loadPedalConfiguration(std::shared_ptr<PedalAssetPay
 {
     if (!config) return;
 
-    // Lock-free atomic swap: UI/compiler thread writes, audio thread only reads
-    auto current = m_currentConfig.load(std::memory_order_acquire);
+    // Thread-safe atomic swap: UI/compiler thread writes, audio thread only reads
+    auto current = m_currentConfig.load();
     if (current && !current->activeRoutingChain.empty())
     {
-        m_nextConfig.store(std::move(config), std::memory_order_release);
+        m_nextConfig.store(std::move(config));
         m_crossfadeCounter = 0;
     }
     else
     {
-        m_currentConfig.store(std::move(config), std::memory_order_release);
+        m_currentConfig.store(std::move(config));
         reset();
     }
 }
@@ -124,14 +124,15 @@ float UnifiedPedalProcessor::readParam(uint16_t token, float fallback) const
 
 std::vector<ParameterDescriptor> UnifiedPedalProcessor::getCurrentParams() const
 {
-    if (m_currentConfig)
-        return m_currentConfig->parameters;
+    auto current = m_currentConfig.load();
+    if (current)
+        return current->parameters;
     return {};
 }
 
 std::shared_ptr<PedalAssetPayload> UnifiedPedalProcessor::getCurrentConfig() const
 {
-    return m_currentConfig;
+    return m_currentConfig.load();
 }
 
 void UnifiedPedalProcessor::updateParameter(int physicalSlot, int knobIdx, float newValue)
@@ -185,9 +186,9 @@ void UnifiedPedalProcessor::processWithConfig(float** b, int c, int s, const Ped
 
 void UnifiedPedalProcessor::processAudioBlock(float** buffer, int numChannels, int numSamples)
 {
-    // Lock-free: Atomic load of config pointers (no mutex held)
-    std::shared_ptr<PedalAssetPayload> current = m_currentConfig.load(std::memory_order_acquire);
-    std::shared_ptr<PedalAssetPayload> next = m_nextConfig.load(std::memory_order_acquire);
+    // Thread-safe: Atomic load of config pointers
+    std::shared_ptr<PedalAssetPayload> current = m_currentConfig.load();
+    std::shared_ptr<PedalAssetPayload> next = m_nextConfig.load();
 
     if (!current)
         return;
@@ -232,11 +233,11 @@ void UnifiedPedalProcessor::processAudioBlock(float** buffer, int numChannels, i
 
     m_activeConfig = nullptr;
 
-    // Lock-free config commit (atomic swap)
+    // Thread-safe config commit (atomic swap)
     if (next && m_crossfadeCounter >= m_crossfadeSamples)
     {
-        m_currentConfig.store(std::move(m_nextConfig), std::memory_order_release);
-        m_nextConfig = nullptr;
+        m_currentConfig.store(next);
+        m_nextConfig.store(nullptr);
         m_crossfadeCounter = 0;
         reset();
     }

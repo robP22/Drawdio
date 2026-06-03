@@ -4,6 +4,7 @@
 #include <memory>
 #include <array>
 #include <cstdint>
+#include <mutex>
 #include "PedalStructures.h"
 #include "Effects/DspEffect.h"
 
@@ -43,8 +44,24 @@ private:
     std::atomic<uint32_t> m_paramRevision{0};
     std::array<std::atomic<float>, 24> m_parameterCache;
 
-    std::atomic<std::shared_ptr<PedalAssetPayload>> m_currentConfig{nullptr};
-    std::atomic<std::shared_ptr<PedalAssetPayload>> m_nextConfig{nullptr};
+    // Thread-safe config pointer using atomic<void*> workaround for libc++
+    // (std::atomic<std::shared_ptr> is not supported on macOS libc++)
+    struct AtomicConfigPtr {
+        void store(std::shared_ptr<PedalAssetPayload> ptr) {
+            std::lock_guard<std::mutex> lock(m_mutex);
+            m_ptr = std::move(ptr);
+        }
+        std::shared_ptr<PedalAssetPayload> load() const {
+            std::lock_guard<std::mutex> lock(m_mutex);
+            return m_ptr;
+        }
+    private:
+        mutable std::mutex m_mutex;
+        std::shared_ptr<PedalAssetPayload> m_ptr;
+    };
+
+    AtomicConfigPtr m_currentConfig;
+    AtomicConfigPtr m_nextConfig;
     int m_crossfadeCounter;
     int m_currentNodeIndex;
 

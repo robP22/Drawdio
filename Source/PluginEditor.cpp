@@ -509,7 +509,7 @@ void BottomControlBar::setMeterLevels(float inputLevel, float outputLevel)
 }
 
 DrawdioProcessorEditor::DrawdioProcessorEditor(DrawdioProcessor& p)
-    : AudioProcessorEditor(&p),
+    : AudioProcessorEditor(p),
       audioProcessor(p),
       m_woodGrainBackground(m_resourceManager, m_theme),
       m_pedalboardBackground(m_resourceManager, m_theme),
@@ -645,4 +645,9 @@ void DrawdioProcessorEditor::checkForUpdates()
 
     // Trigger repaint only if changes were made
     repaint();
+}
+
+void DrawdioProcessorEditor::timerCallback()
+{
+    checkForUpdates();
 }

@@ -165,7 +165,7 @@ private:
     juce::ComboBox m_qualitySelector;
 };
 
-class DrawdioProcessorEditor : public juce::AudioProcessorEditor
+class DrawdioProcessorEditor : public juce::AudioProcessorEditor, private juce::Timer
 {
 public:
     explicit DrawdioProcessorEditor(DrawdioProcessor&);
@@ -177,6 +177,7 @@ public:
 private:
     void triggerRecompile();
     void checkForUpdates();  // Change-driven update check
+    void timerCallback() override;  // JUCE Timer callback
 
     DrawdioProcessor& audioProcessor;
     ResourceManager m_resourceManager;

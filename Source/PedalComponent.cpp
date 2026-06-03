@@ -138,10 +138,12 @@ juce::String PedalComponent::knobLabel(DspModuleType t, int knobIdx)
 PedalComponent::PedalComponent(DrawdioProcessor& processor,
                                int slotIndex,
                                DspModuleType initialType,
-                               const ResourceManager&,
-                               const ThemeManager&,
+                               const ResourceManager& resources,
+                               const ThemeManager& theme,
                                PedalSkinManager::PedalSkin skin)
     : audioProcessor(processor),
+      m_resources(resources),
+      m_theme(theme),
       m_slotIndex(slotIndex),
       m_currentType(initialType),
       m_skin(skin)
