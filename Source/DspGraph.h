@@ -4,6 +4,7 @@
 #include <vector>
 #include <cstdint>
 #include "Effects/DspEffect.h"
+#include "PedalStructures.h"
 
 constexpr int MaxChainNodes = 8;
 
