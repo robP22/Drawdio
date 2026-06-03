@@ -12,17 +12,17 @@
 class DrawdioProcessor;
 
 /**
-    PedalboardCanvas manages the physical pedals and the routing cables between them.
+    PedalboardGrid manages the physical pedals and the routing cables between them.
     It handles both automatic (drawn) routing and manual interaction.
 */
 class PedalboardGrid : public juce::Component
 {
 public:
-    PedalboardCanvas(DrawdioProcessor& processor,
-                     const ResourceManager& resources,
-                     const ThemeManager& theme,
-                     CanvasRoutingManager& routingManager);
-    ~PedalboardCanvas() override = default;
+    PedalboardGrid(DrawdioProcessor& processor,
+                   const ResourceManager& resources,
+                   const ThemeManager& theme,
+                   CanvasRoutingManager& routingManager);
+    ~PedalboardGrid() override = default;
 
     void paint(juce::Graphics& g) override;
     void resized() override;
@@ -63,5 +63,5 @@ private:
     juce::Point<float> m_dragCurrentPos;
     int m_dragSrcJackIdx = -1;
 
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PedalboardCanvas)
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PedalboardGrid)
 };

@@ -1,4 +1,4 @@
-#include "PedalboardCanvas.h"
+#include "PedalboardGrid.h"
 #include "PluginProcessor.h"
 #include "RenderUtils.h"
 
@@ -11,7 +11,7 @@ constexpr float kJackRadius = 16.0f;
 constexpr int kPedalboardColumns = 3;
 }
 
-PedalboardCanvas::PedalboardCanvas(DrawdioProcessor& processor,
+PedalboardGrid::PedalboardGrid(DrawdioProcessor& processor,
                                    const ResourceManager& resources,
                                    const ThemeManager& theme,
                                    CanvasRoutingManager& routingManager)
@@ -28,7 +28,7 @@ PedalboardCanvas::PedalboardCanvas(DrawdioProcessor& processor,
     }
 }
 
-void PedalboardCanvas::paint(juce::Graphics& g)
+void PedalboardGrid::paint(juce::Graphics& g)
 {
     // Minimal pedalboard - just flat felt background, no decorative frames
     // Background texture is already drawn by m_pedalboardBackground component
@@ -45,7 +45,7 @@ void PedalboardCanvas::paint(juce::Graphics& g)
     drawActiveDraggingCable(g);
 }
 
-void PedalboardCanvas::resized()
+void PedalboardGrid::resized()
 {
     auto bounds = getLocalBounds();
 
@@ -67,20 +67,20 @@ void PedalboardCanvas::resized()
     }
 }
 
-void PedalboardCanvas::updateRouting(const std::vector<uint8_t>& routingOrder)
+void PedalboardGrid::updateRouting(const std::vector<uint8_t>& routingOrder)
 {
     m_routingManager.setRoutingOrder(routingOrder);
     repaint();
 }
 
-void PedalboardCanvas::syncPedals()
+void PedalboardGrid::syncPedals()
 {
     for (auto& pedal : m_pedalComponents)
         if (pedal)
             pedal->syncFromProcessor();
 }
 
-void PedalboardCanvas::drawRoutingCables(juce::Graphics& g)
+void PedalboardGrid::drawRoutingCables(juce::Graphics& g)
 {
     const auto connections = m_routingManager.getConnections();
     if (connections.empty())
@@ -116,7 +116,7 @@ void PedalboardCanvas::drawRoutingCables(juce::Graphics& g)
     }
 }
 
-void PedalboardCanvas::drawActiveDraggingCable(juce::Graphics& g)
+void PedalboardGrid::drawActiveDraggingCable(juce::Graphics& g)
 {
     if (!m_isDraggingCable)
         return;
@@ -137,7 +137,7 @@ void PedalboardCanvas::drawActiveDraggingCable(juce::Graphics& g)
     RenderUtils::strokeCable(g, path, juce::Colours::white.withAlpha(0.16f), 1.2f);
 }
 
-void PedalboardCanvas::mouseDown(const juce::MouseEvent& event)
+void PedalboardGrid::mouseDown(const juce::MouseEvent& event)
 {
     const auto pos = event.position;
     const int jackIdx = findJackAt(pos, kJackRadius);
@@ -153,7 +153,7 @@ void PedalboardCanvas::mouseDown(const juce::MouseEvent& event)
     }
 }
 
-void PedalboardCanvas::mouseDrag(const juce::MouseEvent& event)
+void PedalboardGrid::mouseDrag(const juce::MouseEvent& event)
 {
     if (m_isDraggingCable)
     {
@@ -162,7 +162,7 @@ void PedalboardCanvas::mouseDrag(const juce::MouseEvent& event)
     }
 }
 
-void PedalboardCanvas::mouseUp(const juce::MouseEvent& event)
+void PedalboardGrid::mouseUp(const juce::MouseEvent& event)
 {
     if (!m_isDraggingCable)
         return;
@@ -187,7 +187,7 @@ void PedalboardCanvas::mouseUp(const juce::MouseEvent& event)
     repaint();
 }
 
-std::vector<PedalboardCanvas::JackInfo> PedalboardCanvas::getJacks() const
+std::vector<PedalboardGrid::JackInfo> PedalboardGrid::getJacks() const
 {
     std::vector<JackInfo> jacks;
     jacks.reserve(PedalSlotCount * 2);
@@ -201,7 +201,7 @@ std::vector<PedalboardCanvas::JackInfo> PedalboardCanvas::getJacks() const
     return jacks;
 }
 
-int PedalboardCanvas::findJackAt(juce::Point<float> pos, float radius) const
+int PedalboardGrid::findJackAt(juce::Point<float> pos, float radius) const
 {
     auto jacks = getJacks();
     for (int i = 0; i < static_cast<int>(jacks.size()); ++i)
