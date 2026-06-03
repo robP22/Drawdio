@@ -26,10 +26,10 @@ FetchContent_MakeAvailable(JUCE)
 
 juce_add_plugin(Drawdio
     PRODUCT_NAME              "Drawdio"
-    PLUGIN_MANUFACTURER       "Drawdio"
+    PLUGIN_MANUFACTURER       "robP"
     PLUGIN_MANUFACTURER_CODE  DrDd
     PLUGIN_CODE               Draw
-    PLUGIN_DESCRIPTION        "Drawdio"
+    PLUGIN_DESCRIPTION        "VST effects plugin that routes audio and changes knob parameters of 6 unique guitar pedals based on the image you draw on the rendered canvas."
     PLUGIN_IS_A_SYNTH         FALSE
     PLUGIN_WANTS_MIDI_INPUT   FALSE
     PLUGIN_NEEDS_MIDI_OUTPUT  FALSE
