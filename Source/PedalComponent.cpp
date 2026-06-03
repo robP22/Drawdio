@@ -137,10 +137,14 @@ juce::String PedalComponent::knobLabel(DspModuleType t, int knobIdx)
 
 PedalComponent::PedalComponent(DrawdioProcessor& processor,
                                int slotIndex,
-                               DspModuleType initialType)
+                               DspModuleType initialType,
+                               const ResourceManager&,
+                               const ThemeManager&,
+                               PedalSkinManager::PedalSkin skin)
     : audioProcessor(processor),
       m_slotIndex(slotIndex),
-      m_currentType(initialType)
+      m_currentType(initialType),
+      m_skin(skin)
 {
     for (auto& knob : m_knobs)
         initKnob(knob);
@@ -186,113 +190,83 @@ void PedalComponent::initKnob(juce::Slider& knob)
 void PedalComponent::paint(juce::Graphics& g)
 {
     auto bounds = getLocalBounds().toFloat();
-    auto body = bounds.reduced(5.0f, 9.0f);
-    body.removeFromTop(6.0f);
+    if (bounds.isEmpty())
+        return;
 
-    g.setColour(juce::Colours::black.withAlpha(0.45f));
-    g.fillRoundedRectangle(body.translated(2.0f, 5.0f), 13.0f);
+    // Minimal flat pedal appearance - NO decorative body, bezel, or mounting frame
+    // Just a flat coloured surface with essential text and small accent indicators
 
-    juce::ColourGradient sideGradient(skinColourForSlot(m_slotIndex).darker(0.65f),
-                                      body.getX(), body.getY(),
-                                      juce::Colour(0xFF0F1113),
-                                      body.getX(), body.getBottom(),
-                                      false);
-    g.setGradientFill(sideGradient);
-    g.fillRoundedRectangle(body, 13.0f);
+    // Flat background surface
+    auto surface = bounds.reduced(4.0f, 6.0f);
+    g.setColour(skinColourForSlot(m_slotIndex));
+    g.fillRoundedRectangle(surface, 4.0f);
 
-    auto face = body.reduced(7.0f, 6.0f);
-    juce::Colour skin = skinColourForSlot(m_slotIndex);
-    juce::ColourGradient faceGradient(skin.brighter(0.08f), face.getX(), face.getY(),
-                                      skin.darker(0.52f), face.getX(), face.getBottom(),
-                                      false);
-    g.setGradientFill(faceGradient);
-    g.fillRoundedRectangle(face, 10.0f);
-
-    juce::Random random(0xD0A0 + m_slotIndex);
-    for (int i = 0; i < 90; ++i)
-    {
-        const auto x = face.getX() + random.nextFloat() * face.getWidth();
-        const auto y = face.getY() + random.nextFloat() * face.getHeight();
-        g.setColour(juce::Colours::white.withAlpha(random.nextFloat() * 0.035f));
-        g.fillRect(x, y, 1.0f + random.nextFloat() * 2.0f, 0.7f);
-    }
-
+    // Subtle top highlight line
     g.setColour(juce::Colours::white.withAlpha(0.15f));
-    g.drawRoundedRectangle(face.reduced(1.0f), 9.0f, 1.0f);
-    g.setColour(juce::Colours::black.withAlpha(0.56f));
-    g.drawRoundedRectangle(body, 13.0f, 1.8f);
+    g.drawLine(surface.getX(), surface.getY() + 1.0f,
+               surface.getRight(), surface.getY() + 1.0f, 1.0f);
 
-    auto labelTop = face.removeFromTop(24.0f).reduced(8.0f, 2.0f);
-    g.setFont(juce::FontOptions(11.0f, juce::Font::bold));
-    g.setColour(juce::Colours::white.withAlpha(0.76f));
+    // Bottom label area - type name
+    auto labelTop = surface.removeFromTop(24.0f).reduced(8.0f, 2.0f);
+    g.setFont(juce::FontOptions(10.0f, juce::Font::bold));
+    g.setColour(juce::Colours::white.withAlpha(0.72f));
     g.drawFittedText("DRAWDIO " + juce::String(m_slotIndex + 1),
                      labelTop.toNearestInt(),
                      juce::Justification::centred,
                      1);
 
-    auto lcdArea = body.withTrimmedTop(body.getHeight() * 0.67f).reduced(18.0f, 10.0f);
-    g.setColour(juce::Colours::black.withAlpha(0.60f));
-    g.fillRoundedRectangle(lcdArea.expanded(3.0f), 6.0f);
-    g.setColour(juce::Colour(0xFF050707));
-    g.fillRoundedRectangle(lcdArea, 5.0f);
-
-    juce::ColourGradient lens(juce::Colour(0xFF233034).withAlpha(0.70f),
-                              lcdArea.getX(), lcdArea.getY(),
-                              juce::Colour(0xFF070909).withAlpha(0.96f),
-                              lcdArea.getRight(), lcdArea.getBottom(),
-                              false);
-    g.setGradientFill(lens);
-    g.fillRoundedRectangle(lcdArea.reduced(2.0f), 4.0f);
-
-    g.setColour(juce::Colours::white.withAlpha(0.88f));
-    g.setFont(juce::FontOptions(11.0f, juce::Font::bold));
+    // Type display in a small flat box
+    auto typeBox = surface.withTrimmedTop(surface.getHeight() * 0.72f).reduced(10.0f, 6.0f);
+    g.setColour(juce::Colours::black.withAlpha(0.35f));
+    g.fillRoundedRectangle(typeBox, 3.0f);
+    g.setColour(juce::Colours::white.withAlpha(0.82f));
+    g.setFont(juce::FontOptions(10.0f, juce::Font::bold));
     g.drawFittedText(typeName(m_currentType),
-                     lcdArea.reduced(5.0f, 2.0f).toNearestInt(),
+                     typeBox.reduced(4.0f, 2.0f).toNearestInt(),
                      juce::Justification::centred,
                      1);
 
+    // Small LED indicator - minimal dot
+    auto led = bounds.reduced(8.0f, 12.0f).withTrimmedBottom(bounds.getHeight() * 0.80f)
+                   .removeFromRight(16.0f);
+    const bool active = m_currentType != DspModuleType::BYPASS;
+    g.setColour(active ? juce::Colour(0xFF50F07E) : juce::Colour(0xFF344039));
+    g.fillEllipse(led.withSizeKeepingCentre(8.0f, 8.0f));
+
+    // Draw jack indicators as simple circles
     auto inJack = getInputJackPos() - getPosition().toFloat();
     auto outJack = getOutputJackPos() - getPosition().toFloat();
     for (auto jack : { inJack, outJack })
     {
-        g.setColour(juce::Colours::black.withAlpha(0.42f));
-        g.fillEllipse(jack.x - 9.0f, jack.y - 5.0f, 18.0f, 12.0f);
-
-        juce::ColourGradient jackGradient(juce::Colour(0xFFC4C9CB),
-                                          jack.x - 7.0f, jack.y - 7.0f,
-                                          juce::Colour(0xFF3E4447),
-                                          jack.x + 7.0f, jack.y + 7.0f,
-                                          false);
-        g.setGradientFill(jackGradient);
-        g.fillEllipse(jack.x - 7.0f, jack.y - 7.0f, 14.0f, 14.0f);
+        // Simple flat jack circle
+        g.setColour(juce::Colour(0xFF606060));
+        g.fillEllipse(jack.x - 6.0f, jack.y - 4.0f, 12.0f, 10.0f);
         g.setColour(juce::Colours::black);
-        g.fillEllipse(jack.x - 3.2f, jack.y - 3.2f, 6.4f, 6.4f);
+        g.fillEllipse(jack.x - 2.5f, jack.y - 2.5f, 5.0f, 5.0f);
     }
 
-    auto led = body.reduced(18.0f, 24.0f).withTrimmedBottom(body.getHeight() * 0.70f)
-                   .removeFromRight(20.0f);
-    const bool active = m_currentType != DspModuleType::BYPASS;
-    g.setColour(active ? juce::Colour(0xFF50F07E).withAlpha(0.22f)
-                       : juce::Colours::black.withAlpha(0.26f));
-    g.fillEllipse(led.expanded(active ? 5.0f : 1.0f));
-    g.setColour(active ? juce::Colour(0xFF50F07E) : juce::Colour(0xFF344039));
-    g.fillEllipse(led);
-    g.setColour(juce::Colours::white.withAlpha(active ? 0.42f : 0.12f));
-    g.fillEllipse(led.withSizeKeepingCentre(led.getWidth() * 0.35f, led.getHeight() * 0.22f)
-                      .translated(-2.0f, -2.0f));
-
-    g.setFont(juce::FontOptions(9.0f, juce::Font::bold));
+    // Knob labels - minimal text
+    g.setFont(juce::FontOptions(8.0f, juce::Font::bold));
     for (int i = 0; i < 4; ++i)
     {
         auto kb = m_knobs[i].getBounds();
         g.setColour(juce::Colours::black.withAlpha(0.46f));
         g.drawText(knobLabel(m_currentType, i),
-                   kb.getX(), kb.getY() - 14, kb.getWidth(), 12,
+                   kb.getX(), kb.getY() - 12, kb.getWidth(), 10,
                    juce::Justification::centred);
-        g.setColour(juce::Colours::white.withAlpha(0.72f));
+        g.setColour(juce::Colours::white.withAlpha(0.68f));
         g.drawText(knobLabel(m_currentType, i),
-                   kb.getX(), kb.getY() - 15, kb.getWidth(), 12,
+                   kb.getX(), kb.getY() - 13, kb.getWidth(), 10,
                    juce::Justification::centred);
+    }
+}
+
+void PedalComponent::setSkin(PedalSkinManager::PedalSkin skin)
+{
+    if (m_skin != skin)
+    {
+        m_skin = skin;
+        repaint();
     }
 }
 

@@ -30,46 +30,17 @@ PedalboardCanvas::PedalboardCanvas(DrawdioProcessor& processor,
 
 void PedalboardCanvas::paint(juce::Graphics& g)
 {
+    // Minimal pedalboard - just flat felt background, no decorative frames
+    // Background texture is already drawn by m_pedalboardBackground component
     auto bounds = getLocalBounds().toFloat().reduced(2.0f);
+    if (bounds.isEmpty())
+        return;
 
-    g.setColour(juce::Colours::black.withAlpha(0.48f));
-    g.fillRoundedRectangle(bounds.translated(0.0f, 9.0f), 14.0f);
+    // Very subtle border line
+    g.setColour(juce::Colours::black.withAlpha(0.15f));
+    g.drawRect(bounds, 1.0f);
 
-    RenderUtils::drawTextureClippedToRoundedRect(g,
-                                                 m_resources.getTexture(ResourceManager::TextureId::WorkspaceWood),
-                                                 bounds,
-                                                 14.0f,
-                                                 1.0f);
-
-    g.setColour(juce::Colours::white.withAlpha(0.12f));
-    g.drawRoundedRectangle(bounds.reduced(1.0f), 13.0f, 1.0f);
-    g.setColour(juce::Colours::black.withAlpha(0.55f));
-    g.drawRoundedRectangle(bounds, 14.0f, 2.0f);
-
-    RenderUtils::drawTextureClippedToRoundedRect(g,
-                                                 m_resources.getTexture(ResourceManager::TextureId::PedalboardFelt),
-                                                 m_feltBounds.toFloat(),
-                                                 9.0f,
-                                                 1.0f);
-
-    g.setColour(juce::Colours::black.withAlpha(0.68f));
-    g.drawRoundedRectangle(m_feltBounds.toFloat().expanded(2.0f), 10.0f, 2.0f);
-    g.setColour(juce::Colours::white.withAlpha(0.06f));
-    g.drawRoundedRectangle(m_feltBounds.toFloat().reduced(1.0f), 8.0f, 1.0f);
-
-    for (const auto& pedal : m_pedalComponents)
-    {
-        if (!pedal)
-            continue;
-
-        const auto pedalBounds = pedal->getBounds().toFloat();
-        const auto& style = m_theme.pedalStyle();
-        RenderUtils::drawSoftShadow(g,
-                                    pedalBounds.translated(style.shadowOffsetX, style.shadowOffsetY),
-                                    style.bodyRadius + 1.0f,
-                                    style.shadowAlpha);
-    }
-
+    // Draw routing cables (top layer)
     drawRoutingCables(g);
     drawActiveDraggingCable(g);
 }
@@ -77,23 +48,20 @@ void PedalboardCanvas::paint(juce::Graphics& g)
 void PedalboardCanvas::resized()
 {
     auto bounds = getLocalBounds();
-    m_boardBounds = bounds.reduced(2);
-    m_feltBounds = m_boardBounds.reduced(21, 19);
 
-    const int rowCount = (PedalSlotCount + kPedalboardColumns - 1) / kPedalboardColumns;
-    const int colW = m_feltBounds.getWidth() / kPedalboardColumns;
-    const int rowH = m_feltBounds.getHeight() / rowCount;
-    const int pedalW = juce::jlimit(142, 180, colW - 20);
-    const int pedalH = juce::jlimit(194, 240, rowH - 26);
+    // Simple 2x3 grid layout for pedal slots - no decorative padding
+    const int rowCount = 2;
+    const int colCount = 3;
+    const int colW = bounds.getWidth() / colCount;
+    const int rowH = bounds.getHeight() / rowCount;
+    const int pedalW = juce::jlimit(140, 180, colW - 16);
+    const int pedalH = juce::jlimit(180, 220, rowH - 16);
 
     for (int slot = 0; slot < PedalSlotCount; ++slot)
     {
-        const int row = slot / kPedalboardColumns;
-        const int col = slot % kPedalboardColumns;
-        auto slotBounds = juce::Rectangle<int>(m_feltBounds.getX() + col * colW,
-                                               m_feltBounds.getY() + row * rowH,
-                                               colW,
-                                               rowH).reduced(6, 8);
+        const int row = slot / colCount;
+        const int col = slot % colCount;
+        auto slotBounds = juce::Rectangle<int>(col * colW, row * rowH, colW, rowH);
         auto pedalBounds = slotBounds.withSizeKeepingCentre(pedalW, pedalH);
         m_pedalComponents[static_cast<size_t>(slot)]->setBounds(pedalBounds);
     }

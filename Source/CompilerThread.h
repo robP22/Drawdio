@@ -39,9 +39,9 @@ private:
     std::vector<ParameterDescriptor> m_existingParams;
 
     // Thread-safe slot: compiler thread writes, UI/Audio thread reads.
-    std::shared_ptr<PedalAssetPayload> m_slot;
+    // Uses atomic flag for lock-free single-producer-single-consumer protocol.
+    std::shared_ptr<PedalAssetPayload> m_slot{nullptr};
     std::atomic<bool> m_slotFull{false};
-    mutable std::mutex m_slotMutex;
 
     mutable std::mutex m_configMutex;
 

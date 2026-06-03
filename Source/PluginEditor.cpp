@@ -20,28 +20,27 @@ juce::String colorName(PixelCanvasComponent::PixelColor color)
 }
 }
 
-WorkspaceBackground::WorkspaceBackground(const ResourceManager& resources, const ThemeManager& theme)
+// Background component implementations - flat textures without decorative frames
+WoodGrainBackground::WoodGrainBackground(const ResourceManager& resources, const ThemeManager& theme)
     : m_resources(resources),
       m_theme(theme)
 {
     setInterceptsMouseClicks(false, false);
 }
 
-void WorkspaceBackground::paint(juce::Graphics& g)
+void WoodGrainBackground::paint(juce::Graphics& g)
 {
-    const auto bounds = getLocalBounds().toFloat();
+    auto bounds = getLocalBounds().toFloat();
+    if (bounds.isEmpty())
+        return;
+
+    // Draw wood grain texture as flat background - no decorative borders
     if (m_resources.getTexture(ResourceManager::TextureId::WorkspaceWood).isValid())
         RenderUtils::drawImageScaled(g, m_resources.getTexture(ResourceManager::TextureId::WorkspaceWood), bounds);
     else
         g.fillAll(m_theme.workspaceFallback());
 
-    juce::ColourGradient light(juce::Colours::white.withAlpha(0.13f), 0.0f, 0.0f,
-                               juce::Colours::transparentWhite,
-                               bounds.getWidth() * 0.66f,
-                               bounds.getHeight() * 0.72f, true);
-    g.setGradientFill(light);
-    g.fillAll();
-
+    // Subtle gradient overlay for depth
     juce::ColourGradient vignette(juce::Colours::transparentBlack,
                                   bounds.getCentreX(),
                                   bounds.getCentreY(),
@@ -51,6 +50,26 @@ void WorkspaceBackground::paint(juce::Graphics& g)
                                   true);
     g.setGradientFill(vignette);
     g.fillAll();
+}
+
+PedalboardBackground::PedalboardBackground(const ResourceManager& resources, const ThemeManager& theme)
+    : m_resources(resources),
+      m_theme(theme)
+{
+    setInterceptsMouseClicks(false, false);
+}
+
+void PedalboardBackground::paint(juce::Graphics& g)
+{
+    auto bounds = getLocalBounds().toFloat();
+    if (bounds.isEmpty())
+        return;
+
+    // Draw pedalboard felt texture as flat background - no mounting frames or bezels
+    if (m_resources.getTexture(ResourceManager::TextureId::PedalboardFelt).isValid())
+        RenderUtils::drawImageScaled(g, m_resources.getTexture(ResourceManager::TextureId::PedalboardFelt), bounds);
+    else
+        g.fillAll(m_theme.pedalStyle().backgroundColour);
 }
 
 ColorPalette::ColorPalette(const ResourceManager& resources, const ThemeManager& theme)
@@ -313,19 +332,18 @@ CanvasModule::CanvasModule(const ResourceManager& resources, const ThemeManager&
 void CanvasModule::paint(juce::Graphics& g)
 {
     auto bounds = getLocalBounds().toFloat().reduced(2.0f);
+    if (bounds.isEmpty())
+        return;
 
-    g.setColour(juce::Colours::black.withAlpha(0.48f));
-    g.fillRoundedRectangle(bounds.translated(0.0f, 9.0f), 14.0f);
-
-    RenderUtils::fillVerticalGloss(g, bounds, m_theme.panelTop(), m_theme.panelBottom(), 8.0f);
-    g.setColour(m_theme.panelEdge());
-    g.drawRoundedRectangle(bounds.reduced(1.0f), 12.0f, 2.0f);
-
+    // Flat, minimal canvas appearance - no decorative case or frame
+    // Just a subtle shadow around the canvas area
     auto canvasPocket = m_pixelCanvas.getBounds().toFloat().expanded(10.0f);
-    g.setColour(juce::Colours::black.withAlpha(0.62f));
-    g.fillRoundedRectangle(canvasPocket, 9.0f);
-    g.setColour(juce::Colours::white.withAlpha(0.16f));
-    g.drawRoundedRectangle(canvasPocket.reduced(1.0f), 8.0f, 1.0f);
+    g.setColour(juce::Colours::black.withAlpha(0.30f));
+    g.fillRoundedRectangle(canvasPocket.translated(0.0f, 4.0f), 6.0f);
+
+    // Very subtle inset effect
+    g.setColour(juce::Colours::black.withAlpha(0.20f));
+    g.fillRoundedRectangle(canvasPocket, 6.0f);
 }
 
 void CanvasModule::resized()
@@ -493,16 +511,22 @@ void BottomControlBar::setMeterLevels(float inputLevel, float outputLevel)
 DrawdioProcessorEditor::DrawdioProcessorEditor(DrawdioProcessor& p)
     : AudioProcessorEditor(&p),
       audioProcessor(p),
-      m_workspaceBackground(m_resourceManager, m_theme),
+      m_woodGrainBackground(m_resourceManager, m_theme),
+      m_pedalboardBackground(m_resourceManager, m_theme),
       m_canvasModule(m_resourceManager, m_theme),
-      m_pedalboardCanvas(p, m_resourceManager, m_theme, m_routingManager),
+      m_pedalboardGrid(p, m_resourceManager, m_theme, m_routingManager),
       m_bottomControlBar(m_theme)
 {
-    addAndMakeVisible(m_workspaceBackground);
+    // Add background layers first, then content
+    addAndMakeVisible(m_woodGrainBackground);
+    addAndMakeVisible(m_pedalboardBackground);
     addAndMakeVisible(m_canvasModule);
-    addAndMakeVisible(m_pedalboardCanvas);
+    addAndMakeVisible(m_pedalboardGrid);
     addAndMakeVisible(m_bottomControlBar);
-    m_workspaceBackground.toBack();
+
+    // Backgrounds go to back
+    m_woodGrainBackground.toBack();
+    m_pedalboardBackground.toBack();
 
     auto& pixelCanvas = m_canvasModule.getPixelCanvas();
     pixelCanvas.setGridData(audioProcessor.getGridData());
@@ -518,18 +542,20 @@ DrawdioProcessorEditor::DrawdioProcessorEditor(DrawdioProcessor& p)
     {
         triggerRecompile();
         m_canvasModule.refreshStatus();
-        juce::MessageManager::callAsync([this]() { timerCallback(); });
+        checkForUpdates();  // Direct check instead of async message
     });
 
     m_canvasModule.setOnClear([this]()
     {
         m_routingManager.clearManualRouting();
-        m_pedalboardCanvas.updateRouting({});
+        m_pedalboardGrid.updateRouting({});
         audioProcessor.setManualRouting({});
     });
 
     setSize(1400, 800);
-    startTimerHz(30);
+
+    // Start with an update check
+    juce::MessageManager::callAsync([this]() { checkForUpdates(); });
 }
 
 DrawdioProcessorEditor::~DrawdioProcessorEditor()
@@ -545,8 +571,8 @@ void DrawdioProcessorEditor::paint(juce::Graphics& g)
 void DrawdioProcessorEditor::resized()
 {
     auto bounds = getLocalBounds();
-    m_workspaceBackground.setBounds(bounds);
 
+    // Position background layers: left half = wood, right half = pedalboard
     auto bottom = bounds.removeFromBottom(78);
     m_bottomControlBar.setBounds(bottom);
 
@@ -556,8 +582,14 @@ void DrawdioProcessorEditor::resized()
     auto pedalArea = content.removeFromRight(pedalW);
     content.removeFromRight(gap);
 
+    // Set bounds for split background layers
+    // Left half: wood grain for canvas area
+    m_woodGrainBackground.setBounds(content);
+    // Right half: pedalboard background for pedal area
+    m_pedalboardBackground.setBounds(pedalArea);
+
     m_canvasModule.setBounds(content);
-    m_pedalboardCanvas.setBounds(pedalArea);
+    m_pedalboardGrid.setBounds(pedalArea);
 }
 
 void DrawdioProcessorEditor::triggerRecompile()
@@ -568,14 +600,18 @@ void DrawdioProcessorEditor::triggerRecompile()
     audioProcessor.getCompilerThread().notify();
 }
 
-void DrawdioProcessorEditor::timerCallback()
+void DrawdioProcessorEditor::checkForUpdates()
 {
+    // Check if UI needs an update (called on message thread)
+    if (!audioProcessor.consumeUINotification())
+        return;  // No updates needed
+
     const auto previousRevision = m_seenConfigRevision;
     audioProcessor.consumeCompiledResultIfAvailable();
     m_seenConfigRevision = audioProcessor.getConfigRevision();
     const bool configChanged = m_seenConfigRevision != previousRevision;
 
-    m_pedalboardCanvas.syncPedals();
+    m_pedalboardGrid.syncPedals();
 
     auto config = audioProcessor.getDSPProcessor().getCurrentConfig();
     if (config)
@@ -586,7 +622,7 @@ void DrawdioProcessorEditor::timerCallback()
             if (chainPos >= 0 && chainPos < static_cast<int>(config->routingSlotOrder.size()))
             {
                 const int slotIdx = config->routingSlotOrder[static_cast<size_t>(chainPos)];
-                if (auto* pedal = m_pedalboardCanvas.getPedal(slotIdx))
+                if (auto* pedal = m_pedalboardGrid.getPedal(slotIdx))
                     pedal->setKnobValue(static_cast<int>(param.parameterToken), param.currentValue);
             }
         }
@@ -594,16 +630,19 @@ void DrawdioProcessorEditor::timerCallback()
         if (configChanged || config->routingSlotOrder != m_lastRoutingOrder)
         {
             m_lastRoutingOrder = config->routingSlotOrder;
-            m_pedalboardCanvas.updateRouting(m_lastRoutingOrder);
+            m_pedalboardGrid.updateRouting(m_lastRoutingOrder);
         }
     }
     else if (!m_lastRoutingOrder.empty())
     {
         m_lastRoutingOrder.clear();
-        m_pedalboardCanvas.updateRouting(m_lastRoutingOrder);
+        m_pedalboardGrid.updateRouting(m_lastRoutingOrder);
     }
 
     m_bottomControlBar.setMeterLevels(audioProcessor.getInputMeterLevel(),
                                       audioProcessor.getOutputMeterLevel());
     m_canvasModule.refreshStatus();
+
+    // Trigger repaint only if changes were made
+    repaint();
 }

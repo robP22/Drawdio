@@ -54,7 +54,12 @@ target_sources(Drawdio PRIVATE
     Source/PenDebouncer.cpp
     Source/CompilerEngine.cpp
     Source/PedalComponent.cpp
-    Source/PedalboardBackground.cpp
+    Source/PedalSkinManager.cpp
+    Source/PedalboardGrid.cpp
+    Source/DspState.cpp
+    Source/HeadlessDspTest.cpp
+    Source/StateSerializer.cpp
+    Source/DspGraph.cpp
     Source/Effects/GranularBaseEffect.cpp
     Source/Effects/DistortionEffects.cpp
     Source/Effects/FilterEffects.cpp

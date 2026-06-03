@@ -33,6 +33,8 @@ public:
         Buttons,
         Meters,
         Overlays,
+        JapanesePedals,
+        GeneralPedals,
         Count
     };
 
@@ -46,6 +48,14 @@ public:
         ButtonDefault,
         MeterSegment,
         OverlayGloss,
+        // Japanese skin sprites
+        JapPedalBody,
+        JapPedalLed,
+        JapPedalJack,
+        // General skin sprites
+        GenPedalBody,
+        GenPedalLed,
+        GenPedalJack,
         Count
     };
 
@@ -88,6 +98,7 @@ private:
     void loadAll();
     void loadProceduralTextures();
     void loadSpriteSheets();
+    void loadPedalSkinSpriteSheets();
 
     bool loadImageFromBinaryData(ImageId id, const void* data, size_t sizeInBytes);
     bool loadTextureFromBinaryData(TextureId id, const void* data, size_t sizeInBytes);

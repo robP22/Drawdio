@@ -8,6 +8,7 @@ class ThemeManager final
 public:
     struct PedalStyle
     {
+        juce::Colour backgroundColour = juce::Colour(0xFF24292A);
         float bodyRadius = 13.0f;
         float faceRadius = 10.0f;
         float lcdRadius = 5.0f;

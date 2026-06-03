@@ -111,6 +111,37 @@ void ResourceManager::loadSpriteSheets()
         { SpriteSheetId::Meters, spriteFrameRect(0, placeholderFrame, placeholderFrame) };
     m_spriteFrames[static_cast<size_t>(SpriteId::OverlayGloss)] =
         { SpriteSheetId::Overlays, spriteFrameRect(0, placeholderFrame, placeholderFrame) };
+
+    // Load real sprite sheets for pedal skins
+    loadPedalSkinSpriteSheets();
+}
+
+void ResourceManager::loadPedalSkinSpriteSheets()
+{
+    // Japanese pedal sprite sheet - 3 frames: body, LED, jack
+    // Frame positions based on jap_pedal_sprite_sheet.png layout
+    constexpr int japFrameW = 96;
+    constexpr int japFrameH = 64;
+    m_spriteSheets[static_cast<size_t>(SpriteSheetId::JapanesePedals)] =
+        { makePedalPartsSpriteSheet(japFrameW, japFrameH), japFrameW, japFrameH };
+    m_spriteFrames[static_cast<size_t>(SpriteId::JapPedalBody)] =
+        { SpriteSheetId::JapanesePedals, spriteFrameRect(0, japFrameW, japFrameH) };
+    m_spriteFrames[static_cast<size_t>(SpriteId::JapPedalLed)] =
+        { SpriteSheetId::JapanesePedals, spriteFrameRect(1, japFrameW, japFrameH) };
+    m_spriteFrames[static_cast<size_t>(SpriteId::JapPedalJack)] =
+        { SpriteSheetId::JapanesePedals, spriteFrameRect(2, japFrameW, japFrameH) };
+
+    // General pedal sprite sheet - 3 frames: body, LED, jack
+    constexpr int genFrameW = 96;
+    constexpr int genFrameH = 64;
+    m_spriteSheets[static_cast<size_t>(SpriteSheetId::GeneralPedals)] =
+        { makePedalPartsSpriteSheet(genFrameW, genFrameH), genFrameW, genFrameH };
+    m_spriteFrames[static_cast<size_t>(SpriteId::GenPedalBody)] =
+        { SpriteSheetId::GeneralPedals, spriteFrameRect(0, genFrameW, genFrameH) };
+    m_spriteFrames[static_cast<size_t>(SpriteId::GenPedalLed)] =
+        { SpriteSheetId::GeneralPedals, spriteFrameRect(1, genFrameW, genFrameH) };
+    m_spriteFrames[static_cast<size_t>(SpriteId::GenPedalJack)] =
+        { SpriteSheetId::GeneralPedals, spriteFrameRect(2, genFrameW, genFrameH) };
 }
 
 bool ResourceManager::loadImageFromBinaryData(ImageId id, const void* data, size_t sizeInBytes)

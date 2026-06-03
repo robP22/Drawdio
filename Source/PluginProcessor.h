@@ -61,6 +61,10 @@ public:
     float getInputMeterLevel() const { return m_inputMeterLevel.load(std::memory_order_relaxed); }
     float getOutputMeterLevel() const { return m_outputMeterLevel.load(std::memory_order_relaxed); }
 
+    // Change-driven UI updates - UI polls this flag
+    bool consumeUINotification();
+    void triggerUINotification();
+
 private:
     void syncCompilerConfig();
     void publishMeterLevels(float inputPeak, float outputPeak);
@@ -77,6 +81,7 @@ private:
     std::atomic<float> m_inputMeterLevel { 0.0f };
     std::atomic<float> m_outputMeterLevel { 0.0f };
     std::atomic<uint32_t> m_configRevision { 0 };
+    std::atomic<bool> m_uiNeedsUpdate { false };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(DrawdioProcessor)
 };

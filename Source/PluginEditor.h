@@ -7,20 +7,29 @@
 #include <utility>
 #include <vector>
 
-#include "PedalboardCanvas.h"
+#include "PedalboardGrid.h"
 #include "PixelCanvasComponent.h"
 #include "PluginProcessor.h"
 #include "ResourceManager.h"
 #include "ThemeManager.h"
 #include "CanvasRoutingManager.h"
 
-class WorkspaceBackground : public juce::Component
+// Background components for left (wood) and right (pedalboard) halves
+class WoodGrainBackground : public juce::Component
 {
 public:
-    WorkspaceBackground(const ResourceManager& resources, const ThemeManager& theme);
-
+    WoodGrainBackground(const ResourceManager& resources, const ThemeManager& theme);
     void paint(juce::Graphics& g) override;
+private:
+    const ResourceManager& m_resources;
+    const ThemeManager& m_theme;
+};
 
+class PedalboardBackground : public juce::Component
+{
+public:
+    PedalboardBackground(const ResourceManager& resources, const ThemeManager& theme);
+    void paint(juce::Graphics& g) override;
 private:
     const ResourceManager& m_resources;
     const ThemeManager& m_theme;
@@ -156,8 +165,7 @@ private:
     juce::ComboBox m_qualitySelector;
 };
 
-class DrawdioProcessorEditor : public juce::AudioProcessorEditor,
-                                private juce::Timer
+class DrawdioProcessorEditor : public juce::AudioProcessorEditor
 {
 public:
     explicit DrawdioProcessorEditor(DrawdioProcessor&);
@@ -168,15 +176,16 @@ public:
 
 private:
     void triggerRecompile();
-    void timerCallback() override;
+    void checkForUpdates();  // Change-driven update check
 
     DrawdioProcessor& audioProcessor;
     ResourceManager m_resourceManager;
     ThemeManager m_theme;
     CanvasRoutingManager m_routingManager;
-    WorkspaceBackground m_workspaceBackground;
+    WoodGrainBackground m_woodGrainBackground;
+    PedalboardBackground m_pedalboardBackground;
     CanvasModule m_canvasModule;
-    PedalboardCanvas m_pedalboardCanvas;
+    PedalboardGrid m_pedalboardGrid;
     BottomControlBar m_bottomControlBar;
     std::vector<uint8_t> m_lastRoutingOrder;
     uint32_t m_seenConfigRevision = 0;

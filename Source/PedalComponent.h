@@ -4,6 +4,7 @@
 #include "PedalStructures.h"
 #include "ResourceManager.h"
 #include "ThemeManager.h"
+#include "PedalSkinManager.h"
 
 class DrawdioProcessor;
 
@@ -14,7 +15,8 @@ public:
                    int slotIndex,
                    DspModuleType initialType,
                    const ResourceManager& resources,
-                   const ThemeManager& theme);
+                   const ThemeManager& theme,
+                   PedalSkinManager::PedalSkin skin = PedalSkinManager::PedalSkin::Default);
     ~PedalComponent() override;
 
     void paint(juce::Graphics&) override;
@@ -24,6 +26,7 @@ public:
 
     void setKnobValue(int knobIdx, float value);
     void syncFromProcessor();
+    void setSkin(PedalSkinManager::PedalSkin skin);
 
     juce::Point<float> getInputJackPos() const;
     juce::Point<float> getOutputJackPos() const;
@@ -34,7 +37,6 @@ public:
 private:
     void showTypePopup();
     void initKnob(juce::Slider& knob);
-    juce::Rectangle<float> getBodyBounds() const;
     void updateDefinition();
 
     DrawdioProcessor& audioProcessor;
@@ -43,6 +45,7 @@ private:
     int m_slotIndex;
     DspModuleType m_currentType;
     const PedalDefinition* m_definition = nullptr;
+    PedalSkinManager::PedalSkin m_skin;
 
     juce::Slider m_knobs[4];
 };

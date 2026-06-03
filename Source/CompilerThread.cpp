@@ -61,12 +61,15 @@ bool CompilerThread::hasCompiledResult() const
 
 std::shared_ptr<PedalAssetPayload> CompilerThread::getCompiledPayloadPtr()
 {
-    if (!m_slotFull.load(std::memory_order_acquire))
+    // Lock-free consume: only one reader (DSP thread), one writer (compiler thread)
+    // Use compare-exchange to ensure we only consume when slot is actually full
+    bool expected = true;
+    if (!m_slotFull.compare_exchange_strong(expected, false, std::memory_order_acq_rel, std::memory_order_acquire))
         return nullptr;
 
-    std::lock_guard<std::mutex> lock(m_slotMutex);
+    // Slot was full, now cleared - take ownership
     auto ptr = std::move(m_slot);
-    m_slotFull.store(false, std::memory_order_release);
+    m_slot = nullptr;
     return ptr;
 }
 
@@ -101,15 +104,13 @@ void CompilerThread::threadFunc(CanvasMessageQueue& queue, PenDebouncer& debounc
             existingParams = m_existingParams;
         }
 
-        // Only publish if the previous result has been consumed.
-        if (!m_slotFull.load(std::memory_order_acquire))
+        // Lock-free publish: only write if slot is empty
+        bool expected = false;
+        if (m_slotFull.compare_exchange_strong(expected, true, std::memory_order_acq_rel, std::memory_order_acquire))
         {
-            auto newPayload = std::make_shared<PedalAssetPayload>(
+            m_slot = std::make_shared<PedalAssetPayload>(
                 compileCanvas(msg.gridSnapshot.data(), slots, manualRouting, existingParams));
-            
-            std::lock_guard<std::mutex> lock(m_slotMutex);
-            m_slot = std::move(newPayload);
-            m_slotFull.store(true, std::memory_order_release);
         }
+        // If slot was already full, skip this frame (previous result still pending)
     }
 }

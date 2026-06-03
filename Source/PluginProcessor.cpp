@@ -1,5 +1,6 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
+#include "StateSerializer.h"
 
 #include <algorithm>
 #include <cmath>
@@ -156,7 +157,19 @@ bool DrawdioProcessor::consumeCompiledResultIfAvailable()
 
     m_dspProcessor.loadPedalConfiguration(std::move(payloadPtr));
     m_configRevision.fetch_add(1, std::memory_order_acq_rel);
+    triggerUINotification();  // Signal UI that config changed
     return true;
+}
+
+bool DrawdioProcessor::consumeUINotification()
+{
+    bool expected = true;
+    return m_uiNeedsUpdate.compare_exchange_strong(expected, false, std::memory_order_acq_rel);
+}
+
+void DrawdioProcessor::triggerUINotification()
+{
+    m_uiNeedsUpdate.store(true, std::memory_order_release);
 }
 
 void DrawdioProcessor::publishMeterLevels(float inputPeak, float outputPeak)
@@ -171,69 +184,24 @@ void DrawdioProcessor::publishMeterLevels(float inputPeak, float outputPeak)
 
 void DrawdioProcessor::getStateInformation(juce::MemoryBlock& destData)
 {
-    std::vector<uint8_t> blob(SerializedSize, 0);
+    auto state = StateSerializer::createState(m_gridData, m_pedalSlots, m_manualRouting);
+    std::vector<uint8_t> blob;
+    StateSerializer::serialize(state, blob);
 
-    blob[0] = 0x44; // 'D'
-    blob[1] = 0x52; // 'R'
-    blob[2] = 0x44; // 'D'
-    blob[3] = 0x01; // version
-
-    std::memcpy(blob.data() + 4, m_gridData.data(), TotalCells);
-
-    const int layoutOffset = 4 + TotalCells;
-    for (int i = 0; i < static_cast<int>(m_pedalSlots.size()); ++i)
-        blob[layoutOffset + i] = static_cast<uint8_t>(m_pedalSlots[static_cast<size_t>(i)]);
-
-    const int routingOffset = layoutOffset + PedalSlotCount;
-    for (int i = 0; i < PedalSlotCount; ++i)
-    {
-        if (i < static_cast<int>(m_manualRouting.size()))
-            blob[routingOffset + i] = m_manualRouting[static_cast<size_t>(i)];
-        else
-            blob[routingOffset + i] = 0xFF;
-    }
-
-    const int flagOffset = routingOffset + PedalSlotCount;
-    blob[flagOffset] = 0;
-
-    destData.setSize(SerializedSize);
-    destData.copyFrom(blob.data(), 0, SerializedSize);
+    destData.setSize(blob.size());
+    destData.copyFrom(blob.data(), 0, blob.size());
 }
 
 void DrawdioProcessor::setStateInformation(const void* data, int sizeInBytes)
 {
-    if (sizeInBytes < SerializedSize)
+    StateSerializer::SerializedState state;
+    if (!StateSerializer::deserialize(static_cast<const uint8_t*>(data),
+                                     static_cast<size_t>(sizeInBytes), state))
         return;
 
-    const auto* blob = static_cast<const uint8_t*>(data);
-
-    if (blob[0] != 0x44 || blob[1] != 0x52 || blob[2] != 0x44)
-        return;
-
-    std::memcpy(m_gridData.data(), blob + 4, TotalCells);
-    for (auto& val : m_gridData)
-        if (val > 4)
-            val = 0;
-
-    const int layoutOffset = 4 + TotalCells;
-    constexpr auto maxPedalType = static_cast<uint8_t>(DspModuleType::GRANULAR_DELAY);
-    for (int i = 0; i < static_cast<int>(m_pedalSlots.size()); ++i)
-    {
-        uint8_t raw = blob[layoutOffset + i];
-        if (raw > maxPedalType)
-            raw = 0;
-
-        m_pedalSlots[static_cast<size_t>(i)] = static_cast<DspModuleType>(raw);
-    }
-
-    const int routingOffset = layoutOffset + PedalSlotCount;
-    m_manualRouting.clear();
-    for (int i = 0; i < PedalSlotCount; ++i)
-    {
-        uint8_t slot = blob[routingOffset + i];
-        if (slot < PedalSlotCount)
-            m_manualRouting.push_back(slot);
-    }
+    m_gridData = state.gridData;
+    m_pedalSlots = state.pedalSlots;
+    m_manualRouting = state.manualRouting;
 
     m_dspProcessor.reset();
     syncCompilerConfig();
