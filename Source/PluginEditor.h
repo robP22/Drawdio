@@ -1,0 +1,183 @@
+#pragma once
+
+#include <JuceHeader.h>
+#include <array>
+#include <cstdint>
+#include <functional>
+#include <utility>
+#include <vector>
+
+#include "PedalboardCanvas.h"
+#include "PixelCanvasComponent.h"
+#include "PluginProcessor.h"
+#include "ResourceManager.h"
+#include "ThemeManager.h"
+#include "CanvasRoutingManager.h"
+
+class WorkspaceBackground : public juce::Component
+{
+public:
+    WorkspaceBackground(const ResourceManager& resources, const ThemeManager& theme);
+
+    void paint(juce::Graphics& g) override;
+
+private:
+    const ResourceManager& m_resources;
+    const ThemeManager& m_theme;
+};
+
+class ColorPalette : public juce::Component
+{
+public:
+    using ColorCallback = std::function<void(PixelCanvasComponent::PixelColor)>;
+
+    ColorPalette(const ResourceManager& resources, const ThemeManager& theme);
+
+    void paint(juce::Graphics& g) override;
+    void resized() override;
+    void mouseDown(const juce::MouseEvent& event) override;
+    void mouseMove(const juce::MouseEvent& event) override;
+    void mouseExit(const juce::MouseEvent& event) override;
+
+    void setSelectedColor(PixelCanvasComponent::PixelColor color);
+    void setOnColorSelected(ColorCallback cb) { m_onColorSelected = std::move(cb); }
+
+private:
+    struct PaintBlob
+    {
+        PixelCanvasComponent::PixelColor color;
+        juce::Rectangle<float> bounds;
+    };
+
+    int hitTestBlob(juce::Point<float> position) const;
+
+    const ResourceManager& m_resources;
+    const ThemeManager& m_theme;
+    std::array<PaintBlob, 5> m_blobs;
+    PixelCanvasComponent::PixelColor m_selectedColor = PixelCanvasComponent::PixelColor::Red;
+    int m_hoveredBlob = -1;
+    ColorCallback m_onColorSelected;
+};
+
+class CanvasTools : public juce::Component
+{
+public:
+    explicit CanvasTools(const ThemeManager& theme);
+
+    void paint(juce::Graphics& g) override;
+    void resized() override;
+
+    void setOnUndo(std::function<void()> cb) { m_onUndo = std::move(cb); }
+    void setOnClear(std::function<void()> cb) { m_onClear = std::move(cb); }
+
+private:
+    void styleButton(juce::TextButton& button, juce::Colour accent);
+
+    const ThemeManager& m_theme;
+    juce::TextButton m_drawButton { "Draw" };
+    juce::TextButton m_undoButton { "Undo" };
+    juce::TextButton m_clearButton { "Clear" };
+
+    std::function<void()> m_onUndo;
+    std::function<void()> m_onClear;
+};
+
+class CanvasStatusDisplay : public juce::Component
+{
+public:
+    explicit CanvasStatusDisplay(const ThemeManager& theme);
+
+    void paint(juce::Graphics& g) override;
+
+    void setSelectedColor(PixelCanvasComponent::PixelColor color);
+    void setChangedCellCount(int count);
+
+private:
+    const ThemeManager& m_theme;
+    PixelCanvasComponent::PixelColor m_selectedColor = PixelCanvasComponent::PixelColor::Red;
+    int m_changedCellCount = 0;
+};
+
+class CanvasModule : public juce::Component
+{
+public:
+    CanvasModule(const ResourceManager& resources, const ThemeManager& theme);
+
+    void paint(juce::Graphics& g) override;
+    void resized() override;
+
+    PixelCanvasComponent& getPixelCanvas() { return m_pixelCanvas; }
+    const PixelCanvasComponent& getPixelCanvas() const { return m_pixelCanvas; }
+
+    void setOnClear(std::function<void()> cb) { m_onClear = std::move(cb); }
+    void refreshStatus();
+
+private:
+    const ResourceManager& m_resources;
+    const ThemeManager& m_theme;
+    PixelCanvasComponent m_pixelCanvas;
+    ColorPalette m_palette;
+    CanvasTools m_tools;
+    CanvasStatusDisplay m_status;
+
+    std::function<void()> m_onClear;
+};
+
+class LevelMeter : public juce::Component
+{
+public:
+    LevelMeter(juce::String label, const ThemeManager& theme);
+
+    void paint(juce::Graphics& g) override;
+    void setLevel(float level);
+
+private:
+    const ThemeManager& m_theme;
+    juce::String m_label;
+    float m_level = 0.0f;
+};
+
+class BottomControlBar : public juce::Component
+{
+public:
+    explicit BottomControlBar(const ThemeManager& theme);
+
+    void paint(juce::Graphics& g) override;
+    void resized() override;
+
+    void setMeterLevels(float inputLevel, float outputLevel);
+
+private:
+    const ThemeManager& m_theme;
+    LevelMeter m_inputMeter;
+    LevelMeter m_outputMeter;
+    juce::Slider m_dryWetSlider;
+    juce::ComboBox m_oversamplingSelector;
+    juce::ComboBox m_qualitySelector;
+};
+
+class DrawdioProcessorEditor : public juce::AudioProcessorEditor,
+                                private juce::Timer
+{
+public:
+    explicit DrawdioProcessorEditor(DrawdioProcessor&);
+    ~DrawdioProcessorEditor() override;
+
+    void paint(juce::Graphics& g) override;
+    void resized() override;
+
+private:
+    void triggerRecompile();
+    void timerCallback() override;
+
+    DrawdioProcessor& audioProcessor;
+    ResourceManager m_resourceManager;
+    ThemeManager m_theme;
+    CanvasRoutingManager m_routingManager;
+    WorkspaceBackground m_workspaceBackground;
+    CanvasModule m_canvasModule;
+    PedalboardCanvas m_pedalboardCanvas;
+    BottomControlBar m_bottomControlBar;
+    std::vector<uint8_t> m_lastRoutingOrder;
+    uint32_t m_seenConfigRevision = 0;
+};
