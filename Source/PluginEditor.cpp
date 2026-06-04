@@ -278,15 +278,15 @@ void CanvasModule::paint(juce::Graphics&)
 void CanvasModule::resized()
 {
     auto area = getLocalBounds().reduced(22, 20).translated(-20, 85);
-    auto bottom = area.removeFromBottom(380);
+    auto bottom = area.removeFromBottom(380);  // Larger palette
     area.removeFromBottom(14);
 
     const auto square = juce::jmin(area.getWidth(), area.getHeight()) + 140;
-    auto canvasArea = area.withSizeKeepingCentre(square, square).translated(-10, -5);
+    auto canvasArea = area.withSizeKeepingCentre(square, square).translated(0, -5);
     m_pixelCanvas.setBounds(canvasArea.reduced(8));
 
     auto controls = bottom;
-    auto toolsArea = controls.removeFromRight(40);  // Smaller tools area
+    auto toolsArea = controls.removeFromRight(70);
     controls.removeFromRight(10);
 
     m_palette.setBounds(controls);
