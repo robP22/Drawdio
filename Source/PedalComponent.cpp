@@ -190,71 +190,9 @@ void PedalComponent::initKnob(juce::Slider& knob)
     };
 }
 
-void PedalComponent::paint(juce::Graphics& g)
+void PedalComponent::paint(juce::Graphics&)
 {
-    auto bounds = getLocalBounds().toFloat();
-    if (bounds.isEmpty())
-        return;
-
-    // Draw pedal body sprite as background
-    const auto& frame = m_resources.getSpriteFrame(ResourceManager::SpriteId::PedalBody);
-    const auto& sheet = m_resources.getSpriteSheet(frame.sheetId);
-    if (sheet.image.isValid())
-    {
-        g.drawImage(sheet.image,
-                   static_cast<int>(bounds.getX()),
-                   static_cast<int>(bounds.getY()),
-                   static_cast<int>(bounds.getWidth()),
-                   static_cast<int>(bounds.getHeight()),
-                   frame.source.getX(),
-                   frame.source.getY(),
-                   frame.source.getWidth(),
-                   frame.source.getHeight());
-    }
-
-    // Draw LED indicator (top center area)
-    auto ledArea = bounds.reduced(bounds.getWidth() * 0.45f, bounds.getHeight() * 0.04f)
-                      .withTrimmedBottom(bounds.getHeight() * 0.88f)
-                      .withTrimmedTop(bounds.getHeight() * 0.04f);
-    const bool active = m_currentType != DspModuleType::BYPASS;
-    g.setColour(active ? juce::Colour(0xFF50F07E) : juce::Colour(0xFF344039));
-    g.fillEllipse(ledArea.withSizeKeepingCentre(12.0f, 12.0f));
-
-    // Pedal name/type text where 'LCD screen' area is on sprite
-    auto labelTop = bounds.reduced(bounds.getWidth() * 0.08f, bounds.getHeight() * 0.06f);
-    labelTop = labelTop.withTrimmedTop(labelTop.getHeight() * 0.72f);
-    g.setFont(juce::FontOptions(11.0f, juce::Font::bold));
-    g.setColour(juce::Colours::black.withAlpha(0.8f));
-    g.drawFittedText(typeName(m_currentType),
-                     labelTop.toNearestInt(),
-                     juce::Justification::centred,
-                     1);
-
-    // Draw jack indicators as simple circles
-    auto inJack = getInputJackPos() - getPosition().toFloat();
-    auto outJack = getOutputJackPos() - getPosition().toFloat();
-    for (auto jack : { inJack, outJack })
-    {
-        g.setColour(juce::Colour(0xFF606060));
-        g.fillEllipse(jack.x - 8.0f, jack.y - 6.0f, 16.0f, 12.0f);
-        g.setColour(juce::Colours::black);
-        g.fillEllipse(jack.x - 3.0f, jack.y - 3.0f, 6.0f, 6.0f);
-    }
-
-    // Knob labels - rendered near each knob
-    g.setFont(juce::FontOptions(8.0f, juce::Font::bold));
-    for (int i = 0; i < 4; ++i)
-    {
-        auto kb = m_knobs[i].getBounds();
-        g.setColour(juce::Colours::black.withAlpha(0.46f));
-        g.drawText(knobLabel(m_currentType, i),
-                   kb.getX(), kb.getY() - 12, kb.getWidth(), 10,
-                   juce::Justification::centred);
-        g.setColour(juce::Colours::white.withAlpha(0.68f));
-        g.drawText(knobLabel(m_currentType, i),
-                   kb.getX(), kb.getY() - 13, kb.getWidth(), 10,
-                   juce::Justification::centred);
-    }
+    // EMPTY - sprites only, added later
 }
 
 void PedalComponent::setSkin(PedalSkinManager::PedalSkin skin)
