@@ -83,7 +83,6 @@ private:
     void styleButton(juce::TextButton& button, juce::Colour accent);
 
     const ThemeManager& m_theme;
-    juce::TextButton m_drawButton { "Draw" };
     juce::TextButton m_undoButton { "Undo" };
     juce::TextButton m_clearButton { "Clear" };
 
