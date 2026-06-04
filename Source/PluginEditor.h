@@ -91,22 +91,6 @@ private:
     std::function<void()> m_onClear;
 };
 
-class CanvasStatusDisplay : public juce::Component
-{
-public:
-    explicit CanvasStatusDisplay(const ThemeManager& theme);
-
-    void paint(juce::Graphics& g) override;
-
-    void setSelectedColor(PixelCanvasComponent::PixelColor color);
-    void setChangedCellCount(int count);
-
-private:
-    const ThemeManager& m_theme;
-    PixelCanvasComponent::PixelColor m_selectedColor = PixelCanvasComponent::PixelColor::Red;
-    int m_changedCellCount = 0;
-};
-
 class CanvasModule : public juce::Component
 {
 public:
@@ -127,42 +111,8 @@ private:
     PixelCanvasComponent m_pixelCanvas;
     ColorPalette m_palette;
     CanvasTools m_tools;
-    CanvasStatusDisplay m_status;
 
     std::function<void()> m_onClear;
-};
-
-class LevelMeter : public juce::Component
-{
-public:
-    LevelMeter(juce::String label, const ThemeManager& theme);
-
-    void paint(juce::Graphics& g) override;
-    void setLevel(float level);
-
-private:
-    const ThemeManager& m_theme;
-    juce::String m_label;
-    float m_level = 0.0f;
-};
-
-class BottomControlBar : public juce::Component
-{
-public:
-    explicit BottomControlBar(const ThemeManager& theme);
-
-    void paint(juce::Graphics& g) override;
-    void resized() override;
-
-    void setMeterLevels(float inputLevel, float outputLevel);
-
-private:
-    const ThemeManager& m_theme;
-    LevelMeter m_inputMeter;
-    LevelMeter m_outputMeter;
-    juce::Slider m_dryWetSlider;
-    juce::ComboBox m_oversamplingSelector;
-    juce::ComboBox m_qualitySelector;
 };
 
 class DrawdioProcessorEditor : public juce::AudioProcessorEditor, private juce::Timer
@@ -187,7 +137,6 @@ private:
     PedalboardBackground m_pedalboardBackground;
     CanvasModule m_canvasModule;
     PedalboardGrid m_pedalboardGrid;
-    BottomControlBar m_bottomControlBar;
     std::vector<uint8_t> m_lastRoutingOrder;
     uint32_t m_seenConfigRevision = 0;
 };

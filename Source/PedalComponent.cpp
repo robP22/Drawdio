@@ -1,5 +1,6 @@
 #include "PedalComponent.h"
 #include "PluginProcessor.h"
+#include "RenderUtils.h"
 
 namespace
 {
@@ -195,59 +196,42 @@ void PedalComponent::paint(juce::Graphics& g)
     if (bounds.isEmpty())
         return;
 
-    // Minimal flat pedal appearance - NO decorative body, bezel, or mounting frame
-    // Just a flat coloured surface with essential text and small accent indicators
+    // Draw pedal base sprite as background
+    if (m_resources.getTexture(ResourceManager::TextureId::PedalBase).isValid())
+        RenderUtils::drawImageScaled(g, m_resources.getTexture(ResourceManager::TextureId::PedalBase), bounds);
 
-    // Flat background surface
-    auto surface = bounds.reduced(4.0f, 6.0f);
-    g.setColour(skinColourForSlot(m_slotIndex));
-    g.fillRoundedRectangle(surface, 4.0f);
+    // Draw sprite sheet for LED (top center area)
+    // The sprite sheet contains LED state in the top area
+    // For now, draw a simple LED indicator
+    auto led = bounds.reduced(bounds.getWidth() * 0.45f, bounds.getHeight() * 0.04f)
+                   .withTrimmedBottom(bounds.getHeight() * 0.88f)
+                   .withTrimmedTop(bounds.getHeight() * 0.04f);
+    const bool active = m_currentType != DspModuleType::BYPASS;
+    g.setColour(active ? juce::Colour(0xFF50F07E) : juce::Colour(0xFF344039));
+    g.fillEllipse(led.withSizeKeepingCentre(12.0f, 12.0f));
 
-    // Subtle top highlight line
-    g.setColour(juce::Colours::white.withAlpha(0.15f));
-    g.drawLine(surface.getX(), surface.getY() + 1.0f,
-               surface.getRight(), surface.getY() + 1.0f, 1.0f);
-
-    // Bottom label area - type name
-    auto labelTop = surface.removeFromTop(24.0f).reduced(8.0f, 2.0f);
-    g.setFont(juce::FontOptions(10.0f, juce::Font::bold));
-    g.setColour(juce::Colours::white.withAlpha(0.72f));
-    g.drawFittedText("DRAWDIO " + juce::String(m_slotIndex + 1),
+    // Pedal name/type text where 'LCD screen' area is on sprite
+    auto labelTop = bounds.reduced(bounds.getWidth() * 0.08f, bounds.getHeight() * 0.06f);
+    labelTop = labelTop.withTrimmedTop(labelTop.getHeight() * 0.72f);
+    g.setFont(juce::FontOptions(11.0f, juce::Font::bold));
+    g.setColour(juce::Colours::black.withAlpha(0.8f));
+    g.drawFittedText(typeName(m_currentType),
                      labelTop.toNearestInt(),
                      juce::Justification::centred,
                      1);
-
-    // Type display in a small flat box
-    auto typeBox = surface.withTrimmedTop(surface.getHeight() * 0.72f).reduced(10.0f, 6.0f);
-    g.setColour(juce::Colours::black.withAlpha(0.35f));
-    g.fillRoundedRectangle(typeBox, 3.0f);
-    g.setColour(juce::Colours::white.withAlpha(0.82f));
-    g.setFont(juce::FontOptions(10.0f, juce::Font::bold));
-    g.drawFittedText(typeName(m_currentType),
-                     typeBox.reduced(4.0f, 2.0f).toNearestInt(),
-                     juce::Justification::centred,
-                     1);
-
-    // Small LED indicator - minimal dot
-    auto led = bounds.reduced(8.0f, 12.0f).withTrimmedBottom(bounds.getHeight() * 0.80f)
-                   .removeFromRight(16.0f);
-    const bool active = m_currentType != DspModuleType::BYPASS;
-    g.setColour(active ? juce::Colour(0xFF50F07E) : juce::Colour(0xFF344039));
-    g.fillEllipse(led.withSizeKeepingCentre(8.0f, 8.0f));
 
     // Draw jack indicators as simple circles
     auto inJack = getInputJackPos() - getPosition().toFloat();
     auto outJack = getOutputJackPos() - getPosition().toFloat();
     for (auto jack : { inJack, outJack })
     {
-        // Simple flat jack circle
         g.setColour(juce::Colour(0xFF606060));
-        g.fillEllipse(jack.x - 6.0f, jack.y - 4.0f, 12.0f, 10.0f);
+        g.fillEllipse(jack.x - 8.0f, jack.y - 6.0f, 16.0f, 12.0f);
         g.setColour(juce::Colours::black);
-        g.fillEllipse(jack.x - 2.5f, jack.y - 2.5f, 5.0f, 5.0f);
+        g.fillEllipse(jack.x - 3.0f, jack.y - 3.0f, 6.0f, 6.0f);
     }
 
-    // Knob labels - minimal text
+    // Knob labels - rendered near each knob
     g.setFont(juce::FontOptions(8.0f, juce::Font::bold));
     for (int i = 0; i < 4; ++i)
     {

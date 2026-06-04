@@ -30,16 +30,6 @@ PedalboardGrid::PedalboardGrid(DrawdioProcessor& processor,
 
 void PedalboardGrid::paint(juce::Graphics& g)
 {
-    // Minimal pedalboard - just flat felt background, no decorative frames
-    // Background texture is already drawn by m_pedalboardBackground component
-    auto bounds = getLocalBounds().toFloat().reduced(2.0f);
-    if (bounds.isEmpty())
-        return;
-
-    // Very subtle border line
-    g.setColour(juce::Colours::black.withAlpha(0.15f));
-    g.drawRect(bounds, 1.0f);
-
     // Draw routing cables (top layer)
     drawRoutingCables(g);
     drawActiveDraggingCable(g);

@@ -47,31 +47,6 @@ void PixelCanvasComponent::paint(juce::Graphics& g)
     g.setImageResamplingQuality(juce::Graphics::lowResamplingQuality);
     g.drawImage(m_pixelImage, bounds);
     g.setImageResamplingQuality(juce::Graphics::mediumResamplingQuality);
-
-    g.setColour(juce::Colours::white.withAlpha(0.035f));
-    for (int y = 3; y < getHeight(); y += 6)
-        g.drawHorizontalLine(y, 0.0f, static_cast<float>(getWidth()));
-
-    g.setColour(juce::Colours::black.withAlpha(0.025f));
-    for (int x = 2; x < getWidth(); x += 7)
-        g.drawVerticalLine(x, 0.0f, static_cast<float>(getHeight()));
-
-    const float cellW = bounds.getWidth() / static_cast<float>(GridSize);
-    const float cellH = bounds.getHeight() / static_cast<float>(GridSize);
-    const auto gridAlpha = (m_mouseInside || m_drawing) ? 0.18f : 0.07f;
-
-    g.setColour(m_theme.canvasGrid().withAlpha(gridAlpha));
-    for (int i = 0; i <= GridSize; ++i)
-    {
-        const float x = bounds.getX() + static_cast<float>(i) * cellW;
-        const float y = bounds.getY() + static_cast<float>(i) * cellH;
-        const float thickness = (i % 16 == 0) ? 0.75f : 0.25f;
-        g.drawLine(x, bounds.getY(), x, bounds.getBottom(), thickness);
-        g.drawLine(bounds.getX(), y, bounds.getRight(), y, thickness);
-    }
-
-    g.setColour(juce::Colours::white.withAlpha(0.22f));
-    g.drawRoundedRectangle(bounds.reduced(0.5f), 4.0f, 1.0f);
 }
 
 juce::Point<int> PixelCanvasComponent::gridCoordsFromUI(int uiX, int uiY) const

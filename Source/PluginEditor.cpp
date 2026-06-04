@@ -34,22 +34,11 @@ void WoodGrainBackground::paint(juce::Graphics& g)
     if (bounds.isEmpty())
         return;
 
-    // Draw wood grain texture as flat background - no decorative borders
+    // Draw wood grain texture only - no vignette overlay
     if (m_resources.getTexture(ResourceManager::TextureId::WorkspaceWood).isValid())
         RenderUtils::drawImageScaled(g, m_resources.getTexture(ResourceManager::TextureId::WorkspaceWood), bounds);
     else
         g.fillAll(m_theme.workspaceFallback());
-
-    // Subtle gradient overlay for depth
-    juce::ColourGradient vignette(juce::Colours::transparentBlack,
-                                  bounds.getCentreX(),
-                                  bounds.getCentreY(),
-                                  m_theme.workspaceVignette(),
-                                  0.0f,
-                                  bounds.getHeight() * 0.68f,
-                                  true);
-    g.setGradientFill(vignette);
-    g.fillAll();
 }
 
 PedalboardBackground::PedalboardBackground(const ResourceManager& resources, const ThemeManager& theme)
@@ -88,14 +77,11 @@ ColorPalette::ColorPalette(const ResourceManager& resources, const ThemeManager&
 void ColorPalette::paint(juce::Graphics& g)
 {
     auto bounds = getLocalBounds().toFloat();
-    g.setColour(juce::Colours::black.withAlpha(0.18f));
-    g.fillRoundedRectangle(bounds.reduced(2.0f).translated(0.0f, 2.0f), 7.0f);
-    RenderUtils::drawTextureClippedToRoundedRect(g,
-                                                 m_resources.getTexture(ResourceManager::TextureId::PalettePaint),
-                                                 bounds.reduced(2.0f),
-                                                 7.0f,
-                                                 1.0f);
-
+    
+    // Draw palette sprite background
+    if (m_resources.getTexture(ResourceManager::TextureId::PalettePaint).isValid())
+        RenderUtils::drawImageScaled(g, m_resources.getTexture(ResourceManager::TextureId::PalettePaint), bounds);
+    
     for (int i = 0; i < static_cast<int>(m_blobs.size()); ++i)
     {
         const auto& blob = m_blobs[static_cast<size_t>(i)];
@@ -224,9 +210,9 @@ CanvasTools::CanvasTools(const ThemeManager& theme)
     };
 }
 
-void CanvasTools::paint(juce::Graphics& g)
+void CanvasTools::paint(juce::Graphics&)
 {
-    RenderUtils::drawInsetPanel(g, getLocalBounds().toFloat().reduced(1.0f), 7.0f);
+    // Buttons render themselves - no additional painting needed
 }
 
 void CanvasTools::resized()
@@ -248,72 +234,25 @@ void CanvasTools::styleButton(juce::TextButton& button, juce::Colour accent)
     button.setColour(juce::TextButton::textColourOnId, juce::Colours::white);
 }
 
-CanvasStatusDisplay::CanvasStatusDisplay(const ThemeManager& theme)
-    : m_theme(theme)
-{
-}
-
-void CanvasStatusDisplay::paint(juce::Graphics& g)
-{
-    auto bounds = getLocalBounds().toFloat().reduced(1.0f);
-    RenderUtils::drawInsetPanel(g, bounds, 7.0f);
-
-    auto content = bounds.reduced(12.0f, 8.0f).toNearestInt();
-    auto chip = content.removeFromLeft(34).reduced(0, 7).toFloat();
-    g.setColour(m_theme.canvasPixelColour(static_cast<uint8_t>(m_selectedColor)));
-    g.fillEllipse(chip);
-    g.setColour(juce::Colours::white.withAlpha(0.34f));
-    g.drawEllipse(chip, 1.2f);
-
-    g.setFont(juce::FontOptions(12.0f, juce::Font::bold));
-    g.setColour(juce::Colours::whitesmoke.withAlpha(0.88f));
-    g.drawText(colorName(m_selectedColor), content.removeFromTop(22), juce::Justification::centredLeft);
-
-    g.setFont(juce::FontOptions(10.0f));
-    g.setColour(juce::Colours::lightgrey.withAlpha(0.72f));
-    g.drawText(juce::String(m_changedCellCount) + " / " + juce::String(TotalCells),
-               content,
-               juce::Justification::centredLeft);
-}
-
-void CanvasStatusDisplay::setSelectedColor(PixelCanvasComponent::PixelColor color)
-{
-    m_selectedColor = color;
-    repaint();
-}
-
-void CanvasStatusDisplay::setChangedCellCount(int count)
-{
-    if (m_changedCellCount == count)
-        return;
-
-    m_changedCellCount = count;
-    repaint();
-}
-
 CanvasModule::CanvasModule(const ResourceManager& resources, const ThemeManager& theme)
     : m_resources(resources),
       m_theme(theme),
       m_pixelCanvas(theme),
       m_palette(resources, theme),
-      m_tools(theme),
-      m_status(theme)
+      m_tools(theme)
 {
     addAndMakeVisible(m_pixelCanvas);
     addAndMakeVisible(m_palette);
     addAndMakeVisible(m_tools);
-    addAndMakeVisible(m_status);
 
     m_palette.setOnColorSelected([this](auto color)
     {
         m_pixelCanvas.setCurrentColor(color);
-        m_status.setSelectedColor(color);
     });
 
     m_tools.setOnUndo([this]()
     {
         m_pixelCanvas.undo();
-        refreshStatus();
     });
 
     m_tools.setOnClear([this]()
@@ -322,28 +261,14 @@ CanvasModule::CanvasModule(const ResourceManager& resources, const ThemeManager&
             m_onClear();
 
         m_pixelCanvas.clearCanvas();
-        refreshStatus();
     });
 
-    m_status.setSelectedColor(m_pixelCanvas.getCurrentColor());
-    refreshStatus();
+    m_pixelCanvas.setCurrentColor(PixelCanvasComponent::PixelColor::Red);
 }
 
-void CanvasModule::paint(juce::Graphics& g)
+void CanvasModule::paint(juce::Graphics&)
 {
-    auto bounds = getLocalBounds().toFloat().reduced(2.0f);
-    if (bounds.isEmpty())
-        return;
-
-    // Flat, minimal canvas appearance - no decorative case or frame
-    // Just a subtle shadow around the canvas area
-    auto canvasPocket = m_pixelCanvas.getBounds().toFloat().expanded(10.0f);
-    g.setColour(juce::Colours::black.withAlpha(0.30f));
-    g.fillRoundedRectangle(canvasPocket.translated(0.0f, 4.0f), 6.0f);
-
-    // Very subtle inset effect
-    g.setColour(juce::Colours::black.withAlpha(0.20f));
-    g.fillRoundedRectangle(canvasPocket, 6.0f);
+    // No additional painting - canvas pixels and background sprite only
 }
 
 void CanvasModule::resized()
@@ -359,153 +284,14 @@ void CanvasModule::resized()
     auto controls = bottom;
     auto toolsArea = controls.removeFromRight(112);
     controls.removeFromRight(10);
-    auto statusArea = controls.removeFromRight(162);
-    controls.removeFromRight(10);
 
     m_palette.setBounds(controls);
-    m_status.setBounds(statusArea);
     m_tools.setBounds(toolsArea);
 }
 
 void CanvasModule::refreshStatus()
 {
-    m_status.setChangedCellCount(m_pixelCanvas.getChangedCellCount());
-}
-
-LevelMeter::LevelMeter(juce::String label, const ThemeManager& theme)
-    : m_theme(theme),
-      m_label(std::move(label))
-{
-}
-
-void LevelMeter::paint(juce::Graphics& g)
-{
-    auto bounds = getLocalBounds().toFloat();
-    RenderUtils::drawInsetPanel(g, bounds, 6.0f);
-
-    auto meter = bounds.reduced(8.0f, 8.0f);
-    auto labelArea = meter.removeFromLeft(26.0f);
-
-    g.setFont(juce::FontOptions(10.0f, juce::Font::bold));
-    g.setColour(juce::Colours::lightgrey.withAlpha(0.82f));
-    g.drawText(m_label, labelArea.toNearestInt(), juce::Justification::centred);
-
-    auto bar = meter.reduced(2.0f, 5.0f);
-    g.setColour(juce::Colours::black.withAlpha(0.56f));
-    g.fillRoundedRectangle(bar, 3.0f);
-
-    auto lit = bar.withWidth(bar.getWidth() * juce::jlimit(0.0f, 1.0f, m_level));
-    juce::ColourGradient gradient(juce::Colour(0xFF36D987), lit.getX(), lit.getY(),
-                                  juce::Colour(0xFFEBD45E), lit.getRight(), lit.getY(), false);
-    gradient.addColour(0.82, juce::Colour(0xFFEBD45E));
-    gradient.addColour(1.0, juce::Colour(0xFFE94D44));
-    g.setGradientFill(gradient);
-    g.fillRoundedRectangle(lit, 3.0f);
-
-    g.setColour(juce::Colours::white.withAlpha(0.16f));
-    g.drawRoundedRectangle(bar, 3.0f, 1.0f);
-}
-
-void LevelMeter::setLevel(float level)
-{
-    level = juce::jlimit(0.0f, 1.0f, level);
-    if (std::abs(level - m_level) < 0.002f)
-        return;
-
-    m_level = level;
-    repaint();
-}
-
-BottomControlBar::BottomControlBar(const ThemeManager& theme)
-    : m_theme(theme),
-      m_inputMeter("IN", theme),
-      m_outputMeter("OUT", theme)
-{
-    addAndMakeVisible(m_inputMeter);
-    addAndMakeVisible(m_outputMeter);
-    addAndMakeVisible(m_dryWetSlider);
-    addAndMakeVisible(m_oversamplingSelector);
-    addAndMakeVisible(m_qualitySelector);
-
-    m_dryWetSlider.setSliderStyle(juce::Slider::LinearHorizontal);
-    m_dryWetSlider.setTextBoxStyle(juce::Slider::TextBoxRight, false, 56, 20);
-    m_dryWetSlider.setRange(0.0, 100.0, 1.0);
-    m_dryWetSlider.setValue(50.0, juce::dontSendNotification);
-    m_dryWetSlider.setTextValueSuffix("%");
-    m_dryWetSlider.setColour(juce::Slider::thumbColourId, juce::Colour(0xFFE6ECEF));
-    m_dryWetSlider.setColour(juce::Slider::trackColourId, m_theme.drawButtonAccent());
-    m_dryWetSlider.setColour(juce::Slider::backgroundColourId, juce::Colour(0xFF0E1012));
-
-    m_oversamplingSelector.addItem("1x", 1);
-    m_oversamplingSelector.addItem("2x", 2);
-    m_oversamplingSelector.addItem("4x", 3);
-    m_oversamplingSelector.setSelectedId(1, juce::dontSendNotification);
-
-    m_qualitySelector.addItem("Eco", 1);
-    m_qualitySelector.addItem("Studio", 2);
-    m_qualitySelector.addItem("Ultra", 3);
-    m_qualitySelector.setSelectedId(2, juce::dontSendNotification);
-
-    for (auto* combo : { &m_oversamplingSelector, &m_qualitySelector })
-    {
-        combo->setColour(juce::ComboBox::backgroundColourId, juce::Colour(0xFF1D2225));
-        combo->setColour(juce::ComboBox::textColourId, juce::Colours::whitesmoke);
-        combo->setColour(juce::ComboBox::outlineColourId, juce::Colour(0xFF4A555B));
-        combo->setColour(juce::ComboBox::arrowColourId, juce::Colour(0xFFB8C1C5));
-    }
-}
-
-void BottomControlBar::paint(juce::Graphics& g)
-{
-    auto bounds = getLocalBounds().toFloat();
-    g.setColour(juce::Colours::black.withAlpha(0.50f));
-    g.fillRect(bounds);
-
-    juce::ColourGradient gradient(juce::Colour(0xFF24282B), bounds.getX(), bounds.getY(),
-                                  juce::Colour(0xFF0C0E10), bounds.getX(), bounds.getBottom(), false);
-    g.setGradientFill(gradient);
-    g.fillRoundedRectangle(bounds.reduced(8.0f, 5.0f), 8.0f);
-
-    g.setColour(juce::Colours::white.withAlpha(0.10f));
-    g.drawRoundedRectangle(bounds.reduced(9.0f, 6.0f), 7.0f, 1.0f);
-
-    auto labels = getLocalBounds().reduced(24, 8);
-    labels.removeFromLeft(414);
-    auto dryLabel = labels.removeFromLeft(66);
-    g.setColour(juce::Colours::lightgrey.withAlpha(0.76f));
-    g.setFont(juce::FontOptions(11.0f, juce::Font::bold));
-    g.drawText("DRY/WET", dryLabel, juce::Justification::centredLeft);
-
-    labels.removeFromLeft(240);
-    g.drawText("OS", labels.removeFromLeft(28), juce::Justification::centredLeft);
-    labels.removeFromLeft(120);
-    g.drawText("QUALITY", labels.removeFromLeft(58), juce::Justification::centredLeft);
-}
-
-void BottomControlBar::resized()
-{
-    auto area = getLocalBounds().reduced(24, 17);
-    const int meterW = 190;
-    m_inputMeter.setBounds(area.removeFromLeft(meterW));
-    area.removeFromLeft(14);
-    m_outputMeter.setBounds(area.removeFromLeft(meterW));
-    area.removeFromLeft(28);
-
-    area.removeFromLeft(70);
-    m_dryWetSlider.setBounds(area.removeFromLeft(260).reduced(0, 4));
-    area.removeFromLeft(34);
-
-    area.removeFromLeft(30);
-    m_oversamplingSelector.setBounds(area.removeFromLeft(116).reduced(0, 7));
-    area.removeFromLeft(34);
-    area.removeFromLeft(60);
-    m_qualitySelector.setBounds(area.removeFromLeft(130).reduced(0, 7));
-}
-
-void BottomControlBar::setMeterLevels(float inputLevel, float outputLevel)
-{
-    m_inputMeter.setLevel(inputLevel);
-    m_outputMeter.setLevel(outputLevel);
+    // Status display removed - no-op
 }
 
 DrawdioProcessorEditor::DrawdioProcessorEditor(DrawdioProcessor& p)
@@ -514,15 +300,13 @@ DrawdioProcessorEditor::DrawdioProcessorEditor(DrawdioProcessor& p)
       m_woodGrainBackground(m_resourceManager, m_theme),
       m_pedalboardBackground(m_resourceManager, m_theme),
       m_canvasModule(m_resourceManager, m_theme),
-      m_pedalboardGrid(p, m_resourceManager, m_theme, m_routingManager),
-      m_bottomControlBar(m_theme)
+      m_pedalboardGrid(p, m_resourceManager, m_theme, m_routingManager)
 {
     // Add background layers first, then content
     addAndMakeVisible(m_woodGrainBackground);
     addAndMakeVisible(m_pedalboardBackground);
     addAndMakeVisible(m_canvasModule);
     addAndMakeVisible(m_pedalboardGrid);
-    addAndMakeVisible(m_bottomControlBar);
 
     // Backgrounds go to back
     m_woodGrainBackground.toBack();
@@ -571,10 +355,6 @@ void DrawdioProcessorEditor::paint(juce::Graphics& g)
 void DrawdioProcessorEditor::resized()
 {
     auto bounds = getLocalBounds();
-
-    // Position background layers: left half = wood, right half = pedalboard
-    auto bottom = bounds.removeFromBottom(78);
-    m_bottomControlBar.setBounds(bottom);
 
     auto content = bounds.reduced(18, 16);
     const auto gap = 18;
@@ -639,8 +419,6 @@ void DrawdioProcessorEditor::checkForUpdates()
         m_pedalboardGrid.updateRouting(m_lastRoutingOrder);
     }
 
-    m_bottomControlBar.setMeterLevels(audioProcessor.getInputMeterLevel(),
-                                      audioProcessor.getOutputMeterLevel());
     m_canvasModule.refreshStatus();
 
     // Trigger repaint only if changes were made
