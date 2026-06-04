@@ -136,7 +136,11 @@ void ColorPalette::resized()
                                            area.getY(),
                                            slotW,
                                            area.getHeight());
-        m_blobs[static_cast<size_t>(i)].bounds = slot.withSizeKeepingCentre(blobSize, blobSize * 0.78f);
+        auto bounds = slot.withSizeKeepingCentre(blobSize, blobSize * 0.78f);
+        // Shift red blob up 15px and right 10px
+        if (i == 0)
+            bounds = bounds.translated(10.0f, -15.0f);
+        m_blobs[static_cast<size_t>(i)].bounds = bounds;
     }
 }
 
@@ -216,7 +220,7 @@ void CanvasTools::paint(juce::Graphics&)
 void CanvasTools::resized()
 {
     auto area = getLocalBounds().reduced(10, 8);
-    const auto buttonH = juce::jmax(16, (area.getHeight() - 4) / 2);
+    const auto buttonH = 12;
     m_undoButton.setBounds(area.removeFromTop(buttonH));
     area.removeFromTop(4);
     m_clearButton.setBounds(area.removeFromTop(buttonH));
