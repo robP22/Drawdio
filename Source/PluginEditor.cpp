@@ -270,15 +270,15 @@ void CanvasModule::paint(juce::Graphics&)
 void CanvasModule::resized()
 {
     auto area = getLocalBounds().reduced(22, 20);
-    auto bottom = area.removeFromBottom(182);
+    auto bottom = area.removeFromBottom(220);
     area.removeFromBottom(14);
 
-    const auto square = juce::jmin(area.getWidth(), area.getHeight()) - 50;
+    const auto square = juce::jmin(area.getWidth(), area.getHeight()) + 100;
     auto canvasArea = area.withSizeKeepingCentre(square, square);
     m_pixelCanvas.setBounds(canvasArea.reduced(8));
 
     auto controls = bottom;
-    auto toolsArea = controls.removeFromRight(112);
+    auto toolsArea = controls.removeFromRight(70);
     controls.removeFromRight(10);
 
     m_palette.setBounds(controls);
@@ -350,20 +350,22 @@ void DrawdioProcessorEditor::resized()
 {
     auto bounds = getLocalBounds();
 
-    auto content = bounds;
-    const auto gap = 0;
+    auto content = juce::Rectangle<int>(50, 0, bounds.getWidth() - 50, bounds.getHeight());
     // Give more width to pedalboard (right side), less to canvas (left side)
-    const auto pedalW = juce::jlimit(780, 880, content.getWidth() - 400) - 40;
+    const auto pedalW = juce::jlimit(680, 780, content.getWidth() - 400) - 40;
     auto pedalArea = content.removeFromRight(pedalW);
-    content.removeFromRight(gap);
+
+    // Pedalboard grid slightly smaller and shifted right by 50px
+    auto gridArea = pedalArea.withX(pedalArea.getX() + 50).withSizeKeepingCentre(
+        pedalArea.getWidth() - 100, pedalArea.getHeight() - 50);
 
     // Wood grain fills entire window as bottom layer
     m_woodGrainBackground.setBounds(bounds);
-    // Pedalboard sprite on right side only (~55-65% of window), alpha=0 shows wood grain through
+    // Pedalboard sprite on right side only
     m_pedalboardBackground.setBounds(pedalArea);
 
     m_canvasModule.setBounds(content);
-    m_pedalboardGrid.setBounds(pedalArea);
+    m_pedalboardGrid.setBounds(gridArea);
 }
 
 void DrawdioProcessorEditor::triggerRecompile()
