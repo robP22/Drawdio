@@ -37,7 +37,7 @@ void PedalboardGrid::paint(juce::Graphics& g)
 
 void PedalboardGrid::resized()
 {
-    auto bounds = getLocalBounds().translated(0, 130);
+    auto bounds = getLocalBounds().translated(0, 150);
 
     // Simple 2x3 grid layout for pedal slots - no decorative padding
     const int rowCount = 2;

@@ -127,7 +127,8 @@ void ColorPalette::paint(juce::Graphics& g)
 void ColorPalette::resized()
 {
     auto area = getLocalBounds().toFloat();
-    const auto blobSize = juce::jmin(52.0f, area.getHeight() - 4.0f);
+    // Make blobs 40% larger (1.4x)
+    const auto blobSize = juce::jmin(52.0f * 1.4f, area.getHeight() - 4.0f);
     const auto blobWidth = blobSize * 0.78f;
     
     // Calculate y position for all blobs (move up 3px)
@@ -223,16 +224,16 @@ void CanvasTools::paint(juce::Graphics&)
 
 void CanvasTools::resized()
 {
-    auto area = getLocalBounds();
-    // Stack buttons with 5px gap, centerline aligned with blob y-axis
+    auto area = getLocalBounds().reduced(10, 8);
+    // Stack buttons vertically with 5px gap, align centerline with blob y-axis
     const auto buttonH = 12;
     const auto gap = 5;
     const auto totalH = buttonH * 2 + gap;
-    const auto blobWidth = 40.0f;  // Approximate blob width
     // Align button stack centerline with blob center (blobY = area.centreY - blobWidth/2 - 3)
+    const auto blobWidth = 40.0f * 1.4f;
     const auto blobCentreY = area.getCentreY() - blobWidth / 2.0f - 3.0f;
     const auto startY = static_cast<int>(blobCentreY - totalH / 2.0f);
-    auto buttonArea = area.withTrimmedTop(startY).withHeight(totalH).reduced(10, 8);
+    auto buttonArea = area.withTrimmedTop(startY).withHeight(totalH);
     m_undoButton.setBounds(buttonArea.removeFromTop(buttonH));
     buttonArea.removeFromTop(gap);
     m_clearButton.setBounds(buttonArea.removeFromTop(buttonH));
@@ -285,11 +286,11 @@ void CanvasModule::paint(juce::Graphics&)
 
 void CanvasModule::resized()
 {
-    auto area = getLocalBounds().reduced(22, 20).translated(0, 100);
+    auto area = getLocalBounds().reduced(22, 20).translated(-20, 120);
     auto bottom = area.removeFromBottom(320);
     area.removeFromBottom(14);
 
-    const auto square = juce::jmin(area.getWidth(), area.getHeight()) + 100;
+    const auto square = juce::jmin(area.getWidth(), area.getHeight()) + 140;
     auto canvasArea = area.withSizeKeepingCentre(square, square);
     m_pixelCanvas.setBounds(canvasArea.reduced(8));
 
