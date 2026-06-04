@@ -1,4 +1,5 @@
 #include "ResourceManager.h"
+#include "BinaryData.h"
 
 #include <utility>
 
@@ -73,11 +74,13 @@ void ResourceManager::loadAll()
 
 void ResourceManager::loadProceduralTextures()
 {
-    m_images[static_cast<size_t>(ImageId::WorkspaceWood)] = makeWorkspaceWoodTexture();
-    m_images[static_cast<size_t>(ImageId::PedalboardFelt)] = makePedalboardFeltTexture();
-    m_images[static_cast<size_t>(ImageId::PalettePaint)] = makePalettePaintTexture();
-    m_images[static_cast<size_t>(ImageId::PedalFaceGrain)] = makePedalFaceGrainTexture();
-    m_images[static_cast<size_t>(ImageId::OverlayGloss)] = makeOverlayGlossTexture();
+    // Load REAL sprite images from binary data
+    m_images[static_cast<size_t>(ImageId::WorkspaceWood)] =
+        decodeImageFromBinaryData(wood_texture_generic_png, wood_texture_generic_pngSize);
+    m_images[static_cast<size_t>(ImageId::PedalboardFelt)] =
+        decodeImageFromBinaryData(pedalboard_bg_png, pedalboard_bg_pngSize);
+    m_images[static_cast<size_t>(ImageId::PalettePaint)] =
+        decodeImageFromBinaryData(palette_body_png, palette_body_pngSize);
 }
 
 void ResourceManager::loadSpriteSheets()

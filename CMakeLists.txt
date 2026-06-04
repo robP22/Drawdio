@@ -10,11 +10,14 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(ASSETS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/Assets")
 if(EXISTS "${ASSETS_DIR}")
     message(STATUS "Assets directory found: ${ASSETS_DIR}")
-    file(GLOB_RECURSE ASSET_FILES "${ASSETS_DIR}/*")
+    file(GLOB_RECURSE ASSET_FILES "${ASSETS_DIR}/*.png")
     foreach(file IN LISTS ASSET_FILES)
         message(STATUS "  Asset: ${file}")
     endforeach()
 endif()
+
+# Create binary data for assets
+juce_add_binary_data(DrawdioAssets SOURCES ${ASSET_FILES})
 
 include(FetchContent)
 FetchContent_Declare(JUCE
