@@ -4,71 +4,6 @@
 
 namespace
 {
-class PedalKnobLookAndFeel : public juce::LookAndFeel_V4
-{
-public:
-    void drawRotarySlider(juce::Graphics& g, int x, int y, int width, int height,
-                          float sliderPosProportional, float rotaryStartAngle,
-                          float rotaryEndAngle, juce::Slider&) override
-    {
-        auto bounds = juce::Rectangle<float>(static_cast<float>(x),
-                                             static_cast<float>(y),
-                                             static_cast<float>(width),
-                                             static_cast<float>(height)).reduced(7.0f);
-        const auto radius = juce::jmin(bounds.getWidth(), bounds.getHeight()) * 0.5f;
-        const auto centre = bounds.getCentre();
-        const auto angle = rotaryStartAngle
-            + sliderPosProportional * (rotaryEndAngle - rotaryStartAngle);
-
-        g.setColour(juce::Colours::black.withAlpha(0.42f));
-        g.fillEllipse(bounds.translated(0.0f, 3.0f));
-
-        juce::ColourGradient body(juce::Colour(0xFFB8BEC0),
-                                  centre.x - radius, centre.y - radius,
-                                  juce::Colour(0xFF3C4144),
-                                  centre.x + radius, centre.y + radius,
-                                  false);
-        body.addColour(0.45, juce::Colour(0xFF777E82));
-        g.setGradientFill(body);
-        g.fillEllipse(bounds);
-
-        g.setColour(juce::Colours::black.withAlpha(0.58f));
-        g.drawEllipse(bounds, 1.4f);
-
-        auto cap = bounds.reduced(radius * 0.25f);
-        juce::ColourGradient capGradient(juce::Colour(0xFFD9DEE0),
-                                         cap.getX(), cap.getY(),
-                                         juce::Colour(0xFF5B6265),
-                                         cap.getRight(), cap.getBottom(),
-                                         false);
-        g.setGradientFill(capGradient);
-        g.fillEllipse(cap);
-
-        g.setColour(juce::Colours::white.withAlpha(0.34f));
-        g.fillEllipse(cap.withSizeKeepingCentre(cap.getWidth() * 0.46f,
-                                                cap.getHeight() * 0.22f)
-                          .translated(-cap.getWidth() * 0.12f, -cap.getHeight() * 0.18f));
-
-        juce::Path indicator;
-        const auto lineStart = centre.getPointOnCircumference(radius * 0.18f, angle);
-        const auto lineEnd = centre.getPointOnCircumference(radius * 0.72f, angle);
-        indicator.startNewSubPath(lineStart);
-        indicator.lineTo(lineEnd);
-
-        g.setColour(juce::Colour(0xFF101214));
-        g.strokePath(indicator, juce::PathStrokeType(2.1f, juce::PathStrokeType::curved,
-                                                    juce::PathStrokeType::rounded));
-        g.setColour(juce::Colours::white.withAlpha(0.30f));
-        g.drawEllipse(bounds.reduced(2.0f), 1.0f);
-    }
-};
-
-PedalKnobLookAndFeel& knobLookAndFeel()
-{
-    static PedalKnobLookAndFeel lookAndFeel;
-    return lookAndFeel;
-}
-
 juce::Colour skinColourForSlot(int slot)
 {
     static constexpr uint32_t colours[] {
@@ -162,7 +97,6 @@ PedalComponent::~PedalComponent()
 void PedalComponent::initKnob(juce::Slider& knob)
 {
     addAndMakeVisible(knob);
-    knob.setLookAndFeel(&knobLookAndFeel());
     knob.setSliderStyle(juce::Slider::RotaryVerticalDrag);
     knob.setRotaryParameters(juce::MathConstants<float>::pi * 1.18f,
                              juce::MathConstants<float>::pi * 2.82f,

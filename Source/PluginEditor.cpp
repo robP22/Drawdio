@@ -28,11 +28,9 @@ WoodGrainBackground::WoodGrainBackground(const ResourceManager& resources, const
     setInterceptsMouseClicks(false, false);
 }
 
-void WoodGrainBackground::paint(juce::Graphics& g)
+void WoodGrainBackground::paint(juce::Graphics&)
 {
-    auto bounds = getLocalBounds().toFloat();
-    if (m_resources.getTexture(ResourceManager::TextureId::WorkspaceWood).isValid())
-        RenderUtils::drawImageScaled(g, m_resources.getTexture(ResourceManager::TextureId::WorkspaceWood), bounds);
+    // EMPTY - no custom rendering
 }
 
 PedalboardBackground::PedalboardBackground(const ResourceManager& resources, const ThemeManager& theme)
@@ -42,11 +40,9 @@ PedalboardBackground::PedalboardBackground(const ResourceManager& resources, con
     setInterceptsMouseClicks(false, false);
 }
 
-void PedalboardBackground::paint(juce::Graphics& g)
+void PedalboardBackground::paint(juce::Graphics&)
 {
-    auto bounds = getLocalBounds().toFloat();
-    if (m_resources.getTexture(ResourceManager::TextureId::PedalboardFelt).isValid())
-        RenderUtils::drawImageScaled(g, m_resources.getTexture(ResourceManager::TextureId::PedalboardFelt), bounds);
+    // EMPTY - no custom rendering
 }
 
 ColorPalette::ColorPalette(const ResourceManager& resources, const ThemeManager& theme)
@@ -62,9 +58,44 @@ ColorPalette::ColorPalette(const ResourceManager& resources, const ThemeManager&
 {
 }
 
-void ColorPalette::paint(juce::Graphics&)
+void ColorPalette::paint(juce::Graphics& g)
 {
-    // EMPTY - no custom rendering
+    for (int i = 0; i < static_cast<int>(m_blobs.size()); ++i)
+    {
+        const auto& blob = m_blobs[static_cast<size_t>(i)];
+        const auto blobBounds = blob.bounds;
+        const auto paintColour = m_theme.canvasPixelColour(static_cast<uint8_t>(blob.color));
+        const bool selected = blob.color == m_selectedColor;
+        const bool hovered = i == m_hoveredBlob;
+
+        if (selected)
+        {
+            g.setColour(m_theme.paletteSelectionFill(paintColour));
+            g.fillEllipse(blobBounds.expanded(7.0f));
+            g.setColour(m_theme.paletteSelectionOutline());
+            g.drawEllipse(blobBounds.expanded(5.0f), 2.0f);
+        }
+
+        g.setColour(juce::Colours::black.withAlpha(0.32f));
+        g.fillEllipse(blobBounds.translated(0.0f, selected ? 5.0f : 7.0f));
+
+        auto body = blobBounds.translated(0.0f, selected ? -3.0f : 0.0f);
+        g.setColour(paintColour.darker(0.25f));
+        g.fillEllipse(body);
+
+        g.setColour(paintColour.brighter(0.08f));
+        g.fillEllipse(body.reduced(body.getWidth() * 0.07f, body.getHeight() * 0.12f));
+
+        g.setColour(paintColour.brighter(0.45f).withAlpha(blob.color == PixelCanvasComponent::PixelColor::Black ? 0.18f : 0.42f));
+        g.fillEllipse(body.withSizeKeepingCentre(body.getWidth() * 0.42f, body.getHeight() * 0.22f)
+                          .translated(-body.getWidth() * 0.12f, -body.getHeight() * 0.18f));
+
+        if (hovered)
+        {
+            g.setColour(m_theme.paletteHoverOutline());
+            g.drawEllipse(body.expanded(2.0f), 1.2f);
+        }
+    }
 }
 
 void ColorPalette::resized()

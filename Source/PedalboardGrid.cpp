@@ -28,9 +28,11 @@ PedalboardGrid::PedalboardGrid(DrawdioProcessor& processor,
     }
 }
 
-void PedalboardGrid::paint(juce::Graphics&)
+void PedalboardGrid::paint(juce::Graphics& g)
 {
-    // EMPTY - no custom rendering
+    // Keep bezier cables only
+    drawRoutingCables(g);
+    drawActiveDraggingCable(g);
 }
 
 void PedalboardGrid::resized()
