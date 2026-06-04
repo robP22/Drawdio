@@ -27,9 +27,6 @@ FetchContent_MakeAvailable(JUCE)
 # Create binary data for assets (after JUCE is loaded)
 juce_add_binary_data(DrawdioAssets SOURCES ${ASSET_FILES})
 
-# Link the binary data target so its include directories are available
-target_link_libraries(Drawdio PRIVATE DrawdioAssets)
-
 juce_add_plugin(Drawdio
     PRODUCT_NAME              "Drawdio"
     PLUGIN_MANUFACTURER       "robP"
@@ -47,6 +44,9 @@ juce_add_plugin(Drawdio
     DEFINITIONS
         JUCE_WEB_BROWSER=0
 )
+
+# Link the binary data target so its include directories are available
+target_link_libraries(Drawdio PRIVATE DrawdioAssets)
 
 juce_generate_juce_header(Drawdio)
 
