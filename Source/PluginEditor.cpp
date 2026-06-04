@@ -81,15 +81,7 @@ ColorPalette::ColorPalette(const ResourceManager& resources, const ThemeManager&
 
 void ColorPalette::paint(juce::Graphics& g)
 {
-    auto bounds = getLocalBounds().toFloat();
-    const auto& paletteTexture = m_resources.getTexture(ResourceManager::TextureId::PalettePaint);
-    if (paletteTexture.isValid())
-    {
-        g.drawImage(paletteTexture, bounds.getX(), bounds.getY(),
-                   bounds.getWidth(), bounds.getHeight(),
-                   0, 0, paletteTexture.getWidth(), paletteTexture.getHeight());
-    }
-
+    // Draw sprite scaled to fit blob area only (not full component bounds)
     for (int i = 0; i < static_cast<int>(m_blobs.size()); ++i)
     {
         const auto& blob = m_blobs[static_cast<size_t>(i)];
@@ -97,6 +89,17 @@ void ColorPalette::paint(juce::Graphics& g)
         const auto paintColour = m_theme.canvasPixelColour(static_cast<uint8_t>(blob.color));
         const bool selected = blob.color == m_selectedColor;
         const bool hovered = i == m_hoveredBlob;
+
+        // Draw small palette sprite behind each blob
+        const auto& paletteTexture = m_resources.getTexture(ResourceManager::TextureId::PalettePaint);
+        if (paletteTexture.isValid())
+        {
+            auto spriteBounds = blobBounds.expanded(3.0f);
+            g.drawImage(paletteTexture,
+                       spriteBounds.getX(), spriteBounds.getY(),
+                       spriteBounds.getWidth(), spriteBounds.getHeight(),
+                       0, 0, paletteTexture.getWidth(), paletteTexture.getHeight());
+        }
 
         if (selected)
         {
@@ -130,7 +133,7 @@ void ColorPalette::paint(juce::Graphics& g)
 
 void ColorPalette::resized()
 {
-    auto area = getLocalBounds().reduced(8, 6).toFloat();
+    auto area = getLocalBounds().toFloat();
     const auto slotW = area.getWidth() / static_cast<float>(m_blobs.size());
     const auto blobSize = juce::jmin(52.0f, area.getHeight() - 4.0f);
 
@@ -277,7 +280,7 @@ void CanvasModule::resized()
     auto bottom = area.removeFromBottom(82);
     area.removeFromBottom(14);
 
-    const auto square = juce::jmin(area.getWidth(), area.getHeight());
+    const auto square = juce::jmin(area.getWidth(), area.getHeight()) - 50;
     auto canvasArea = area.withSizeKeepingCentre(square, square);
     m_pixelCanvas.setBounds(canvasArea.reduced(8));
 
@@ -357,7 +360,7 @@ void DrawdioProcessorEditor::resized()
     auto bounds = getLocalBounds();
 
     auto content = bounds.reduced(18, 16);
-    const auto gap = 18;
+    const auto gap = 0;
     const auto pedalW = juce::jlimit(560, 620, content.getWidth() - 760) - 50;
     auto pedalArea = content.removeFromRight(pedalW);
     content.removeFromRight(gap);
