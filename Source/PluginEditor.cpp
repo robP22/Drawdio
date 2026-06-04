@@ -74,11 +74,12 @@ ColorPalette::ColorPalette(const ResourceManager& resources, const ThemeManager&
 
 void ColorPalette::paint(juce::Graphics& g)
 {
-    // Draw palette sprite once, scaled to full component bounds with alpha
+    // Draw palette sprite once, scaled to full component bounds
+    // Sprite's alpha channel handles transparency
+    auto bounds = getLocalBounds().toFloat();
     const auto& paletteTexture = m_resources.getTexture(ResourceManager::TextureId::PalettePaint);
     if (paletteTexture.isValid())
     {
-        auto bounds = getLocalBounds().toFloat();
         g.drawImage(paletteTexture,
                    bounds.getX(), bounds.getY(),
                    bounds.getWidth(), bounds.getHeight(),
