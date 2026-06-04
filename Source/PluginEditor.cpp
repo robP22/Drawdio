@@ -55,8 +55,14 @@ void PedalboardBackground::paint(juce::Graphics& g)
     {
         const float cx = bounds.getX() + bounds.getWidth() * 0.5f;
         const float cy = bounds.getY() + bounds.getHeight() * 0.5f;
-        g.drawImageTransformed(texture, bounds,
-            juce::AffineTransform::rotation(juce::MathConstants<float>::halfPi, cx, cy));
+
+        g.saveState();
+        g.addTransform(juce::AffineTransform::rotation(
+            juce::MathConstants<float>::halfPi, cx, cy));
+        g.drawImage(texture, bounds.getX(), bounds.getY(),
+                   bounds.getWidth(), bounds.getHeight(),
+                   0, 0, texture.getWidth(), texture.getHeight());
+        g.restoreState();
     }
 }
 
