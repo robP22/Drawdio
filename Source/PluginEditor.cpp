@@ -127,22 +127,24 @@ void ColorPalette::paint(juce::Graphics& g)
 void ColorPalette::resized()
 {
     auto area = getLocalBounds().toFloat();
-    const auto slotW = area.getWidth() / static_cast<float>(m_blobs.size());
     const auto blobSize = juce::jmin(52.0f, area.getHeight() - 4.0f);
+    const auto blobWidth = blobSize * 0.78f;
+    
+    // Calculate y position for all blobs (move up 3px)
+    const float blobY = area.getCentreY() - blobWidth / 2.0f - 3.0f;
 
-    // Calculate y position for all blobs
-    const float blobY = area.getCentreY() - (blobSize * 0.78f) / 2.0f;
+    // 5 blobs with 6px spacing
+    const float spacing = 6.0f;
+    const float totalWidth = blobWidth * 5.0f + spacing * 4.0f;
+    float startX = area.getCentreX() - totalWidth / 2.0f;
 
     for (int i = 0; i < static_cast<int>(m_blobs.size()); ++i)
     {
-        auto slot = juce::Rectangle<float>(area.getX() + static_cast<float>(i) * slotW,
-                                           area.getY(),
-                                           slotW,
-                                           area.getHeight());
-        auto bounds = slot.withSizeKeepingCentre(blobSize, blobSize * 0.78f);
-        // Align all blobs to same y-axis
-        bounds = bounds.withY(blobY);
-        m_blobs[static_cast<size_t>(i)].bounds = bounds;
+        auto slot = juce::Rectangle<float>(startX + static_cast<float>(i) * (blobWidth + spacing),
+                                           blobY,
+                                           blobWidth,
+                                           blobWidth);
+        m_blobs[static_cast<size_t>(i)].bounds = slot;
     }
 }
 
@@ -222,14 +224,17 @@ void CanvasTools::paint(juce::Graphics&)
 void CanvasTools::resized()
 {
     auto area = getLocalBounds();
-    // Center buttons vertically on blob y-axis (area center)
-    const auto totalH = 28;  // 12px * 2 + 4px gap
-    const auto startY = area.getCentreY() - totalH / 2;
-    auto buttonArea = area.withY(static_cast<float>(startY)).withHeight(static_cast<float>(totalH));
-    buttonArea = buttonArea.reduced(10, 8);
+    // Stack buttons with 5px gap, centerline aligned with blob y-axis
     const auto buttonH = 12;
+    const auto gap = 5;
+    const auto totalH = buttonH * 2 + gap;
+    const auto blobWidth = 40.0f;  // Approximate blob width
+    // Align button stack centerline with blob center (blobY = area.centreY - blobWidth/2 - 3)
+    const auto blobCentreY = area.getCentreY() - blobWidth / 2.0f - 3.0f;
+    const auto startY = static_cast<int>(blobCentreY - totalH / 2.0f);
+    auto buttonArea = area.withTrimmedTop(startY).withHeight(totalH).reduced(10, 8);
     m_undoButton.setBounds(buttonArea.removeFromTop(buttonH));
-    buttonArea.removeFromTop(4);
+    buttonArea.removeFromTop(gap);
     m_clearButton.setBounds(buttonArea.removeFromTop(buttonH));
 }
 
