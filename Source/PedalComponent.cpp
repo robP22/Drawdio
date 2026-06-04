@@ -124,9 +124,33 @@ void PedalComponent::initKnob(juce::Slider& knob)
     };
 }
 
-void PedalComponent::paint(juce::Graphics&)
+void PedalComponent::paint(juce::Graphics& g)
 {
-    // EMPTY - sprites only, added later
+    // Pedal type name text (top center area)
+    auto bounds = getLocalBounds().toFloat();
+    auto labelTop = bounds.reduced(bounds.getWidth() * 0.08f, bounds.getHeight() * 0.06f);
+    labelTop = labelTop.withTrimmedTop(labelTop.getHeight() * 0.72f);
+    g.setFont(juce::FontOptions(11.0f, juce::Font::bold));
+    g.setColour(juce::Colours::black.withAlpha(0.8f));
+    g.drawFittedText(typeName(m_currentType),
+                     labelTop.toNearestInt(),
+                     juce::Justification::centred,
+                     1);
+
+    // Knob labels - rendered near each knob
+    g.setFont(juce::FontOptions(8.0f, juce::Font::bold));
+    for (int i = 0; i < 4; ++i)
+    {
+        auto kb = m_knobs[i].getBounds();
+        g.setColour(juce::Colours::black.withAlpha(0.46f));
+        g.drawText(knobLabel(m_currentType, i),
+                   kb.getX(), kb.getY() - 12, kb.getWidth(), 10,
+                   juce::Justification::centred);
+        g.setColour(juce::Colours::white.withAlpha(0.68f));
+        g.drawText(knobLabel(m_currentType, i),
+                   kb.getX(), kb.getY() - 13, kb.getWidth(), 10,
+                   juce::Justification::centred);
+    }
 }
 
 void PedalComponent::setSkin(PedalSkinManager::PedalSkin skin)
