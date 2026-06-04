@@ -361,7 +361,7 @@ void DrawdioProcessorEditor::resized()
 
     auto content = bounds.reduced(18, 16);
     const auto gap = 0;
-    const auto pedalW = juce::jlimit(560, 620, content.getWidth() - 760) - 50;
+    const auto pedalW = juce::jlimit(560, 620, content.getWidth() - 860) - 50;
     auto pedalArea = content.removeFromRight(pedalW);
     content.removeFromRight(gap);
 
