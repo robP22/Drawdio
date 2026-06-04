@@ -70,6 +70,22 @@ ColorPalette::ColorPalette(const ResourceManager& resources, const ThemeManager&
           { PixelCanvasComponent::PixelColor::Black, {} }
       }}
 {
+    addAndMakeVisible(m_undoButton);
+    addAndMakeVisible(m_clearButton);
+    styleButton(m_undoButton, juce::Colour(0xFF4A90D9));
+    styleButton(m_clearButton, juce::Colour(0xFFE74C3C));
+
+    m_undoButton.onClick = [this]()
+    {
+        if (m_onUndo)
+            m_onUndo();
+    };
+
+    m_clearButton.onClick = [this]()
+    {
+        if (m_onClear)
+            m_onClear();
+    };
 }
 
 void ColorPalette::paint(juce::Graphics& g)
@@ -126,14 +142,19 @@ void ColorPalette::paint(juce::Graphics& g)
 
 void ColorPalette::resized()
 {
-    auto area = getLocalBounds().withTrimmedTop(20).withTrimmedBottom(20);
-    const auto blobSize = juce::jmin(area.getHeight() - 10.0f, 72.0f);
-    
-    // 5 blobs with 8px spacing, centered
+    auto area = getLocalBounds();
+    // Bottom section for buttons (match blob height + spacing pattern)
+    const auto buttonAreaHeight = 80.0f;
+    auto blobsArea = area.withTrimmedBottom(buttonAreaHeight);
+    auto buttonsArea = area.withTrimmedTop(blobsArea.getHeight()).withTrimmedLeft(10).withTrimmedRight(10);
+
+    // Position blobs in top section
+    const auto blobArea = blobsArea.withTrimmedTop(20).withTrimmedBottom(20);
+    const auto blobSize = juce::jmin(blobArea.getHeight() - 10.0f, 72.0f);
     const float spacing = 8.0f;
     const float totalWidth = blobSize * 5.0f + spacing * 4.0f;
-    float startX = area.getCentreX() - totalWidth / 2.0f;
-    float blobY = area.getCentreY() - blobSize / 2.0f;
+    float startX = blobArea.getCentreX() - totalWidth / 2.0f;
+    float blobY = blobArea.getCentreY() - blobSize / 2.0f;
 
     for (int i = 0; i < static_cast<int>(m_blobs.size()); ++i)
     {
@@ -143,6 +164,15 @@ void ColorPalette::resized()
                                            blobSize);
         m_blobs[static_cast<size_t>(i)].bounds = slot;
     }
+
+    // Position buttons in bottom section, centered
+    const auto buttonH = 16;
+    const auto gap = 5;
+    const auto totalH = static_cast<float>(buttonH * 2 + gap);
+    auto buttonBounds = buttonsArea.withSizeKeepingCentre(buttonsArea.getWidth(), totalH);
+    m_undoButton.setBounds(buttonBounds.removeFromTop(buttonH).toType<int>());
+    buttonBounds.removeFromTop(gap);
+    m_clearButton.setBounds(buttonBounds.removeFromTop(buttonH).toType<int>());
 }
 
 void ColorPalette::mouseDown(const juce::MouseEvent& event)
@@ -213,24 +243,7 @@ CanvasTools::CanvasTools(const ThemeManager& theme)
     };
 }
 
-void CanvasTools::paint(juce::Graphics&)
-{
-    // EMPTY - no custom rendering
-}
-
-void CanvasTools::resized()
-{
-    auto area = getLocalBounds().withTrimmedTop(20).withTrimmedBottom(20);
-    const auto buttonH = 16;
-    const auto gap = 5;
-    const auto totalH = buttonH * 2 + gap;
-    auto buttonArea = area.withSizeKeepingCentre(area.getWidth() - 20, static_cast<float>(totalH));
-    m_undoButton.setBounds(buttonArea.removeFromTop(buttonH));
-    buttonArea.removeFromTop(gap);
-    m_clearButton.setBounds(buttonArea.removeFromTop(buttonH));
-}
-
-void CanvasTools::styleButton(juce::TextButton& button, juce::Colour accent)
+void ColorPalette::styleButton(juce::TextButton& button, juce::Colour accent)
 {
     button.setColour(juce::TextButton::buttonColourId, juce::Colour(0xFF25292C));
     button.setColour(juce::TextButton::buttonOnColourId, accent.darker(0.2f));
@@ -242,24 +255,22 @@ CanvasModule::CanvasModule(const ResourceManager& resources, const ThemeManager&
     : m_resources(resources),
       m_theme(theme),
       m_pixelCanvas(theme),
-      m_palette(resources, theme),
-      m_tools(theme)
+      m_palette(resources, theme)
 {
     addAndMakeVisible(m_pixelCanvas);
     addAndMakeVisible(m_palette);
-    addAndMakeVisible(m_tools);
 
     m_palette.setOnColorSelected([this](auto color)
     {
         m_pixelCanvas.setCurrentColor(color);
     });
 
-    m_tools.setOnUndo([this]()
+    m_palette.setOnUndo([this]()
     {
         m_pixelCanvas.undo();
     });
 
-    m_tools.setOnClear([this]()
+    m_palette.setOnClear([this]()
     {
         if (m_onClear)
             m_onClear();
@@ -285,12 +296,7 @@ void CanvasModule::resized()
     auto canvasArea = area.withSizeKeepingCentre(square, square).translated(0, -5);
     m_pixelCanvas.setBounds(canvasArea.reduced(8));
 
-    auto controls = bottom;
-    auto toolsArea = controls.removeFromRight(50);
-    controls.removeFromRight(10);
-
-    m_palette.setBounds(controls);
-    m_tools.setBounds(toolsArea);
+    m_palette.setBounds(bottom);
 }
 
 void CanvasModule::refreshStatus()

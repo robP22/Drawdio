@@ -50,8 +50,12 @@ public:
 
     void setSelectedColor(PixelCanvasComponent::PixelColor color);
     void setOnColorSelected(ColorCallback cb) { m_onColorSelected = std::move(cb); }
+    void setOnUndo(std::function<void()> cb) { m_onUndo = std::move(cb); }
+    void setOnClear(std::function<void()> cb) { m_onClear = std::move(cb); }
 
 private:
+    void styleButton(juce::TextButton& button, juce::Colour accent);
+
     struct PaintBlob
     {
         PixelCanvasComponent::PixelColor color;
@@ -66,26 +70,8 @@ private:
     PixelCanvasComponent::PixelColor m_selectedColor = PixelCanvasComponent::PixelColor::Red;
     int m_hoveredBlob = -1;
     ColorCallback m_onColorSelected;
-};
-
-class CanvasTools : public juce::Component
-{
-public:
-    explicit CanvasTools(const ThemeManager& theme);
-
-    void paint(juce::Graphics& g) override;
-    void resized() override;
-
-    void setOnUndo(std::function<void()> cb) { m_onUndo = std::move(cb); }
-    void setOnClear(std::function<void()> cb) { m_onClear = std::move(cb); }
-
-private:
-    void styleButton(juce::TextButton& button, juce::Colour accent);
-
-    const ThemeManager& m_theme;
     juce::TextButton m_undoButton { "Undo" };
     juce::TextButton m_clearButton { "Clear" };
-
     std::function<void()> m_onUndo;
     std::function<void()> m_onClear;
 };
@@ -109,7 +95,6 @@ private:
     const ThemeManager& m_theme;
     PixelCanvasComponent m_pixelCanvas;
     ColorPalette m_palette;
-    CanvasTools m_tools;
 
     std::function<void()> m_onClear;
 };
