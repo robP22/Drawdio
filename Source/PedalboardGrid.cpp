@@ -44,8 +44,8 @@ void PedalboardGrid::resized()
     const int colCount = 3;
     const int colW = bounds.getWidth() / colCount;
     const int rowH = bounds.getHeight() / rowCount;
-    const int pedalW = juce::jlimit(140, 180, colW - 16);
-    const int pedalH = juce::jlimit(180, 220, rowH - 16);
+    const int pedalW = juce::jlimit(180, 220, colW - 16);
+    const int pedalH = juce::jlimit(240, 280, rowH - 16);
 
     for (int slot = 0; slot < PedalSlotCount; ++slot)
     {

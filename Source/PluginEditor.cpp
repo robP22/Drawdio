@@ -53,16 +53,9 @@ void PedalboardBackground::paint(juce::Graphics& g)
     const auto& texture = m_resources.getTexture(ResourceManager::TextureId::PedalboardFelt);
     if (texture.isValid())
     {
-        const float cx = bounds.getX() + bounds.getWidth() * 0.5f;
-        const float cy = bounds.getY() + bounds.getHeight() * 0.5f;
-
-        g.saveState();
-        g.addTransform(juce::AffineTransform::rotation(
-            juce::MathConstants<float>::halfPi, cx, cy));
         g.drawImage(texture, bounds.getX(), bounds.getY(),
                    bounds.getWidth(), bounds.getHeight(),
                    0, 0, texture.getWidth(), texture.getHeight());
-        g.restoreState();
     }
 }
 
@@ -357,11 +350,12 @@ void DrawdioProcessorEditor::paint(juce::Graphics& g)
 
 void DrawdioProcessorEditor::resized()
 {
-    auto bounds = getLocalBounds();
+    auto bounds = getLocalBounds().reduced(18, 16);
 
-    auto content = bounds.reduced(18, 16);
+    auto content = bounds;
     const auto gap = 0;
-    const auto pedalW = juce::jlimit(560, 620, content.getWidth() - 860) - 50;
+    // Give more width to pedalboard (right side), less to canvas (left side)
+    const auto pedalW = juce::jlimit(680, 780, content.getWidth() - 500) - 40;
     auto pedalArea = content.removeFromRight(pedalW);
     content.removeFromRight(gap);
 
