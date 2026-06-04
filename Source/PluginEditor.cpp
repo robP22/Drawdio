@@ -28,9 +28,16 @@ WoodGrainBackground::WoodGrainBackground(const ResourceManager& resources, const
     setInterceptsMouseClicks(false, false);
 }
 
-void WoodGrainBackground::paint(juce::Graphics&)
+void WoodGrainBackground::paint(juce::Graphics& g)
 {
-    // EMPTY - no custom rendering
+    auto bounds = getLocalBounds().toFloat();
+    const auto& woodTexture = m_resources.getTexture(ResourceManager::TextureId::WorkspaceWood);
+    if (woodTexture.isValid())
+    {
+        g.drawImage(woodTexture, bounds.getX(), bounds.getY(), 
+                   bounds.getWidth(), bounds.getHeight(),
+                   0, 0, woodTexture.getWidth(), woodTexture.getHeight());
+    }
 }
 
 PedalboardBackground::PedalboardBackground(const ResourceManager& resources, const ThemeManager& theme)
@@ -40,9 +47,16 @@ PedalboardBackground::PedalboardBackground(const ResourceManager& resources, con
     setInterceptsMouseClicks(false, false);
 }
 
-void PedalboardBackground::paint(juce::Graphics&)
+void PedalboardBackground::paint(juce::Graphics& g)
 {
-    // EMPTY - no custom rendering
+    auto bounds = getLocalBounds().toFloat();
+    const auto& pedalboardTexture = m_resources.getTexture(ResourceManager::TextureId::PedalboardFelt);
+    if (pedalboardTexture.isValid())
+    {
+        g.drawImage(pedalboardTexture, bounds.getX(), bounds.getY(),
+                   bounds.getWidth(), bounds.getHeight(),
+                   0, 0, pedalboardTexture.getWidth(), pedalboardTexture.getHeight());
+    }
 }
 
 ColorPalette::ColorPalette(const ResourceManager& resources, const ThemeManager& theme)
