@@ -18,6 +18,17 @@ juce::String colorName(PixelCanvasComponent::PixelColor color)
         default:                                      return "BLACK";
     }
 }
+
+// Layout constants
+constexpr int WindowWidth = 1400;
+constexpr int WindowHeight = 800;
+constexpr int BlobCount = 5;
+constexpr float BlobSpacing = 8.0f;
+constexpr float BlobMaxSize = 72.0f;
+constexpr float BlobPadding = 20.0f;
+constexpr int ButtonHeight = 16;
+constexpr int ButtonSpacing = 5;
+constexpr int ButtonAreaHeight = 80;
 }
 
 // Background component implementations - flat textures without decorative frames
@@ -147,22 +158,19 @@ void ColorPalette::paint(juce::Graphics& g)
 void ColorPalette::resized()
 {
     auto area = getLocalBounds();
-    // Bottom section for buttons (match blob height + spacing pattern)
-    const auto buttonAreaHeight = 80.0f;
-    auto blobsArea = area.withTrimmedBottom(buttonAreaHeight);
+    auto blobsArea = area.withTrimmedBottom(ButtonAreaHeight);
     auto buttonsArea = area.withTrimmedTop(blobsArea.getHeight()).withTrimmedLeft(10).withTrimmedRight(10);
 
-    // Position blobs in top section
-    const auto blobArea = blobsArea.withTrimmedTop(20).withTrimmedBottom(20);
-    const auto blobSize = juce::jmin(blobArea.getHeight() - 10.0f, 72.0f);
-    const float spacing = 8.0f;
-    const float totalWidth = blobSize * 5.0f + spacing * 4.0f;
+    // Position blobs in top section using constants
+    const auto blobArea = blobsArea.withTrimmedTop(BlobPadding).withTrimmedBottom(BlobPadding);
+    const auto blobSize = juce::jmin(blobArea.getHeight() - 10.0f, BlobMaxSize);
+    const float totalWidth = blobSize * BlobCount + BlobSpacing * (BlobCount - 1);
     float startX = blobArea.getCentreX() - totalWidth / 2.0f;
     float blobY = blobArea.getCentreY() - blobSize / 2.0f;
 
     for (int i = 0; i < static_cast<int>(m_blobs.size()); ++i)
     {
-        auto slot = juce::Rectangle<float>(startX + static_cast<float>(i) * (blobSize + spacing),
+        auto slot = juce::Rectangle<float>(startX + static_cast<float>(i) * (blobSize + BlobSpacing),
                                            blobY,
                                            blobSize,
                                            blobSize);
@@ -170,13 +178,11 @@ void ColorPalette::resized()
     }
 
     // Position buttons in bottom section, centered
-    const auto buttonH = 16;
-    const auto gap = 5;
-    const auto totalH = static_cast<float>(buttonH * 2 + gap);
+    const auto totalH = static_cast<float>(ButtonHeight * 2 + ButtonSpacing);
     auto buttonBounds = buttonsArea.withSizeKeepingCentre(buttonsArea.getWidth(), totalH);
-    m_undoButton.setBounds(buttonBounds.removeFromTop(buttonH).toType<int>());
-    buttonBounds.removeFromTop(gap);
-    m_clearButton.setBounds(buttonBounds.removeFromTop(buttonH).toType<int>());
+    m_undoButton.setBounds(buttonBounds.removeFromTop(ButtonHeight).toType<int>());
+    buttonBounds.removeFromTop(ButtonSpacing);
+    m_clearButton.setBounds(buttonBounds.removeFromTop(ButtonHeight).toType<int>());
 }
 
 void ColorPalette::mouseDown(const juce::MouseEvent& event)
@@ -223,28 +229,6 @@ int ColorPalette::hitTestBlob(juce::Point<float> position) const
             return i;
 
     return -1;
-}
-
-CanvasTools::CanvasTools(const ThemeManager& theme)
-    : m_theme(theme)
-{
-    styleButton(m_undoButton, m_theme.undoButtonAccent());
-    styleButton(m_clearButton, m_theme.clearButtonAccent());
-
-    addAndMakeVisible(m_undoButton);
-    addAndMakeVisible(m_clearButton);
-
-    m_undoButton.onClick = [this]()
-    {
-        if (m_onUndo)
-            m_onUndo();
-    };
-
-    m_clearButton.onClick = [this]()
-    {
-        if (m_onClear)
-            m_onClear();
-    };
 }
 
 void ColorPalette::styleButton(juce::TextButton& button, juce::Colour accent)
