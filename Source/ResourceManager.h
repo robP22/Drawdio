@@ -97,21 +97,8 @@ public:
 private:
     void loadAll();
     void loadProceduralTextures();
-    void loadSpriteSheets();
-    void loadPedalSkinSpriteSheets();
-
-    bool loadImageFromBinaryData(ImageId id, const void* data, size_t sizeInBytes);
-    bool loadTextureFromBinaryData(TextureId id, const void* data, size_t sizeInBytes);
 
     static juce::Image decodeImageFromBinaryData(const void* data, size_t sizeInBytes);
-    static juce::Image makeWorkspaceWoodTexture();
-    static juce::Image makePedalboardFeltTexture();
-    static juce::Image makePalettePaintTexture();
-    static juce::Image makePedalFaceGrainTexture();
-    static juce::Image makeOverlayGlossTexture();
-    static juce::Image makePedalPartsSpriteSheet(int frameWidth, int frameHeight);
-    static juce::Image makePlaceholderSpriteSheet(juce::Colour colour);
-    static juce::Rectangle<int> spriteFrameRect(int frameIndex, int frameWidth, int frameHeight);
 
     std::array<juce::Image, static_cast<size_t>(ImageId::Count)> m_images;
     std::array<SpriteSheet, static_cast<size_t>(SpriteSheetId::Count)> m_spriteSheets;
