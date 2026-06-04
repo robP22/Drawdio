@@ -103,7 +103,7 @@ void ColorPalette::paint(juce::Graphics& g)
         }
 
         g.setColour(juce::Colours::black.withAlpha(0.32f));
-        g.fillEllipse(blobBounds.translated(0.0f, selected ? 5.0f : 7.0f));
+        g.fillEllipse(blobBounds.translated(0.0f, selected ? 3.0f : 4.0f));
 
         auto body = blobBounds.translated(0.0f, selected ? -3.0f : 0.0f);
         g.setColour(paintColour.darker(0.25f));
@@ -127,24 +127,23 @@ void ColorPalette::paint(juce::Graphics& g)
 void ColorPalette::resized()
 {
     auto area = getLocalBounds().toFloat();
-    // Make blobs 40% larger (1.4x)
+    // Make blobs 40% larger, perfectly circular
     const auto blobSize = juce::jmin(52.0f * 1.4f, area.getHeight() - 4.0f);
-    const auto blobWidth = blobSize * 0.78f;
     
-    // Calculate y position for all blobs (move up 3px)
-    const float blobY = area.getCentreY() - blobWidth / 2.0f - 3.0f;
+    // Move blobs left 30px and up 5px
+    const float blobY = area.getCentreY() - blobSize / 2.0f - 5.0f;
 
     // 5 blobs with 6px spacing
     const float spacing = 6.0f;
-    const float totalWidth = blobWidth * 5.0f + spacing * 4.0f;
-    float startX = area.getCentreX() - totalWidth / 2.0f;
+    const float totalWidth = blobSize * 5.0f + spacing * 4.0f;
+    float startX = area.getCentreX() - totalWidth / 2.0f - 30.0f;
 
     for (int i = 0; i < static_cast<int>(m_blobs.size()); ++i)
     {
-        auto slot = juce::Rectangle<float>(startX + static_cast<float>(i) * (blobWidth + spacing),
+        auto slot = juce::Rectangle<float>(startX + static_cast<float>(i) * (blobSize + spacing),
                                            blobY,
-                                           blobWidth,
-                                           blobWidth);
+                                           blobSize,
+                                           blobSize);
         m_blobs[static_cast<size_t>(i)].bounds = slot;
     }
 }
@@ -224,14 +223,14 @@ void CanvasTools::paint(juce::Graphics&)
 
 void CanvasTools::resized()
 {
-    auto area = getLocalBounds().reduced(10, 8);
+    auto area = getLocalBounds().reduced(10, 8).translated(-40, 15);
     // Stack buttons vertically with 5px gap, align centerline with blob y-axis
     const auto buttonH = 12;
     const auto gap = 5;
     const auto totalH = buttonH * 2 + gap;
-    // Align button stack centerline with blob center (blobY = area.centreY - blobWidth/2 - 3)
-    const auto blobWidth = 40.0f * 1.4f;
-    const auto blobCentreY = area.getCentreY() - blobWidth / 2.0f - 3.0f;
+    // Align button stack centerline with blob center (blobY = area.centreY - blobSize/2 - 5)
+    const auto blobSize = 52.0f * 1.4f;
+    const auto blobCentreY = area.getCentreY() - blobSize / 2.0f - 5.0f;
     const auto startY = static_cast<int>(blobCentreY - totalH / 2.0f);
     auto buttonArea = area.withTrimmedTop(startY).withHeight(totalH);
     m_undoButton.setBounds(buttonArea.removeFromTop(buttonH));
@@ -372,8 +371,8 @@ void DrawdioProcessorEditor::resized()
     const auto pedalW = juce::jlimit(680, 780, content.getWidth() - 400) - 40;
     auto pedalArea = content.removeFromRight(pedalW);
 
-    // Pedalboard grid smaller, shifted left 20px
-    auto gridArea = pedalArea.withX(pedalArea.getX()).withSizeKeepingCentre(
+    // Pedalboard grid smaller with top padding
+    auto gridArea = pedalArea.withTrimmedTop(60).withSizeKeepingCentre(
         pedalArea.getWidth() - 100, pedalArea.getHeight() - 70);
 
     // Wood grain fills entire window as bottom layer
