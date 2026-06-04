@@ -130,8 +130,8 @@ void ColorPalette::resized()
     const auto slotW = area.getWidth() / static_cast<float>(m_blobs.size());
     const auto blobSize = juce::jmin(52.0f, area.getHeight() - 4.0f);
 
-    // Calculate base y position (aligned for all blobs)
-    const float baseY = area.getCentreY() - (blobSize * 0.78f) / 2.0f + 7.0f;
+    // Calculate y position for all blobs
+    const float blobY = area.getCentreY() - (blobSize * 0.78f) / 2.0f;
 
     for (int i = 0; i < static_cast<int>(m_blobs.size()); ++i)
     {
@@ -141,10 +141,7 @@ void ColorPalette::resized()
                                            area.getHeight());
         auto bounds = slot.withSizeKeepingCentre(blobSize, blobSize * 0.78f);
         // Align all blobs to same y-axis
-        bounds = bounds.withY(baseY);
-        // Red blob shifted right 3px
-        if (i == 0)
-            bounds = bounds.translated(3.0f, 0.0f);
+        bounds = bounds.withY(blobY);
         m_blobs[static_cast<size_t>(i)].bounds = bounds;
     }
 }
@@ -224,11 +221,16 @@ void CanvasTools::paint(juce::Graphics&)
 
 void CanvasTools::resized()
 {
-    auto area = getLocalBounds().reduced(10, 8);
+    auto area = getLocalBounds();
+    // Center buttons vertically on blob y-axis (area center)
+    const auto totalH = 28;  // 12px * 2 + 4px gap
+    const auto startY = area.getCentreY() - totalH / 2;
+    auto buttonArea = area.withY(static_cast<float>(startY)).withHeight(static_cast<float>(totalH));
+    buttonArea = buttonArea.reduced(10, 8);
     const auto buttonH = 12;
-    m_undoButton.setBounds(area.removeFromTop(buttonH));
-    area.removeFromTop(4);
-    m_clearButton.setBounds(area.removeFromTop(buttonH));
+    m_undoButton.setBounds(buttonArea.removeFromTop(buttonH));
+    buttonArea.removeFromTop(4);
+    m_clearButton.setBounds(buttonArea.removeFromTop(buttonH));
 }
 
 void CanvasTools::styleButton(juce::TextButton& button, juce::Colour accent)
