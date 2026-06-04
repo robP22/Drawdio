@@ -285,12 +285,12 @@ void CanvasModule::paint(juce::Graphics&)
 
 void CanvasModule::resized()
 {
-    auto area = getLocalBounds().reduced(22, 20).translated(-20, 90);
-    auto bottom = area.removeFromBottom(320);
+    auto area = getLocalBounds().reduced(22, 20).translated(-20, 85);
+    auto bottom = area.removeFromBottom(352);  // 320 * 1.1 = 352 (10% larger)
     area.removeFromBottom(14);
 
     const auto square = juce::jmin(area.getWidth(), area.getHeight()) + 140;
-    auto canvasArea = area.withSizeKeepingCentre(square, square).translated(0, -10);
+    auto canvasArea = area.withSizeKeepingCentre(square, square).translated(0, -5);
     m_pixelCanvas.setBounds(canvasArea.reduced(8));
 
     auto controls = bottom;
@@ -372,7 +372,7 @@ void DrawdioProcessorEditor::resized()
     auto pedalArea = content.removeFromRight(pedalW);
 
     // Pedalboard grid smaller with top padding
-    auto gridArea = pedalArea.withTrimmedTop(70).withSizeKeepingCentre(
+    auto gridArea = pedalArea.withTrimmedTop(75).withSizeKeepingCentre(
         pedalArea.getWidth() - 100, pedalArea.getHeight() - 70);
 
     // Wood grain fills entire window as bottom layer
