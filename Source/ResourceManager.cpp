@@ -65,6 +65,8 @@ void ResourceManager::loadProceduralTextures()
         decodeImageFromBinaryData(BinaryData::pedalboard_final_png, BinaryData::pedalboard_final_pngSize);
     m_images[static_cast<size_t>(ImageId::ColorPaletteBody)] =
         decodeImageFromBinaryData(BinaryData::colorpalette_final_png, BinaryData::colorpalette_final_pngSize);
+    m_images[static_cast<size_t>(ImageId::PedalEnclosure)] =
+        decodeImageFromBinaryData(BinaryData::pedalenclosure_final_png, BinaryData::pedalenclosure_final_pngSize);
 }
 
 juce::Image ResourceManager::decodeImageFromBinaryData(const void* data, size_t sizeInBytes)

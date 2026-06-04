@@ -270,7 +270,7 @@ void CanvasModule::paint(juce::Graphics&)
 void CanvasModule::resized()
 {
     auto area = getLocalBounds().reduced(22, 20);
-    auto bottom = area.removeFromBottom(82);
+    auto bottom = area.removeFromBottom(182);
     area.removeFromBottom(14);
 
     const auto square = juce::jmin(area.getWidth(), area.getHeight()) - 50;
@@ -353,7 +353,7 @@ void DrawdioProcessorEditor::resized()
     auto content = bounds;
     const auto gap = 0;
     // Give more width to pedalboard (right side), less to canvas (left side)
-    const auto pedalW = juce::jlimit(680, 780, content.getWidth() - 500) - 40;
+    const auto pedalW = juce::jlimit(780, 880, content.getWidth() - 400) - 40;
     auto pedalArea = content.removeFromRight(pedalW);
     content.removeFromRight(gap);
 

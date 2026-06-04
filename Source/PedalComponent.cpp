@@ -92,8 +92,19 @@ PedalComponent::~PedalComponent()
 
 void PedalComponent::paint(juce::Graphics& g)
 {
-    // Pedal type name text (top center area)
     auto bounds = getLocalBounds().toFloat();
+
+    // Draw pedal enclosure sprite
+    const auto& enclosureTexture = m_resources.getTexture(ResourceManager::TextureId::PedalEnclosure);
+    if (enclosureTexture.isValid())
+    {
+        g.drawImage(enclosureTexture,
+                   bounds.getX(), bounds.getY(),
+                   bounds.getWidth(), bounds.getHeight(),
+                   0, 0, enclosureTexture.getWidth(), enclosureTexture.getHeight());
+    }
+
+    // Pedal type name text (top center area)
     auto labelTop = bounds.reduced(bounds.getWidth() * 0.08f, bounds.getHeight() * 0.06f);
     labelTop = labelTop.withTrimmedTop(labelTop.getHeight() * 0.72f);
     g.setFont(juce::FontOptions(11.0f, juce::Font::bold));
