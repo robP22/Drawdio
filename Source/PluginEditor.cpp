@@ -81,22 +81,6 @@ ColorPalette::ColorPalette(const ResourceManager& resources, const ThemeManager&
           { PixelCanvasComponent::PixelColor::Black, {} }
       }}
 {
-    addAndMakeVisible(m_undoButton);
-    addAndMakeVisible(m_clearButton);
-    styleButton(m_undoButton, juce::Colour(0xFF4A90D9));
-    styleButton(m_clearButton, juce::Colour(0xFFE74C3C));
-
-    m_undoButton.onClick = [this]()
-    {
-        if (m_onUndo)
-            m_onUndo();
-    };
-
-    m_clearButton.onClick = [this]()
-    {
-        if (m_onClear)
-            m_onClear();
-    };
 }
 
 void ColorPalette::paint(juce::Graphics& g)
@@ -158,15 +142,13 @@ void ColorPalette::paint(juce::Graphics& g)
 void ColorPalette::resized()
 {
     auto area = getLocalBounds();
-    auto blobsArea = area.withTrimmedBottom(ButtonAreaHeight);
-    auto buttonsArea = area.withTrimmedTop(blobsArea.getHeight()).withTrimmedLeft(10).withTrimmedRight(10);
+    auto blobsArea = area.withTrimmedTop(BlobPadding).withTrimmedBottom(BlobPadding);
 
-    // Position blobs in top section using constants
-    const auto blobArea = blobsArea.withTrimmedTop(BlobPadding).withTrimmedBottom(BlobPadding);
-    const auto blobSize = juce::jmin(blobArea.getHeight() - 10.0f, BlobMaxSize);
+    // Position blobs using constants
+    const auto blobSize = juce::jmin(blobsArea.getHeight() - 10.0f, BlobMaxSize);
     const float totalWidth = blobSize * BlobCount + BlobSpacing * (BlobCount - 1);
-    float startX = blobArea.getCentreX() - totalWidth / 2.0f;
-    float blobY = blobArea.getCentreY() - blobSize / 2.0f;
+    float startX = blobsArea.getCentreX() - totalWidth / 2.0f;
+    float blobY = blobsArea.getCentreY() - blobSize / 2.0f;
 
     for (int i = 0; i < static_cast<int>(m_blobs.size()); ++i)
     {
@@ -176,13 +158,6 @@ void ColorPalette::resized()
                                            blobSize);
         m_blobs[static_cast<size_t>(i)].bounds = slot;
     }
-
-    // Position buttons in bottom section, centered
-    const auto totalH = static_cast<float>(ButtonHeight * 2 + ButtonSpacing);
-    auto buttonBounds = buttonsArea.withSizeKeepingCentre(buttonsArea.getWidth(), totalH);
-    m_undoButton.setBounds(buttonBounds.removeFromTop(ButtonHeight).toType<int>());
-    buttonBounds.removeFromTop(ButtonSpacing);
-    m_clearButton.setBounds(buttonBounds.removeFromTop(ButtonHeight).toType<int>());
 }
 
 void ColorPalette::mouseDown(const juce::MouseEvent& event)
@@ -231,6 +206,53 @@ int ColorPalette::hitTestBlob(juce::Point<float> position) const
     return -1;
 }
 
+CanvasTools::CanvasTools(const ThemeManager& theme)
+    : m_theme(theme)
+{
+    styleButton(m_undoButton, m_theme.undoButtonAccent());
+    styleButton(m_clearButton, m_theme.clearButtonAccent());
+
+    addAndMakeVisible(m_undoButton);
+    addAndMakeVisible(m_clearButton);
+
+    m_undoButton.onClick = [this]()
+    {
+        if (m_onUndo)
+            m_onUndo();
+    };
+
+    m_clearButton.onClick = [this]()
+    {
+        if (m_onClear)
+            m_onClear();
+    };
+}
+
+void CanvasTools::paint(juce::Graphics&)
+{
+    // EMPTY - no custom rendering
+}
+
+void CanvasTools::resized()
+{
+    auto area = getLocalBounds().withTrimmedTop(20).withTrimmedBottom(20);
+    const auto buttonH = 16;
+    const auto gap = 5;
+    const auto totalH = buttonH * 2 + gap;
+    auto buttonArea = area.withSizeKeepingCentre(area.getWidth() - 20, static_cast<float>(totalH));
+    m_undoButton.setBounds(buttonArea.removeFromTop(buttonH));
+    buttonArea.removeFromTop(gap);
+    m_clearButton.setBounds(buttonArea.removeFromTop(buttonH));
+}
+
+void CanvasTools::styleButton(juce::TextButton& button, juce::Colour accent)
+{
+    button.setColour(juce::TextButton::buttonColourId, juce::Colour(0xFF25292C));
+    button.setColour(juce::TextButton::buttonOnColourId, accent.darker(0.2f));
+    button.setColour(juce::TextButton::textColourOffId, juce::Colours::whitesmoke);
+    button.setColour(juce::TextButton::textColourOnId, juce::Colours::white);
+}
+
 void ColorPalette::styleButton(juce::TextButton& button, juce::Colour accent)
 {
     button.setColour(juce::TextButton::buttonColourId, juce::Colour(0xFF25292C));
@@ -243,22 +265,24 @@ CanvasModule::CanvasModule(const ResourceManager& resources, const ThemeManager&
     : m_resources(resources),
       m_theme(theme),
       m_pixelCanvas(theme),
-      m_palette(resources, theme)
+      m_palette(resources, theme),
+      m_tools(theme)
 {
     addAndMakeVisible(m_pixelCanvas);
     addAndMakeVisible(m_palette);
+    addAndMakeVisible(m_tools);
 
     m_palette.setOnColorSelected([this](auto color)
     {
         m_pixelCanvas.setCurrentColor(color);
     });
 
-    m_palette.setOnUndo([this]()
+    m_tools.setOnUndo([this]()
     {
         m_pixelCanvas.undo();
     });
 
-    m_palette.setOnClear([this]()
+    m_tools.setOnClear([this]()
     {
         if (m_onClear)
             m_onClear();
@@ -286,7 +310,13 @@ void CanvasModule::resized()
     auto canvasArea = area.withSizeKeepingCentre(square, square).translated(0, -5);
     m_pixelCanvas.setBounds(canvasArea.reduced(8));
 
-    m_palette.setBounds(bottom);
+    // Position palette and tools side by side
+    auto controls = bottom;
+    auto toolsArea = controls.removeFromRight(50);
+    controls.removeFromRight(10);
+
+    m_palette.setBounds(controls);
+    m_tools.setBounds(toolsArea);
 }
 
 void CanvasModule::refreshStatus()
@@ -347,9 +377,13 @@ DrawdioProcessorEditor::~DrawdioProcessorEditor()
 
 void DrawdioProcessorEditor::paint(juce::Graphics& g)
 {
+    // DEBUG: Draw main border first
+    g.setColour(juce::Colours::green.withAlpha(0.5f));
+    g.drawRect(getLocalBounds(), 2);
+
     g.fillAll(m_theme.editorBackground());
 
-    // DEBUG: Draw grid lines across window
+    // DEBUG: Draw grid lines on top (foreground)
     g.setColour(juce::Colours::white.withAlpha(0.2f));
     auto bounds = getLocalBounds();
     for (int x = 0; x < bounds.getWidth(); x += 50)
@@ -360,10 +394,6 @@ void DrawdioProcessorEditor::paint(juce::Graphics& g)
     {
         g.drawLine(0, static_cast<float>(y), static_cast<float>(bounds.getWidth()), static_cast<float>(y));
     }
-
-    // DEBUG: Draw main border
-    g.setColour(juce::Colours::green.withAlpha(0.5f));
-    g.drawRect(bounds, 2);
 }
 
 void DrawdioProcessorEditor::resized()

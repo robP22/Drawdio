@@ -76,6 +76,28 @@ private:
     std::function<void()> m_onClear;
 };
 
+class CanvasTools : public juce::Component
+{
+public:
+    explicit CanvasTools(const ThemeManager& theme);
+
+    void paint(juce::Graphics& g) override;
+    void resized() override;
+
+    void setOnUndo(std::function<void()> cb) { m_onUndo = std::move(cb); }
+    void setOnClear(std::function<void()> cb) { m_onClear = std::move(cb); }
+
+private:
+    void styleButton(juce::TextButton& button, juce::Colour accent);
+
+    const ThemeManager& m_theme;
+    juce::TextButton m_undoButton { "Undo" };
+    juce::TextButton m_clearButton { "Clear" };
+
+    std::function<void()> m_onUndo;
+    std::function<void()> m_onClear;
+};
+
 class CanvasModule : public juce::Component
 {
 public:
@@ -95,6 +117,7 @@ private:
     const ThemeManager& m_theme;
     PixelCanvasComponent m_pixelCanvas;
     ColorPalette m_palette;
+    CanvasTools m_tools;
 
     std::function<void()> m_onClear;
 };
