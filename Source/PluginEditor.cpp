@@ -304,9 +304,7 @@ DrawdioProcessorEditor::DrawdioProcessorEditor(DrawdioProcessor& p)
     addAndMakeVisible(m_canvasModule);
     addAndMakeVisible(m_pedalboardGrid);
 
-    // Backgrounds go to back
-    m_woodGrainBackground.toBack();
-    m_pedalboardBackground.toBack();
+    // Wood grain is bottom-most layer, pedalboard on top (alpha shows wood grain through)
 
     auto& pixelCanvas = m_canvasModule.getPixelCanvas();
     pixelCanvas.setGridData(audioProcessor.getGridData());
@@ -359,13 +357,10 @@ void DrawdioProcessorEditor::resized()
     auto pedalArea = content.removeFromRight(pedalW);
     content.removeFromRight(gap);
 
-    // Canvas and palette share content's width via CanvasModule
-    // Pedalboard has same height as full container (canvas + palette)
-
-    // Set bounds for background layers
-    m_woodGrainBackground.setBounds(content);
-    // Pedalboard spans full height of container
-    m_pedalboardBackground.setBounds(bounds.getX(), bounds.getY(), bounds.getWidth(), bounds.getHeight());
+    // Wood grain fills entire window as bottom layer
+    m_woodGrainBackground.setBounds(bounds);
+    // Pedalboard sprite on top, transparent edges show wood grain through
+    m_pedalboardBackground.setBounds(bounds);
 
     m_canvasModule.setBounds(content);
     m_pedalboardGrid.setBounds(pedalArea);
