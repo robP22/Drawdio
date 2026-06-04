@@ -74,7 +74,18 @@ ColorPalette::ColorPalette(const ResourceManager& resources, const ThemeManager&
 
 void ColorPalette::paint(juce::Graphics& g)
 {
-    // Draw sprite scaled to fit blob area only (not full component bounds)
+    // Draw palette sprite once, scaled to full component bounds with alpha
+    const auto& paletteTexture = m_resources.getTexture(ResourceManager::TextureId::PalettePaint);
+    if (paletteTexture.isValid())
+    {
+        auto bounds = getLocalBounds().toFloat();
+        g.drawImage(paletteTexture,
+                   bounds.getX(), bounds.getY(),
+                   bounds.getWidth(), bounds.getHeight(),
+                   0, 0, paletteTexture.getWidth(), paletteTexture.getHeight());
+    }
+
+    // Draw blob shadows, colors, selection on top
     for (int i = 0; i < static_cast<int>(m_blobs.size()); ++i)
     {
         const auto& blob = m_blobs[static_cast<size_t>(i)];
@@ -82,17 +93,6 @@ void ColorPalette::paint(juce::Graphics& g)
         const auto paintColour = m_theme.canvasPixelColour(static_cast<uint8_t>(blob.color));
         const bool selected = blob.color == m_selectedColor;
         const bool hovered = i == m_hoveredBlob;
-
-        // Draw small palette sprite behind each blob
-        const auto& paletteTexture = m_resources.getTexture(ResourceManager::TextureId::PalettePaint);
-        if (paletteTexture.isValid())
-        {
-            auto spriteBounds = blobBounds.expanded(3.0f);
-            g.drawImage(paletteTexture,
-                       spriteBounds.getX(), spriteBounds.getY(),
-                       spriteBounds.getWidth(), spriteBounds.getHeight(),
-                       0, 0, paletteTexture.getWidth(), paletteTexture.getHeight());
-        }
 
         if (selected)
         {
