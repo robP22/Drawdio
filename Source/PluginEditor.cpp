@@ -74,16 +74,15 @@ ColorPalette::ColorPalette(const ResourceManager& resources, const ThemeManager&
 
 void ColorPalette::paint(juce::Graphics& g)
 {
-    // Draw palette sprite once, scaled to full component bounds
-    // Sprite's alpha channel handles transparency
+    // Draw colorpalettebody.png sprite with black alpha transparency
     auto bounds = getLocalBounds().toFloat();
-    const auto& paletteTexture = m_resources.getTexture(ResourceManager::TextureId::PalettePaint);
-    if (paletteTexture.isValid())
+    const auto& bodyTexture = m_resources.getTexture(ResourceManager::TextureId::ColorPaletteBody);
+    if (bodyTexture.isValid())
     {
-        g.drawImage(paletteTexture,
+        g.drawImage(bodyTexture,
                    bounds.getX(), bounds.getY(),
                    bounds.getWidth(), bounds.getHeight(),
-                   0, 0, paletteTexture.getWidth(), paletteTexture.getHeight());
+                   0, 0, bodyTexture.getWidth(), bodyTexture.getHeight());
     }
 
     // Draw blob shadows, colors, selection on top
@@ -360,9 +359,9 @@ void DrawdioProcessorEditor::resized()
     auto pedalArea = content.removeFromRight(pedalW);
     content.removeFromRight(gap);
 
-    // Set bounds for background layers - wood grain covers full window
-    m_woodGrainBackground.setBounds(bounds);
-    // Right half: pedalboard background for pedal area (transparent)
+    // Set bounds for background layers - wood grain only covers canvas area (left side)
+    m_woodGrainBackground.setBounds(content);
+    // Right half: pedalboard background for pedal area
     m_pedalboardBackground.setBounds(pedalArea);
 
     m_canvasModule.setBounds(content);
