@@ -91,8 +91,8 @@ void FormantShifterEffect::processSample(float** b, int c, int s, float effectPa
     float centerHz = 200.0f + formantFreq * 1800.0f * (0.3f + envMod * 0.7f);
 
     float fc = centerHz / static_cast<float>(m_sampleRate);
-    float bw = 0.1f;
-    float R = 1.0f - bw * 3.14159265f * fc;
+    float bwNorm = 0.1f / static_cast<float>(m_sampleRate);  // Normalize bandwidth
+    float R = 1.0f - bwNorm * 3.14159265f * fc;
     float a = 1.0f - std::exp(-2.0f * 3.14159265f * fc * R);
 
     for (int ch = 0; ch < c; ++ch)

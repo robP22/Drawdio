@@ -38,6 +38,7 @@ void VcaCompressorEffect::processSample(float** b, int c, int s, float effectPar
         float over = m_envelopeFollower - thresh;
         float reduction = over * (1.0f - 1.0f / compRatio);
         gain = (thresh + over - reduction) / (thresh + over);
+        gain = std::fmax(0.0f, std::fmin(1.0f, gain));  // Clamp to [0, 1]
     }
 
     for (int ch = 0; ch < c; ++ch)

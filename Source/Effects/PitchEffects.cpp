@@ -93,11 +93,15 @@ void SubSynthEffect::processSample(float** b, int c, int s, float effectParam)
         if (m_phase >= 1.0f) m_phase -= 1.0f;
     }
 
-    float subOut = (m_phase < 0.5f) ? 0.5f : -0.5f;
+    // Replace hard square wave with bandlimited sawtooth
+    float subOut = 2.0f * m_phase - 1.0f;  // Bandlimited sawtooth instead of square
 
     if (m_silenceCounter >= kGateSamples)
         subOut = 0.0f;
 
+    // Reduce gain for higher harmonics to reduce aliasing
+    float gain = (octDiv > 2) ? 0.8f : 1.0f;
+
     for (int ch = 0; ch < c; ++ch)
-        b[ch][s] = subOut;
+        b[ch][s] = subOut * gain;
 }

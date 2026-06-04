@@ -32,16 +32,19 @@ void ModulatedDelayEffect::processSample(float** b, int c, int s, float effectPa
     int delayRange = static_cast<int>((maxDelay - minDelay) * 0.5f);
     int delaySamples = minDelay + static_cast<int>((lfo * 0.5f + 0.5f) * delayRange);
 
+    // Write input to delay line
     if (c > 0)
         m_delay.buf[m_delay.writePtr] = b[0][s];
+    else
+        m_delay.buf[m_delay.writePtr] = 0.0f;
 
-    int readPtr = (static_cast<int>(m_delay.writePtr) - delaySamples) % static_cast<int>(bufSize);
-    if (readPtr < 0) readPtr += static_cast<int>(bufSize);
-
-    float wet = m_delay.buf[static_cast<size_t>(readPtr)];
-
+    // Process for each channel independently
     for (int ch = 0; ch < c; ++ch)
-        b[ch][s] = wet;
+    {
+        int readPtr = (static_cast<int>(m_delay.writePtr) - delaySamples) % static_cast<int>(bufSize);
+        if (readPtr < 0) readPtr += static_cast<int>(bufSize);
+        b[ch][s] = m_delay.buf[static_cast<size_t>(readPtr)];
+    }
 
     m_delay.writePtr = (m_delay.writePtr + 1) % bufSize;
 }
@@ -96,7 +99,8 @@ void DynamicRingBufferEffect::processSample(float** b, int c, int s, float effec
     size_t bufSize = m_buffer.buf.size();
     if (bufSize == 0) return;
 
-    size_t loopLen = static_cast<size_t>((0.1 + size * 0.9) * bufSize);
+    size_t loopLen = static_cast<size_t>((0.15f + size * 0.85f) * bufSize);
+    if (loopLen == 0) loopLen = 1;  // Ensure minimum of 1
     float readSpeed = 0.75f;
 
     if (c > 0)
@@ -139,14 +143,18 @@ void TapeStopEchoEffect::processSample(float** b, int c, int s, float effectPara
     size_t bufSize = m_buf.size();
     if (bufSize == 0) return;
 
-    float brakeFactor = 0.999f - braking * 0.019f;
+    float brakeFactor = 0.98f - braking * 0.05f;  // Stronger decay
 
     if (c > 0)
         m_buf[m_writePtr] = b[0][s];
 
     float readSpeed = 1.0f;
     if (braking > 0.01f)
-        readSpeed = m_readHead * brakeFactor + 0.001f;
+    {
+        // Clamp readSpeed to prevent runaway exponential growth
+        float speed = m_readHead * brakeFactor + 0.001f;
+        readSpeed = std::fmin(speed, static_cast<float>(bufSize) * 0.1f);
+    }
 
     size_t readIdx;
     if (readSpeed >= 0)

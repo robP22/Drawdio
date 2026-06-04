@@ -40,7 +40,8 @@ void WavefolderEffect::processSample(float** b, int c, int s, float effectParam)
     {
         float x = b[ch][s];
         float folded = std::sin(x * d * 3.14159265f);
-        float norm = 1.0f + d * 0.3f;
+        // Ensure normalization always > 1.0 to prevent gain > 1.0
+        float norm = 1.0f + d * 0.1f;  // Conservative: always attenuates
         b[ch][s] = folded / norm;
     }
 }
