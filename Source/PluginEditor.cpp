@@ -126,17 +126,14 @@ void ColorPalette::paint(juce::Graphics& g)
 
 void ColorPalette::resized()
 {
-    auto area = getLocalBounds().toFloat();
-    // Make blobs 40% larger, perfectly circular
-    const auto blobSize = juce::jmin(52.0f * 1.4f, area.getHeight() - 4.0f);
+    auto area = getLocalBounds().withTrimmedTop(20).withTrimmedBottom(20);
+    const auto blobSize = juce::jmin(area.getHeight() - 10.0f, 72.0f);
     
-    // Move blobs left 30px and up 5px
-    const float blobY = area.getCentreY() - blobSize / 2.0f - 5.0f;
-
-    // 5 blobs with 6px spacing
-    const float spacing = 6.0f;
+    // 5 blobs with 8px spacing, centered
+    const float spacing = 8.0f;
     const float totalWidth = blobSize * 5.0f + spacing * 4.0f;
-    float startX = area.getCentreX() - totalWidth / 2.0f - 30.0f;
+    float startX = area.getCentreX() - totalWidth / 2.0f;
+    float blobY = area.getCentreY() - blobSize / 2.0f;
 
     for (int i = 0; i < static_cast<int>(m_blobs.size()); ++i)
     {
@@ -223,16 +220,11 @@ void CanvasTools::paint(juce::Graphics&)
 
 void CanvasTools::resized()
 {
-    auto area = getLocalBounds().reduced(10, 8);
-    // Stack buttons vertically with 5px gap, align centerline with blob y-axis
-    const auto buttonH = 16;  // Larger buttons
+    auto area = getLocalBounds().withTrimmedTop(20).withTrimmedBottom(20);
+    const auto buttonH = 16;
     const auto gap = 5;
     const auto totalH = buttonH * 2 + gap;
-    // Align button stack centerline with blob center (blobY = area.centreY - blobSize/2 - 5)
-    const auto blobSize = 52.0f * 1.4f;
-    const auto blobCentreY = area.getCentreY() - blobSize / 2.0f - 5.0f;
-    const auto startY = static_cast<int>(blobCentreY - totalH / 2.0f);
-    auto buttonArea = area.withTrimmedTop(startY).withHeight(totalH);
+    auto buttonArea = area.withSizeKeepingCentre(area.getWidth() - 20, static_cast<float>(totalH));
     m_undoButton.setBounds(buttonArea.removeFromTop(buttonH));
     buttonArea.removeFromTop(gap);
     m_clearButton.setBounds(buttonArea.removeFromTop(buttonH));
