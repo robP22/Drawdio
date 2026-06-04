@@ -62,11 +62,9 @@ void ResourceManager::loadProceduralTextures()
     m_images[static_cast<size_t>(ImageId::WorkspaceWood)] =
         decodeImageFromBinaryData(BinaryData::wood_texture_generic_png, BinaryData::wood_texture_generic_pngSize);
     m_images[static_cast<size_t>(ImageId::PedalboardSprite)] =
-        decodeImageFromBinaryData(BinaryData::pedalboard_sprite_png, BinaryData::pedalboard_sprite_pngSize);
-    m_images[static_cast<size_t>(ImageId::PalettePaint)] =
-        decodeImageFromBinaryData(BinaryData::palette_body_png, BinaryData::palette_body_pngSize);
+        decodeImageFromBinaryData(BinaryData::pedalboard_final_png, BinaryData::pedalboard_final_pngSize);
     m_images[static_cast<size_t>(ImageId::ColorPaletteBody)] =
-        decodeImageFromBinaryData(BinaryData::colorpalettebody_png, BinaryData::colorpalettebody_pngSize);
+        decodeImageFromBinaryData(BinaryData::colorpalette_final_png, BinaryData::colorpalette_final_pngSize);
 }
 
 juce::Image ResourceManager::decodeImageFromBinaryData(const void* data, size_t sizeInBytes)

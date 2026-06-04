@@ -12,7 +12,6 @@ public:
     {
         WorkspaceWood = 0,
         PedalboardSprite,
-        PalettePaint,
         ColorPaletteBody,
         PedalFaceGrain,
         OverlayGloss,
@@ -23,7 +22,6 @@ public:
     {
         WorkspaceWood = static_cast<size_t>(ImageId::WorkspaceWood),
         PedalboardSprite = static_cast<size_t>(ImageId::PedalboardSprite),
-        PalettePaint = static_cast<size_t>(ImageId::PalettePaint),
         ColorPaletteBody = static_cast<size_t>(ImageId::ColorPaletteBody),
         PedalFaceGrain = static_cast<size_t>(ImageId::PedalFaceGrain),
         OverlayGloss = static_cast<size_t>(ImageId::OverlayGloss)

@@ -359,8 +359,8 @@ void DrawdioProcessorEditor::resized()
 
     // Wood grain fills entire window as bottom layer
     m_woodGrainBackground.setBounds(bounds);
-    // Pedalboard sprite on top, transparent edges show wood grain through
-    m_pedalboardBackground.setBounds(bounds);
+    // Pedalboard sprite on right side only (~55-65% of window), alpha=0 shows wood grain through
+    m_pedalboardBackground.setBounds(pedalArea);
 
     m_canvasModule.setBounds(content);
     m_pedalboardGrid.setBounds(pedalArea);
