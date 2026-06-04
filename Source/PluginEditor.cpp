@@ -223,7 +223,7 @@ void CanvasTools::paint(juce::Graphics&)
 
 void CanvasTools::resized()
 {
-    auto area = getLocalBounds().reduced(10, 8).translated(-40, 15);
+    auto area = getLocalBounds().reduced(10, 8);
     // Stack buttons vertically with 5px gap, align centerline with blob y-axis
     const auto buttonH = 16;  // Larger buttons
     const auto gap = 5;
