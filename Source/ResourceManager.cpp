@@ -1,5 +1,5 @@
 #include "ResourceManager.h"
-#include "BinaryData.h"
+#include "JuceBinaryData.h"
 
 #include <utility>
 
