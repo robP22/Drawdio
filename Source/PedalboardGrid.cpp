@@ -30,6 +30,10 @@ PedalboardGrid::PedalboardGrid(DrawdioProcessor& processor,
 
 void PedalboardGrid::paint(juce::Graphics& g)
 {
+    // DEBUG: Draw border
+    g.setColour(juce::Colours::cyan.withAlpha(0.5f));
+    g.drawRect(getLocalBounds(), 2);
+
     // Keep bezier cables only
     drawRoutingCables(g);
     drawActiveDraggingCable(g);

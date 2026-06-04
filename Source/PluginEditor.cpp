@@ -101,6 +101,10 @@ void ColorPalette::paint(juce::Graphics& g)
                    0, 0, bodyTexture.getWidth(), bodyTexture.getHeight());
     }
 
+    // DEBUG: Draw colored border
+    g.setColour(juce::Colours::red.withAlpha(0.5f));
+    g.drawRect(getLocalBounds(), 2);
+
     // Draw blob shadows, colors, selection on top
     for (int i = 0; i < static_cast<int>(m_blobs.size()); ++i)
     {
@@ -281,9 +285,11 @@ CanvasModule::CanvasModule(const ResourceManager& resources, const ThemeManager&
     m_pixelCanvas.setCurrentColor(PixelCanvasComponent::PixelColor::Red);
 }
 
-void CanvasModule::paint(juce::Graphics&)
+void CanvasModule::paint(juce::Graphics& g)
 {
-    // EMPTY - no custom rendering
+    // DEBUG: Draw border
+    g.setColour(juce::Colours::yellow.withAlpha(0.5f));
+    g.drawRect(getLocalBounds(), 2);
 }
 
 void CanvasModule::resized()
@@ -358,6 +364,22 @@ DrawdioProcessorEditor::~DrawdioProcessorEditor()
 void DrawdioProcessorEditor::paint(juce::Graphics& g)
 {
     g.fillAll(m_theme.editorBackground());
+
+    // DEBUG: Draw grid lines across window
+    g.setColour(juce::Colours::white.withAlpha(0.2f));
+    auto bounds = getLocalBounds();
+    for (int x = 0; x < bounds.getWidth(); x += 50)
+    {
+        g.drawLine(static_cast<float>(x), 0, static_cast<float>(x), static_cast<float>(bounds.getHeight()));
+    }
+    for (int y = 0; y < bounds.getHeight(); y += 50)
+    {
+        g.drawLine(0, static_cast<float>(y), static_cast<float>(bounds.getWidth()), static_cast<float>(y));
+    }
+
+    // DEBUG: Draw main border
+    g.setColour(juce::Colours::green.withAlpha(0.5f));
+    g.drawRect(bounds, 2);
 }
 
 void DrawdioProcessorEditor::resized()
