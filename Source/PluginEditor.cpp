@@ -50,7 +50,7 @@ PedalboardBackground::PedalboardBackground(const ResourceManager& resources, con
 void PedalboardBackground::paint(juce::Graphics& g)
 {
     auto bounds = getLocalBounds().toFloat();
-    const auto& texture = m_resources.getTexture(ResourceManager::TextureId::PedalboardFelt);
+    const auto& texture = m_resources.getTexture(ResourceManager::TextureId::PedalboardSprite);
     if (texture.isValid())
     {
         g.drawImage(texture, bounds.getX(), bounds.getY(),
@@ -359,10 +359,13 @@ void DrawdioProcessorEditor::resized()
     auto pedalArea = content.removeFromRight(pedalW);
     content.removeFromRight(gap);
 
-    // Set bounds for background layers - wood grain only covers canvas area (left side)
+    // Canvas and palette share content's width via CanvasModule
+    // Pedalboard has same height as full container (canvas + palette)
+
+    // Set bounds for background layers
     m_woodGrainBackground.setBounds(content);
-    // Right half: pedalboard background for pedal area
-    m_pedalboardBackground.setBounds(pedalArea);
+    // Pedalboard spans full height of container
+    m_pedalboardBackground.setBounds(bounds.getX(), bounds.getY(), bounds.getWidth(), bounds.getHeight());
 
     m_canvasModule.setBounds(content);
     m_pedalboardGrid.setBounds(pedalArea);

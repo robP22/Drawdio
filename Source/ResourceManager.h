@@ -11,7 +11,7 @@ public:
     enum class ImageId : size_t
     {
         WorkspaceWood = 0,
-        PedalboardFelt,
+        PedalboardSprite,
         PalettePaint,
         ColorPaletteBody,
         PedalFaceGrain,
@@ -22,7 +22,7 @@ public:
     enum class TextureId : size_t
     {
         WorkspaceWood = static_cast<size_t>(ImageId::WorkspaceWood),
-        PedalboardFelt = static_cast<size_t>(ImageId::PedalboardFelt),
+        PedalboardSprite = static_cast<size_t>(ImageId::PedalboardSprite),
         PalettePaint = static_cast<size_t>(ImageId::PalettePaint),
         ColorPaletteBody = static_cast<size_t>(ImageId::ColorPaletteBody),
         PedalFaceGrain = static_cast<size_t>(ImageId::PedalFaceGrain),

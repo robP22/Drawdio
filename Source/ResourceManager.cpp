@@ -61,8 +61,8 @@ void ResourceManager::loadProceduralTextures()
     // Load REAL sprite images from binary data
     m_images[static_cast<size_t>(ImageId::WorkspaceWood)] =
         decodeImageFromBinaryData(BinaryData::wood_texture_generic_png, BinaryData::wood_texture_generic_pngSize);
-    m_images[static_cast<size_t>(ImageId::PedalboardFelt)] =
-        decodeImageFromBinaryData(BinaryData::pedalboard_bg_png, BinaryData::pedalboard_bg_pngSize);
+    m_images[static_cast<size_t>(ImageId::PedalboardSprite)] =
+        decodeImageFromBinaryData(BinaryData::pedalboard_sprite_png, BinaryData::pedalboard_sprite_pngSize);
     m_images[static_cast<size_t>(ImageId::PalettePaint)] =
         decodeImageFromBinaryData(BinaryData::palette_body_png, BinaryData::palette_body_pngSize);
     m_images[static_cast<size_t>(ImageId::ColorPaletteBody)] =
