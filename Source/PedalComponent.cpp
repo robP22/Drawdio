@@ -84,44 +84,10 @@ PedalComponent::PedalComponent(DrawdioProcessor& processor,
       m_currentType(initialType),
       m_skin(skin)
 {
-    for (auto& knob : m_knobs)
-        initKnob(knob);
 }
 
 PedalComponent::~PedalComponent()
 {
-    for (auto& knob : m_knobs)
-        knob.setLookAndFeel(nullptr);
-}
-
-void PedalComponent::initKnob(juce::Slider& knob)
-{
-    addAndMakeVisible(knob);
-    knob.setSliderStyle(juce::Slider::RotaryVerticalDrag);
-    knob.setRotaryParameters(juce::MathConstants<float>::pi * 1.18f,
-                             juce::MathConstants<float>::pi * 2.82f,
-                             true);
-    knob.setRange(0.0, 1.0, 0.01);
-    knob.setDoubleClickReturnValue(true, 0.5);
-    knob.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
-
-    knob.onValueChange = [this, &knob]()
-    {
-        int knobIdx = -1;
-        for (int i = 0; i < 4; ++i)
-        {
-            if (&m_knobs[i] == &knob)
-            {
-                knobIdx = i;
-                break;
-            }
-        }
-
-        if (knobIdx >= 0)
-            audioProcessor.getDSPProcessor().updateParameter(m_slotIndex,
-                                                             knobIdx,
-                                                             static_cast<float>(knob.getValue()));
-    };
 }
 
 void PedalComponent::paint(juce::Graphics& g)
@@ -136,21 +102,6 @@ void PedalComponent::paint(juce::Graphics& g)
                      labelTop.toNearestInt(),
                      juce::Justification::centred,
                      1);
-
-    // Knob labels - rendered near each knob
-    g.setFont(juce::FontOptions(8.0f, juce::Font::bold));
-    for (int i = 0; i < 4; ++i)
-    {
-        auto kb = m_knobs[i].getBounds();
-        g.setColour(juce::Colours::black.withAlpha(0.46f));
-        g.drawText(knobLabel(m_currentType, i),
-                   kb.getX(), kb.getY() - 12, kb.getWidth(), 10,
-                   juce::Justification::centred);
-        g.setColour(juce::Colours::white.withAlpha(0.68f));
-        g.drawText(knobLabel(m_currentType, i),
-                   kb.getX(), kb.getY() - 13, kb.getWidth(), 10,
-                   juce::Justification::centred);
-    }
 }
 
 void PedalComponent::setSkin(PedalSkinManager::PedalSkin skin)
@@ -164,24 +115,7 @@ void PedalComponent::setSkin(PedalSkinManager::PedalSkin skin)
 
 void PedalComponent::resized()
 {
-    auto bounds = getLocalBounds().reduced(16, 34);
-    bounds.removeFromTop(32);
-    bounds.removeFromBottom(static_cast<int>(getHeight() * 0.30f));
-
-    auto knobArea = bounds.reduced(2, 0);
-    const int halfW = knobArea.getWidth() / 2;
-    const int halfH = knobArea.getHeight() / 2;
-
-    for (int i = 0; i < 4; ++i)
-    {
-        const int row = i / 2;
-        const int col = i % 2;
-        auto kb = juce::Rectangle<int>(knobArea.getX() + col * halfW,
-                                       knobArea.getY() + row * halfH,
-                                       halfW,
-                                       halfH).reduced(6, 8);
-        m_knobs[i].setBounds(kb);
-    }
+    // No rotary knob sliders - sprite-based knobs will be rendered later
 }
 
 void PedalComponent::mouseDown(const juce::MouseEvent& event)
@@ -238,8 +172,8 @@ void PedalComponent::syncFromProcessor()
 
 void PedalComponent::setKnobValue(int knobIdx, float value)
 {
-    if (knobIdx >= 0 && knobIdx < 4)
-        m_knobs[knobIdx].setValue(value, juce::dontSendNotification);
+    // Knob values handled by sprite-based knobs (to be implemented)
+    juce::ignoreUnused(knobIdx, value);
 }
 
 juce::Point<float> PedalComponent::getInputJackPos() const

@@ -351,7 +351,7 @@ void DrawdioProcessorEditor::paint(juce::Graphics& g)
 
 void DrawdioProcessorEditor::resized()
 {
-    auto bounds = getLocalBounds().reduced(18, 16);
+    auto bounds = getLocalBounds();
 
     auto content = bounds;
     const auto gap = 0;
@@ -360,10 +360,9 @@ void DrawdioProcessorEditor::resized()
     auto pedalArea = content.removeFromRight(pedalW);
     content.removeFromRight(gap);
 
-    // Set bounds for split background layers
-    // Left half: wood grain for canvas area
-    m_woodGrainBackground.setBounds(content);
-    // Right half: pedalboard background for pedal area
+    // Set bounds for background layers - wood grain covers full window
+    m_woodGrainBackground.setBounds(bounds);
+    // Right half: pedalboard background for pedal area (transparent)
     m_pedalboardBackground.setBounds(pedalArea);
 
     m_canvasModule.setBounds(content);

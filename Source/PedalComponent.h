@@ -36,7 +36,6 @@ public:
 
 private:
     void showTypePopup();
-    void initKnob(juce::Slider& knob);
     void updateDefinition();
 
     DrawdioProcessor& audioProcessor;
@@ -46,6 +45,4 @@ private:
     DspModuleType m_currentType;
     const PedalDefinition* m_definition = nullptr;
     PedalSkinManager::PedalSkin m_skin;
-
-    juce::Slider m_knobs[4];
 };
