@@ -103,7 +103,11 @@ bool StateSerializer::deserialize(const uint8_t* data, size_t sizeInBytes, Seria
     {
         uint8_t slot = data[routingOffset + i];
         if (slot < PedalSlotCount)
+        {
+            // Valid slot index (0-5). Values >= PedalSlotCount are 0xFF (no routing) - skip.
             outState.manualRouting.push_back(slot);
+        }
+        // If slot >= PedalSlotCount, it's 0xFF (no routing) - skip
     }
 
     return true;

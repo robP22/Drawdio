@@ -9,6 +9,12 @@ constexpr int GridSize = 128;
 constexpr int TotalCells = GridSize * GridSize;
 constexpr int PedalSlotCount = 6;
 
+// Memory safety limits for DSP delay buffers
+constexpr size_t MaxReverbDelayMs = 5000;   // 5 second max reverb delay
+constexpr double MaxGranularDurationSec = 10.0;  // 10 second max granular buffer
+constexpr size_t MaxSimpleDelaySec = 10;    // 10 second max simple delay
+constexpr size_t MaxRingBufferSec = 10;      // 10 second max ring buffer
+
 inline float colorWeight(uint8_t pixelVal)
 {
     switch (pixelVal)
@@ -171,13 +177,15 @@ inline void prepareReverbNetwork(ReverbNetworkState& state, double sampleRate,
 {
     for (int i = 0; i < 4; ++i)
     {
-        size_t len = static_cast<size_t>(sampleRate * config.combTimesMs[i] / 1000.0);
+        size_t clampedTimeMs = std::min(static_cast<size_t>(config.combTimesMs[i]), MaxReverbDelayMs);
+        size_t len = static_cast<size_t>(sampleRate * clampedTimeMs / 1000.0);
         state.combBuf[i].assign(len, 0.0f);
         state.combPtr[i] = 0;
     }
     for (int i = 0; i < 2; ++i)
     {
-        size_t len = static_cast<size_t>(sampleRate * config.apTimesMs[i] / 1000.0);
+        size_t clampedTimeMs = std::min(static_cast<size_t>(config.apTimesMs[i]), MaxReverbDelayMs);
+        size_t len = static_cast<size_t>(sampleRate * clampedTimeMs / 1000.0);
         state.apBuf[i].assign(len, 0.0f);
         state.apPtr[i] = 0;
     }
@@ -263,7 +271,8 @@ struct GranularProcessorState
 inline void prepareGranularProcessor(GranularProcessorState& state,
                                       double sampleRate, double durationSec)
 {
-    size_t size = static_cast<size_t>(sampleRate * durationSec);
+    double safeDuration = std::min(durationSec, MaxGranularDurationSec);
+    size_t size = static_cast<size_t>(sampleRate * safeDuration);
     state.delayBuf.assign(size, 0.0f);
     state.writePtr = 0;
     state.readPtr = 0.0f;
@@ -321,7 +330,8 @@ struct SimpleDelayState
 
 inline void prepareSimpleDelay(SimpleDelayState& state, double sampleRate, double durationSec)
 {
-    size_t size = static_cast<size_t>(sampleRate * durationSec);
+    double safeDuration = std::min(durationSec, static_cast<double>(MaxSimpleDelaySec));
+    size_t size = static_cast<size_t>(sampleRate * safeDuration);
     state.buf.assign(size, 0.0f);
     state.writePtr = 0;
 }
@@ -342,7 +352,8 @@ struct RingBufferState
 
 inline void prepareRingBuffer(RingBufferState& state, double sampleRate, double durationSec)
 {
-    size_t size = static_cast<size_t>(sampleRate * durationSec);
+    double safeDuration = std::min(durationSec, static_cast<double>(MaxRingBufferSec));
+    size_t size = static_cast<size_t>(sampleRate * safeDuration);
     state.buf.assign(size, 0.0f);
     state.writePtr = 0;
     state.readHead = 0.0f;

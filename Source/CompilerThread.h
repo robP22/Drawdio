@@ -45,6 +45,9 @@ private:
 
     mutable std::mutex m_configMutex;
 
+    // Atomic slot count for lock-free validation
+    std::atomic<size_t> m_slotCount{0};
+
     std::mutex m_cvMutex;
     std::condition_variable m_cv;
 };

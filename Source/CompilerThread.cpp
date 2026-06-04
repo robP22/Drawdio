@@ -40,6 +40,7 @@ void CompilerThread::setPedalSlots(const std::vector<DspModuleType>& slots)
 {
     std::lock_guard<std::mutex> lock(m_configMutex);
     m_pedalSlots = slots;
+    m_slotCount.store(slots.size(), std::memory_order_relaxed);
 }
 
 void CompilerThread::setManualRouting(const std::vector<uint8_t>& routing)

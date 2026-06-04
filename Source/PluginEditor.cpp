@@ -50,12 +50,13 @@ PedalboardBackground::PedalboardBackground(const ResourceManager& resources, con
 void PedalboardBackground::paint(juce::Graphics& g)
 {
     auto bounds = getLocalBounds().toFloat();
-    const auto& pedalboardTexture = m_resources.getTexture(ResourceManager::TextureId::PedalboardFelt);
-    if (pedalboardTexture.isValid())
+    const auto& texture = m_resources.getTexture(ResourceManager::TextureId::PedalboardFelt);
+    if (texture.isValid())
     {
-        g.drawImage(pedalboardTexture, bounds.getX(), bounds.getY(),
-                   bounds.getWidth(), bounds.getHeight(),
-                   0, 0, pedalboardTexture.getWidth(), pedalboardTexture.getHeight());
+        const float cx = bounds.getX() + bounds.getWidth() * 0.5f;
+        const float cy = bounds.getY() + bounds.getHeight() * 0.5f;
+        g.drawImageTransformed(texture, bounds,
+            juce::AffineTransform::rotation(juce::MathConstants<float>::halfPi, cx, cy));
     }
 }
 
@@ -74,6 +75,15 @@ ColorPalette::ColorPalette(const ResourceManager& resources, const ThemeManager&
 
 void ColorPalette::paint(juce::Graphics& g)
 {
+    auto bounds = getLocalBounds().toFloat();
+    const auto& paletteTexture = m_resources.getTexture(ResourceManager::TextureId::PalettePaint);
+    if (paletteTexture.isValid())
+    {
+        g.drawImage(paletteTexture, bounds.getX(), bounds.getY(),
+                   bounds.getWidth(), bounds.getHeight(),
+                   0, 0, paletteTexture.getWidth(), paletteTexture.getHeight());
+    }
+
     for (int i = 0; i < static_cast<int>(m_blobs.size()); ++i)
     {
         const auto& blob = m_blobs[static_cast<size_t>(i)];
@@ -342,7 +352,7 @@ void DrawdioProcessorEditor::resized()
 
     auto content = bounds.reduced(18, 16);
     const auto gap = 18;
-    const auto pedalW = juce::jlimit(560, 620, content.getWidth() - 760);
+    const auto pedalW = juce::jlimit(560, 620, content.getWidth() - 760) - 50;
     auto pedalArea = content.removeFromRight(pedalW);
     content.removeFromRight(gap);
 
