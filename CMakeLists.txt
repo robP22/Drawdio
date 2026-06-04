@@ -16,9 +16,6 @@ if(EXISTS "${ASSETS_DIR}")
     endforeach()
 endif()
 
-# Create binary data for assets
-juce_add_binary_data(DrawdioAssets SOURCES ${ASSET_FILES})
-
 include(FetchContent)
 FetchContent_Declare(JUCE
     GIT_REPOSITORY https://github.com/juce-framework/JUCE.git
@@ -26,6 +23,9 @@ FetchContent_Declare(JUCE
     GIT_SHALLOW    TRUE
 )
 FetchContent_MakeAvailable(JUCE)
+
+# Create binary data for assets (after JUCE is loaded)
+juce_add_binary_data(DrawdioAssets SOURCES ${ASSET_FILES})
 
 juce_add_plugin(Drawdio
     PRODUCT_NAME              "Drawdio"
