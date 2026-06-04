@@ -28,11 +28,9 @@ PedalboardGrid::PedalboardGrid(DrawdioProcessor& processor,
     }
 }
 
-void PedalboardGrid::paint(juce::Graphics& g)
+void PedalboardGrid::paint(juce::Graphics&)
 {
-    // Draw routing cables (top layer)
-    drawRoutingCables(g);
-    drawActiveDraggingCable(g);
+    // EMPTY - no custom rendering
 }
 
 void PedalboardGrid::resized()

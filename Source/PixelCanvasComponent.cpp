@@ -38,15 +38,9 @@ juce::Colour PixelCanvasComponent::colourForPixel(PixelColor color)
     return ThemeManager::getDefault().canvasPixelColour(static_cast<uint8_t>(color));
 }
 
-void PixelCanvasComponent::paint(juce::Graphics& g)
+void PixelCanvasComponent::paint(juce::Graphics&)
 {
-    auto bounds = getLocalBounds().toFloat();
-    g.setColour(m_theme.canvasSurface());
-    g.fillRoundedRectangle(bounds, 4.0f);
-
-    g.setImageResamplingQuality(juce::Graphics::lowResamplingQuality);
-    g.drawImage(m_pixelImage, bounds);
-    g.setImageResamplingQuality(juce::Graphics::mediumResamplingQuality);
+    // EMPTY - no custom rendering
 }
 
 juce::Point<int> PixelCanvasComponent::gridCoordsFromUI(int uiX, int uiY) const
