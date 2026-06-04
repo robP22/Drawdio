@@ -130,6 +130,9 @@ void ColorPalette::resized()
     const auto slotW = area.getWidth() / static_cast<float>(m_blobs.size());
     const auto blobSize = juce::jmin(52.0f, area.getHeight() - 4.0f);
 
+    // Calculate base y position (aligned for all blobs)
+    const float baseY = area.getCentreY() - (blobSize * 0.78f) / 2.0f + 7.0f;
+
     for (int i = 0; i < static_cast<int>(m_blobs.size()); ++i)
     {
         auto slot = juce::Rectangle<float>(area.getX() + static_cast<float>(i) * slotW,
@@ -137,9 +140,11 @@ void ColorPalette::resized()
                                            slotW,
                                            area.getHeight());
         auto bounds = slot.withSizeKeepingCentre(blobSize, blobSize * 0.78f);
-        // Shift red blob up 15px and right 10px
+        // Align all blobs to same y-axis
+        bounds = bounds.withY(baseY);
+        // Red blob shifted right 3px
         if (i == 0)
-            bounds = bounds.translated(10.0f, -15.0f);
+            bounds = bounds.translated(3.0f, 0.0f);
         m_blobs[static_cast<size_t>(i)].bounds = bounds;
     }
 }
