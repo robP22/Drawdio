@@ -196,19 +196,29 @@ void PedalComponent::paint(juce::Graphics& g)
     if (bounds.isEmpty())
         return;
 
-    // Draw pedal base sprite as background
-    if (m_resources.getTexture(ResourceManager::TextureId::PedalBase).isValid())
-        RenderUtils::drawImageScaled(g, m_resources.getTexture(ResourceManager::TextureId::PedalBase), bounds);
+    // Draw pedal body sprite as background
+    const auto& frame = m_resources.getSpriteFrame(ResourceManager::SpriteId::PedalBody);
+    const auto& sheet = m_resources.getSpriteSheet(frame.sheetId);
+    if (sheet.image.isValid())
+    {
+        g.drawImage(sheet.image,
+                   static_cast<int>(bounds.getX()),
+                   static_cast<int>(bounds.getY()),
+                   static_cast<int>(bounds.getWidth()),
+                   static_cast<int>(bounds.getHeight()),
+                   frame.source.getX(),
+                   frame.source.getY(),
+                   frame.source.getWidth(),
+                   frame.source.getHeight());
+    }
 
-    // Draw sprite sheet for LED (top center area)
-    // The sprite sheet contains LED state in the top area
-    // For now, draw a simple LED indicator
-    auto led = bounds.reduced(bounds.getWidth() * 0.45f, bounds.getHeight() * 0.04f)
-                   .withTrimmedBottom(bounds.getHeight() * 0.88f)
-                   .withTrimmedTop(bounds.getHeight() * 0.04f);
+    // Draw LED indicator (top center area)
+    auto ledArea = bounds.reduced(bounds.getWidth() * 0.45f, bounds.getHeight() * 0.04f)
+                      .withTrimmedBottom(bounds.getHeight() * 0.88f)
+                      .withTrimmedTop(bounds.getHeight() * 0.04f);
     const bool active = m_currentType != DspModuleType::BYPASS;
     g.setColour(active ? juce::Colour(0xFF50F07E) : juce::Colour(0xFF344039));
-    g.fillEllipse(led.withSizeKeepingCentre(12.0f, 12.0f));
+    g.fillEllipse(ledArea.withSizeKeepingCentre(12.0f, 12.0f));
 
     // Pedal name/type text where 'LCD screen' area is on sprite
     auto labelTop = bounds.reduced(bounds.getWidth() * 0.08f, bounds.getHeight() * 0.06f);
