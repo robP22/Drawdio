@@ -43,11 +43,13 @@ void PedalboardGrid::resized()
 {
     auto bounds = getLocalBounds();
 
-    // Simple 2x3 grid layout for pedal slots - no decorative padding
+    // Simple 2x3 grid layout for pedal slots - with internal top padding
     const int rowCount = 2;
     const int colCount = 3;
+    const int internalPadding = 50;  // Padding from top for first row
     const int colW = bounds.getWidth() / colCount;
-    const int rowH = bounds.getHeight() / rowCount - 60;
+    const int availableH = bounds.getHeight() - internalPadding;
+    const int rowH = availableH / rowCount;
     const int pedalW = juce::jlimit(180, 220, colW - 16);
     const int pedalH = juce::jlimit(240, 280, rowH - 16);
 
@@ -55,7 +57,7 @@ void PedalboardGrid::resized()
     {
         const int row = slot / colCount;
         const int col = slot % colCount;
-        auto slotBounds = juce::Rectangle<int>(col * colW, row * rowH, colW, rowH);
+        auto slotBounds = juce::Rectangle<int>(col * colW, internalPadding + row * rowH, colW, rowH);
         auto pedalBounds = slotBounds.withSizeKeepingCentre(pedalW, pedalH);
         m_pedalComponents[static_cast<size_t>(slot)]->setBounds(pedalBounds);
     }

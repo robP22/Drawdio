@@ -26,7 +26,8 @@ constexpr int BlobCount = 5;
 constexpr float BlobSpacing = 8.0f;
 constexpr float BlobMaxSize = 72.0f;
 constexpr float BlobPadding = 20.0f;
-constexpr int ButtonHeight = 16;
+constexpr int ButtonWidth = 20;
+constexpr int ButtonHeight = 14;
 constexpr int ButtonSpacing = 5;
 constexpr int ButtonAreaHeight = 80;
 }
@@ -163,13 +164,15 @@ void ColorPalette::resized()
         m_blobs[static_cast<size_t>(i)].bounds = slot;
     }
 
-    // Position buttons on right side of palette, below blobs area
+    // Position buttons on right side of palette, vertically centered
     auto buttonsArea = area.withTrimmedLeft(10).withTrimmedRight(10);
     const auto totalH = static_cast<float>(ButtonHeight * 2 + ButtonSpacing);
-    auto buttonBounds = buttonsArea.withSizeKeepingCentre(buttonsArea.getWidth(), totalH);
-    m_undoButton.setBounds(buttonBounds.removeFromTop(ButtonHeight).toType<int>());
-    buttonBounds.removeFromTop(ButtonSpacing);
-    m_clearButton.setBounds(buttonBounds.removeFromTop(ButtonHeight).toType<int>());
+    auto buttonBounds = buttonsArea.withSizeKeepingCentre(ButtonWidth, totalH);
+    // Right-align buttons in the buttonsArea
+    int rightX = buttonsArea.getRight() - ButtonWidth;
+    int buttonY = buttonsArea.getCentreY() - static_cast<int>(totalH) / 2;
+    m_undoButton.setBounds(rightX, buttonY, ButtonWidth, ButtonHeight);
+    m_clearButton.setBounds(rightX, buttonY + ButtonHeight + ButtonSpacing, ButtonWidth, ButtonHeight);
 }
 
 void ColorPalette::mouseDown(const juce::MouseEvent& event)
@@ -416,9 +419,9 @@ void DrawdioProcessorEditor::resized()
     const auto pedalW = juce::jlimit(680, 780, content.getWidth() - 400) - 40;
     auto pedalArea = content.removeFromRight(pedalW);
 
-    // Pedalboard grid with internal padding (top and bottom)
-    auto gridArea = pedalArea.withTrimmedTop(30).withTrimmedBottom(30)
-                        .withSizeKeepingCentre(pedalArea.getWidth() - 60, pedalArea.getHeight() - 40);
+    // Pedalboard grid (internal padding in PedalboardGrid::resized)
+    auto gridArea = pedalArea.withTrimmedBottom(30)
+                        .withSizeKeepingCentre(pedalArea.getWidth() - 60, pedalArea.getHeight() - 20);
 
     // Wood grain fills entire window as bottom layer
     m_woodGrainBackground.setBounds(bounds);
