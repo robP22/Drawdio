@@ -186,11 +186,11 @@ void ColorPalette::paint(juce::Graphics& g)
 
 void ColorPalette::resized()
 {
-    auto area = getLocalBounds().reduced(
-        Layout::PaletteLeftMargin,
-        Layout::PaletteRightMargin,
-        Layout::PaletteTopMargin,
-        Layout::PaletteBottomMargin);
+    auto area = getLocalBounds()
+        .removeFromLeft(Layout::PaletteLeftMargin)
+        .removeFromRight(Layout::PaletteRightMargin)
+        .removeFromTop(Layout::PaletteTopMargin)
+        .removeFromBottom(Layout::PaletteBottomMargin);
 
     const auto blobSize = juce::jmin(area.getHeight() - 10.0f, BlobMaxSize);
     const float totalWidth = blobSize * BlobCount + BlobSpacing * (BlobCount - 1);
