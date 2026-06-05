@@ -147,13 +147,12 @@ void ColorPalette::paint(juce::Graphics& g)
 void ColorPalette::resized()
 {
     auto area = getLocalBounds();
-    auto blobsArea = area.withTrimmedTop(BlobPadding).withTrimmedBottom(BlobPadding);
 
-    // Position blobs using constants, shifted left by 10px
-    const auto blobSize = juce::jmin(blobsArea.getHeight() - 10.0f, BlobMaxSize);
+    // Position blobs using constants, shifted left by 10px (no internal padding)
+    const auto blobSize = juce::jmin(area.getHeight() - 10.0f, BlobMaxSize);
     const float totalWidth = blobSize * BlobCount + BlobSpacing * (BlobCount - 1);
-    float startX = blobsArea.getCentreX() - totalWidth / 2.0f - 10.0f;
-    float blobY = blobsArea.getCentreY() - blobSize / 2.0f;
+    float startX = area.getCentreX() - totalWidth / 2.0f - 10.0f;
+    float blobY = area.getCentreY() - blobSize / 2.0f;
 
     for (int i = 0; i < static_cast<int>(m_blobs.size()); ++i)
     {
@@ -317,9 +316,10 @@ void CanvasModule::paint(juce::Graphics& g)
 void CanvasModule::resized()
 {
     auto area = getLocalBounds().reduced(22, 20);
-    // Move bottom section down by 85px
-    auto bottom = juce::Rectangle<int>(area.getX(), area.getBottom() - 394, area.getWidth(), 380);
-    auto canvasArea = area.withHeight(area.getHeight() - 394).reduced(8);
+    // Reduced palette height from 380 to 300
+    const int paletteHeight = 300;
+    auto bottom = juce::Rectangle<int>(area.getX(), area.getBottom() - paletteHeight, area.getWidth(), paletteHeight);
+    auto canvasArea = area.withHeight(area.getHeight() - paletteHeight).reduced(8);
 
     const auto square = juce::jmin(canvasArea.getWidth(), canvasArea.getHeight()) + 140;
     auto centeredCanvas = canvasArea.withSizeKeepingCentre(square, square);
