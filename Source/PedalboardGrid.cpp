@@ -46,7 +46,7 @@ void PedalboardGrid::resized()
     // Simple 2x3 grid layout for pedal slots - with internal top padding
     const int rowCount = 2;
     const int colCount = 3;
-    const int internalPadding = 50;  // Padding from top for first row
+    const int internalPadding = 30;  // Padding from top for first row
     const int colW = bounds.getWidth() / colCount;
     const int availableH = bounds.getHeight() - internalPadding;
     const int rowH = availableH / rowCount;

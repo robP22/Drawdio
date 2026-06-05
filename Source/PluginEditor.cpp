@@ -149,10 +149,10 @@ void ColorPalette::resized()
     auto area = getLocalBounds();
     auto blobsArea = area.withTrimmedTop(BlobPadding).withTrimmedBottom(BlobPadding);
 
-    // Position blobs using constants
+    // Position blobs using constants, shifted left by 10px
     const auto blobSize = juce::jmin(blobsArea.getHeight() - 10.0f, BlobMaxSize);
     const float totalWidth = blobSize * BlobCount + BlobSpacing * (BlobCount - 1);
-    float startX = blobsArea.getCentreX() - totalWidth / 2.0f;
+    float startX = blobsArea.getCentreX() - totalWidth / 2.0f - 10.0f;
     float blobY = blobsArea.getCentreY() - blobSize / 2.0f;
 
     for (int i = 0; i < static_cast<int>(m_blobs.size()); ++i)
@@ -325,7 +325,7 @@ void CanvasModule::resized()
     auto canvasArea = area.withSizeKeepingCentre(square, square).translated(0, -5);
     m_pixelCanvas.setBounds(canvasArea.reduced(8));
 
-    // Position palette and tools side by side (tools 50px on right)
+    // Position palette and tools side by side (palette 50px wider)
     auto controls = bottom;
     auto toolsArea = controls.removeFromRight(50);
 
@@ -428,7 +428,7 @@ void DrawdioProcessorEditor::resized()
     // Pedalboard sprite on right side only
     m_pedalboardBackground.setBounds(pedalArea);
 
-    m_canvasModule.setBounds(content);
+    m_canvasModule.setBounds(content.withTrimmedRight(pedalW + 60));
     m_pedalboardGrid.setBounds(gridArea);
 }
 
