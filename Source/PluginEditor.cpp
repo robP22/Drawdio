@@ -81,6 +81,10 @@ ColorPalette::ColorPalette(const ResourceManager& resources, const ThemeManager&
           { PixelCanvasComponent::PixelColor::Black, {} }
       }}
 {
+    addAndMakeVisible(m_undoButton);
+    addAndMakeVisible(m_clearButton);
+    styleButton(m_undoButton, juce::Colour(0xFF4A90D9));
+    styleButton(m_clearButton, juce::Colour(0xFFE74C3C));
 }
 
 void ColorPalette::paint(juce::Graphics& g)
@@ -158,6 +162,14 @@ void ColorPalette::resized()
                                            blobSize);
         m_blobs[static_cast<size_t>(i)].bounds = slot;
     }
+
+    // Position buttons on right side of palette, below blobs area
+    auto buttonsArea = area.withTrimmedLeft(10).withTrimmedRight(10);
+    const auto totalH = static_cast<float>(ButtonHeight * 2 + ButtonSpacing);
+    auto buttonBounds = buttonsArea.withSizeKeepingCentre(buttonsArea.getWidth(), totalH);
+    m_undoButton.setBounds(buttonBounds.removeFromTop(ButtonHeight).toType<int>());
+    buttonBounds.removeFromTop(ButtonSpacing);
+    m_clearButton.setBounds(buttonBounds.removeFromTop(ButtonHeight).toType<int>());
 }
 
 void ColorPalette::mouseDown(const juce::MouseEvent& event)
@@ -277,12 +289,12 @@ CanvasModule::CanvasModule(const ResourceManager& resources, const ThemeManager&
         m_pixelCanvas.setCurrentColor(color);
     });
 
-    m_tools.setOnUndo([this]()
+    m_palette.setOnUndo([this]()
     {
         m_pixelCanvas.undo();
     });
 
-    m_tools.setOnClear([this]()
+    m_palette.setOnClear([this]()
     {
         if (m_onClear)
             m_onClear();
