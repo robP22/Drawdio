@@ -1,4 +1,5 @@
 #include "PedalboardGrid.h"
+#include "PluginEditor.h"
 #include "PluginProcessor.h"
 #include "RenderUtils.h"
 
@@ -41,26 +42,35 @@ void PedalboardGrid::paint(juce::Graphics& g)
 
 void PedalboardGrid::resized()
 {
-    auto bounds = getLocalBounds();
+    auto bounds = getLocalBounds().reduced(
+        GridLayout::GridSidePadding,
+        GridLayout::GridSidePadding,
+        GridLayout::GridSidePadding,
+        GridLayout::GridSidePadding);
 
-    // Simple 2x3 grid layout for pedal slots - with internal top padding
-    const int rowCount = 2;
-    const int colCount = 3;
-    const int internalPadding = 30;  // Padding from top for first row
-    const int colW = bounds.getWidth() / colCount;
-    const int availableH = bounds.getHeight() - internalPadding;
-    const int rowH = availableH / rowCount;
-    const int pedalW = juce::jlimit(180, 220, colW - 16);
-    const int pedalH = juce::jlimit(240, 280, rowH - 16);
+    const int colW = bounds.getWidth() / GridLayout::ColCount;
+    const int rowH = bounds.getHeight() / GridLayout::RowCount;
 
     for (int slot = 0; slot < PedalSlotCount; ++slot)
     {
-        const int row = slot / colCount;
-        const int col = slot % colCount;
-        // Constrain top boundary to stay within bounds
-        int slotY = internalPadding + row * rowH;
-        slotY = juce::jmax(0, slotY);
-        auto slotBounds = juce::Rectangle<int>(col * colW, slotY, colW, rowH);
+        const int row = slot / GridLayout::ColCount;
+        const int col = slot % GridLayout::ColCount;
+
+        auto slotBounds = juce::Rectangle<int>(
+            col * colW,
+            row * rowH,
+            colW,
+            rowH).reduced(GridLayout::GridSidePadding);
+
+        const int pedalW = juce::jlimit(
+            GridLayout::PedalWidthMin,
+            GridLayout::PedalWidthMax,
+            slotBounds.getWidth() - 16);
+        const int pedalH = juce::jlimit(
+            GridLayout::PedalHeightMin,
+            GridLayout::PedalHeightMax,
+            slotBounds.getHeight() - 16);
+
         auto pedalBounds = slotBounds.withSizeKeepingCentre(pedalW, pedalH);
         m_pedalComponents[static_cast<size_t>(slot)]->setBounds(pedalBounds);
     }

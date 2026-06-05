@@ -12,7 +12,7 @@ DspState::DspState()
 
 void DspState::setParameterValue(int slot, int paramIdx, float value)
 {
-    if (slot < 0 || slot >= MaxPedalSlots || paramIdx < 0 || paramIdx >= 4)
+    if (slot < 0 || slot >= PedalSlotCount || paramIdx < 0 || paramIdx >= 4)
         return;
 
     const int idx = slot * 4 + paramIdx;
@@ -21,7 +21,7 @@ void DspState::setParameterValue(int slot, int paramIdx, float value)
 
 float DspState::getParameterValue(int slot, int paramIdx) const
 {
-    if (slot < 0 || slot >= MaxPedalSlots || paramIdx < 0 || paramIdx >= 4)
+    if (slot < 0 || slot >= PedalSlotCount || paramIdx < 0 || paramIdx >= 4)
         return 0.5f;
 
     const int idx = slot * 4 + paramIdx;
@@ -67,14 +67,14 @@ void DspState::incrementRevision()
 
 void DspState::setPedalType(int slot, DspModuleType type)
 {
-    if (slot < 0 || slot >= MaxPedalSlots)
+    if (slot < 0 || slot >= PedalSlotCount)
         return;
     m_pedalSlots[static_cast<size_t>(slot)] = type;
 }
 
 DspModuleType DspState::getPedalType(int slot) const
 {
-    if (slot < 0 || slot >= MaxPedalSlots)
+    if (slot < 0 || slot >= PedalSlotCount)
         return DspModuleType::BYPASS;
     return m_pedalSlots[static_cast<size_t>(slot)];
 }
@@ -99,7 +99,7 @@ DspState::ParameterSnapshot DspState::getSnapshot() const
     for (int i = 0; i < MaxParameters; ++i)
         snap.values[static_cast<size_t>(i)] = m_parameters[static_cast<size_t>(i)].load(std::memory_order_acquire);
 
-    for (int i = 0; i < MaxPedalSlots; ++i)
+    for (int i = 0; i < PedalSlotCount; ++i)
         snap.pedalTypes[static_cast<size_t>(i)] = m_pedalSlots[static_cast<size_t>(i)];
 
     {
