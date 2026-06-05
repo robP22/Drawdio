@@ -165,12 +165,11 @@ void ColorPalette::resized()
     }
 
     // Position buttons on right side of palette, vertically centered
-    auto buttonsArea = area.withTrimmedLeft(10).withTrimmedRight(10);
-    const auto totalH = static_cast<float>(ButtonHeight * 2 + ButtonSpacing);
-    auto buttonBounds = buttonsArea.withSizeKeepingCentre(ButtonWidth, totalH);
-    // Right-align buttons in the buttonsArea
-    int rightX = buttonsArea.getRight() - ButtonWidth;
-    int buttonY = buttonsArea.getCentreY() - static_cast<int>(totalH) / 2;
+    const auto totalH = ButtonHeight * 2 + ButtonSpacing;
+    // Right-align buttons within palette bounds (with 10px padding from right edge)
+    int rightX = juce::jmin(area.getRight() - 10, area.getRight() - 10 - ButtonWidth + area.getWidth()) - ButtonWidth;
+    rightX = juce::jmax(rightX, area.getRight() - 10 - ButtonWidth);
+    int buttonY = area.getCentreY() - totalH / 2;
     m_undoButton.setBounds(rightX, buttonY, ButtonWidth, ButtonHeight);
     m_clearButton.setBounds(rightX, buttonY + ButtonHeight + ButtonSpacing, ButtonWidth, ButtonHeight);
 }
@@ -326,9 +325,11 @@ void CanvasModule::resized()
     auto centeredCanvas = canvasArea.withSizeKeepingCentre(square, square);
     m_pixelCanvas.setBounds(centeredCanvas.withY(canvasArea.getCentreY() - square / 2 - 5));
 
-    // Position palette and tools side by side (palette 50px wider)
+    // Position palette and tools side by side (palette 50px wider, tools 50px)
     auto controls = bottom;
     auto toolsArea = controls.removeFromRight(50);
+    // Extend palette to full width of controls area
+    controls = bottom;
 
     m_palette.setBounds(controls);
     m_tools.setBounds(toolsArea);

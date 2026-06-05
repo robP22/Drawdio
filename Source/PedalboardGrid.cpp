@@ -57,7 +57,10 @@ void PedalboardGrid::resized()
     {
         const int row = slot / colCount;
         const int col = slot % colCount;
-        auto slotBounds = juce::Rectangle<int>(col * colW, internalPadding + row * rowH, colW, rowH);
+        // Constrain top boundary to stay within bounds
+        int slotY = internalPadding + row * rowH;
+        slotY = juce::jmax(0, slotY);
+        auto slotBounds = juce::Rectangle<int>(col * colW, slotY, colW, rowH);
         auto pedalBounds = slotBounds.withSizeKeepingCentre(pedalW, pedalH);
         m_pedalComponents[static_cast<size_t>(slot)]->setBounds(pedalBounds);
     }
