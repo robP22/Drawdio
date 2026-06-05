@@ -307,7 +307,7 @@ void CanvasModule::resized()
 
     const auto square = juce::jmin(canvasArea.getWidth(), canvasArea.getHeight()) + 140;
     auto centeredCanvas = canvasArea.withSizeKeepingCentre(square, square);
-    m_pixelCanvas.setBounds(centeredCanvas.withY(canvasArea.getCentreY() - square / 2 - 5));
+    m_pixelCanvas.setBounds(centeredCanvas.withY(canvasArea.getCentreY() - square / 2 + 20));
 
     // Palette takes full width of bottom area
     m_palette.setBounds(bottom);
