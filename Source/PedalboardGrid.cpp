@@ -1,10 +1,21 @@
 #include "PedalboardGrid.h"
-#include "PluginEditor.h"
 #include "PluginProcessor.h"
 #include "RenderUtils.h"
 
 #include <algorithm>
 #include <cmath>
+
+namespace GridLayout
+{
+constexpr int RowCount = 2;
+constexpr int ColCount = 3;
+constexpr int GridTopPadding = 30;
+constexpr int GridSidePadding = 8;
+constexpr int PedalWidthMin = 180;
+constexpr int PedalWidthMax = 220;
+constexpr int PedalHeightMin = 240;
+constexpr int PedalHeightMax = 280;
+}
 
 namespace
 {
@@ -42,11 +53,10 @@ void PedalboardGrid::paint(juce::Graphics& g)
 
 void PedalboardGrid::resized()
 {
-    auto bounds = getLocalBounds().reduced(
-        GridLayout::GridSidePadding,
-        GridLayout::GridSidePadding,
-        GridLayout::GridSidePadding,
-        GridLayout::GridSidePadding);
+    auto bounds = getLocalBounds().withTrimmedLeft(GridLayout::GridSidePadding)
+                                        .withTrimmedRight(GridLayout::GridSidePadding)
+                                        .withTrimmedTop(GridLayout::GridSidePadding)
+                                        .withTrimmedBottom(GridLayout::GridSidePadding);
 
     const int colW = bounds.getWidth() / GridLayout::ColCount;
     const int rowH = bounds.getHeight() / GridLayout::RowCount;
@@ -60,7 +70,10 @@ void PedalboardGrid::resized()
             col * colW,
             row * rowH,
             colW,
-            rowH).reduced(GridLayout::GridSidePadding);
+            rowH).withTrimmedLeft(GridLayout::GridSidePadding)
+               .withTrimmedRight(GridLayout::GridSidePadding)
+               .withTrimmedTop(GridLayout::GridSidePadding)
+               .withTrimmedBottom(GridLayout::GridSidePadding);
 
         const int pedalW = juce::jlimit(
             GridLayout::PedalWidthMin,

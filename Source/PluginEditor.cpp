@@ -343,7 +343,8 @@ void CanvasModule::resized()
     auto paletteArea = area.removeFromBottom(Layout::PaletteHeight);
 
     auto canvasArea = area.removeFromTop(area.getHeight() - Layout::PaletteHeight);
-    canvasArea.reduce(Layout::CanvasPadding, Layout::CanvasPadding);
+    canvasArea.removeFromLeft(Layout::CanvasPadding);
+    canvasArea.removeFromRight(Layout::CanvasPadding);
     canvasArea.removeFromTop(Layout::CanvasTopMargin);
 
     m_pixelCanvas.setBounds(canvasArea);
@@ -438,11 +439,9 @@ void DrawdioProcessorEditor::resized()
         content.getWidth() - 400) - Layout::EditorPedalAreaExtraDeduction;
     auto pedalArea = content.removeFromRight(pedalW);
 
-    auto gridArea = pedalArea.reduced(
-        Layout::EditorGridWidthDeduction / 2,
-        Layout::EditorGridHeightDeduction / 2,
-        Layout::EditorGridWidthDeduction / 2,
-        Layout::EditorGridBottomTrim);
+    auto gridArea = pedalArea.withTrimmedLeft(Layout::EditorGridWidthDeduction / 2)
+                                .withTrimmedRight(Layout::EditorGridWidthDeduction / 2)
+                                .withTrimmedBottom(Layout::EditorGridBottomTrim);
 
     m_woodGrainBackground.setBounds(bounds);
     m_pedalboardBackground.setBounds(pedalArea);
