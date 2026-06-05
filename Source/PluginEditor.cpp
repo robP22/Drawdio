@@ -32,6 +32,46 @@ constexpr int ButtonSpacing = 5;
 constexpr int ButtonAreaHeight = 80;
 }
 
+// Layout constants namespace for consistent spacing across all components
+namespace Layout
+{
+    // CanvasModule layout
+    constexpr int CanvasOuterMargin = 22;
+    constexpr int CanvasVerticalMargin = 20;
+    constexpr int PaletteHeight = 300;
+    constexpr int CanvasPadding = 8;
+    constexpr int CanvasTopMargin = 24;
+
+    // ColorPalette layout
+    constexpr int PaletteLeftMargin = 30;
+    constexpr int PaletteRightMargin = 30;
+    constexpr int PaletteTopMargin = 20;
+    constexpr int PaletteBottomMargin = 20;
+    constexpr float PaletteBlobShift = 10.0f;
+    constexpr int PaletteButtonRightPadding = 25;
+
+    // Editor layout
+    constexpr int EditorContentLeftMargin = 50;
+    constexpr int EditorPedalAreaMinWidth = 680;
+    constexpr int EditorPedalAreaMaxWidth = 780;
+    constexpr int EditorPedalAreaExtraDeduction = 40;
+    constexpr int EditorGridBottomTrim = 30;
+    constexpr int EditorGridWidthDeduction = 60;
+    constexpr int EditorGridHeightDeduction = 20;
+}
+
+namespace GridLayout
+{
+    constexpr int RowCount = 2;
+    constexpr int ColCount = 3;
+    constexpr int GridTopPadding = 30;
+    constexpr int GridSidePadding = 8;
+    constexpr int PedalWidthMin = 180;
+    constexpr int PedalWidthMax = 220;
+    constexpr int PedalHeightMin = 240;
+    constexpr int PedalHeightMax = 280;
+}
+
 // Background component implementations - flat textures without decorative frames
 WoodGrainBackground::WoodGrainBackground(const ResourceManager& resources, const ThemeManager& theme)
     : m_resources(resources),
@@ -146,13 +186,15 @@ void ColorPalette::paint(juce::Graphics& g)
 
 void ColorPalette::resized()
 {
-    // Reduce component bounds (shrink the container)
-    auto area = getLocalBounds().withTrimmedLeft(30).withTrimmedRight(30).withTrimmedTop(20).withTrimmedBottom(20);
+    auto area = getLocalBounds().reduced(
+        Layout::PaletteLeftMargin,
+        Layout::PaletteRightMargin,
+        Layout::PaletteTopMargin,
+        Layout::PaletteBottomMargin);
 
-    // Position blobs using constants, shifted left by 10px (no internal padding)
     const auto blobSize = juce::jmin(area.getHeight() - 10.0f, BlobMaxSize);
     const float totalWidth = blobSize * BlobCount + BlobSpacing * (BlobCount - 1);
-    float startX = area.getCentreX() - totalWidth / 2.0f - 10.0f;
+    float startX = area.getCentreX() - totalWidth / 2.0f - Layout::PaletteBlobShift;
     float blobY = area.getCentreY() - blobSize / 2.0f;
 
     for (int i = 0; i < static_cast<int>(m_blobs.size()); ++i)
@@ -164,13 +206,10 @@ void ColorPalette::resized()
         m_blobs[static_cast<size_t>(i)].bounds = slot;
     }
 
-    // Position buttons on right side of palette, vertically centered
     const auto totalH = ButtonHeight * 2 + ButtonSpacing;
-    // Double button width, shift left by 15px (reduced padding from 10 to 25)
     const int buttonW = ButtonWidth * 2;
-    int rightX = juce::jmin(area.getRight() - 25, area.getRight() - 25 - buttonW + area.getWidth()) - buttonW;
-    rightX = juce::jmax(rightX, area.getRight() - 25 - buttonW);
-    int buttonY = area.getCentreY() - totalH / 2;
+    const int buttonY = area.getCentreY() - totalH / 2;
+    const int rightX = area.getRight() - Layout::PaletteButtonRightPadding - buttonW;
     m_undoButton.setBounds(rightX, buttonY, buttonW, ButtonHeight);
     m_clearButton.setBounds(rightX, buttonY + ButtonHeight + ButtonSpacing, buttonW, ButtonHeight);
 }
@@ -299,18 +338,16 @@ void CanvasModule::paint(juce::Graphics& g)
 
 void CanvasModule::resized()
 {
-    auto area = getLocalBounds().reduced(22, 20);
-    // Reduced palette height from 380 to 300
-    const int paletteHeight = 300;
-    auto bottom = juce::Rectangle<int>(area.getX(), area.getBottom() - paletteHeight, area.getWidth(), paletteHeight);
-    auto canvasArea = area.withHeight(area.getHeight() - paletteHeight).reduced(8);
+    auto area = getLocalBounds().reduced(Layout::CanvasOuterMargin, Layout::CanvasVerticalMargin);
 
-    const auto square = juce::jmin(canvasArea.getWidth(), canvasArea.getHeight()) + 140;
-    auto centeredCanvas = canvasArea.withSizeKeepingCentre(square, square);
-    m_pixelCanvas.setBounds(centeredCanvas.withY(canvasArea.getCentreY() - square / 2 + 20));
+    auto paletteArea = area.removeFromBottom(Layout::PaletteHeight);
 
-    // Palette takes full width of bottom area
-    m_palette.setBounds(bottom);
+    auto canvasArea = area.removeFromTop(area.getHeight() - Layout::PaletteHeight);
+    canvasArea.reduce(Layout::CanvasPadding, Layout::CanvasPadding);
+    canvasArea.removeFromTop(Layout::CanvasTopMargin);
+
+    m_pixelCanvas.setBounds(canvasArea);
+    m_palette.setBounds(paletteArea);
 }
 
 void CanvasModule::refreshStatus()
@@ -394,21 +431,21 @@ void DrawdioProcessorEditor::resized()
 {
     auto bounds = getLocalBounds();
 
-    auto content = juce::Rectangle<int>(50, 0, bounds.getWidth() - 50, bounds.getHeight());
-    // Give more width to pedalboard (right side), less to canvas (left side)
-    const auto pedalW = juce::jlimit(680, 780, content.getWidth() - 400) - 40;
+    auto content = bounds.removeFromLeft(bounds.getWidth() - Layout::EditorContentLeftMargin);
+    const auto pedalW = juce::jlimit(
+        Layout::EditorPedalAreaMinWidth,
+        Layout::EditorPedalAreaMaxWidth,
+        content.getWidth() - 400) - Layout::EditorPedalAreaExtraDeduction;
     auto pedalArea = content.removeFromRight(pedalW);
 
-    // Pedalboard grid (internal padding in PedalboardGrid::resized)
-    auto gridArea = pedalArea.withTrimmedBottom(30)
-                        .withSizeKeepingCentre(pedalArea.getWidth() - 60, pedalArea.getHeight() - 20);
+    auto gridArea = pedalArea.reduced(
+        Layout::EditorGridWidthDeduction / 2,
+        Layout::EditorGridHeightDeduction / 2,
+        Layout::EditorGridWidthDeduction / 2,
+        Layout::EditorGridBottomTrim);
 
-    // Wood grain fills entire window as bottom layer
     m_woodGrainBackground.setBounds(bounds);
-    // Pedalboard sprite on right side only
     m_pedalboardBackground.setBounds(pedalArea);
-
-    // Canvas module gets remaining content area
     m_canvasModule.setBounds(content);
     m_pedalboardGrid.setBounds(gridArea);
 }

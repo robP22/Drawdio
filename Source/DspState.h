@@ -8,8 +8,7 @@
 #include "PedalStructures.h"
 
 constexpr int MaxParameters = 64;
-constexpr int MaxPedalSlots = 6;
-constexpr int MaxRoutingChain = MaxPedalSlots + 2;
+constexpr int MaxRoutingChain = PedalSlotCount + 2;
 
 class DspState
 {
@@ -49,7 +48,7 @@ public:
     struct ParameterSnapshot
     {
         std::array<float, MaxParameters> values;
-        std::array<DspModuleType, MaxPedalSlots> pedalTypes;
+        std::array<DspModuleType, PedalSlotCount> pedalTypes;
         std::vector<uint8_t> routing;
         uint32_t revision;
     };
@@ -66,7 +65,7 @@ private:
     std::atomic<uint32_t> m_revision{0};
     std::atomic<bool> m_needsRepaint{false};
 
-    std::array<DspModuleType, MaxPedalSlots> m_pedalSlots;
+    std::array<DspModuleType, PedalSlotCount> m_pedalSlots;
     mutable std::mutex m_routingMutex;
     std::vector<uint8_t> m_manualRouting;
     std::array<uint8_t, TotalCells> m_gridData;
