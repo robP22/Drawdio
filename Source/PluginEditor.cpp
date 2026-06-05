@@ -224,23 +224,7 @@ int ColorPalette::hitTestBlob(juce::Point<float> position) const
 CanvasTools::CanvasTools(const ThemeManager& theme)
     : m_theme(theme)
 {
-    styleButton(m_undoButton, m_theme.undoButtonAccent());
-    styleButton(m_clearButton, m_theme.clearButtonAccent());
-
-    addAndMakeVisible(m_undoButton);
-    addAndMakeVisible(m_clearButton);
-
-    m_undoButton.onClick = [this]()
-    {
-        if (m_onUndo)
-            m_onUndo();
-    };
-
-    m_clearButton.onClick = [this]()
-    {
-        if (m_onClear)
-            m_onClear();
-    };
+    // Buttons moved to ColorPalette - this is now empty
 }
 
 void CanvasTools::paint(juce::Graphics&)
@@ -280,12 +264,10 @@ CanvasModule::CanvasModule(const ResourceManager& resources, const ThemeManager&
     : m_resources(resources),
       m_theme(theme),
       m_pixelCanvas(theme),
-      m_palette(resources, theme),
-      m_tools(theme)
+      m_palette(resources, theme)
 {
     addAndMakeVisible(m_pixelCanvas);
     addAndMakeVisible(m_palette);
-    addAndMakeVisible(m_tools);
 
     m_palette.setOnColorSelected([this](auto color)
     {
@@ -327,14 +309,8 @@ void CanvasModule::resized()
     auto centeredCanvas = canvasArea.withSizeKeepingCentre(square, square);
     m_pixelCanvas.setBounds(centeredCanvas.withY(canvasArea.getCentreY() - square / 2 - 5));
 
-    // Position palette and tools side by side (palette 50px wider, tools 50px)
-    auto controls = bottom;
-    auto toolsArea = controls.removeFromRight(50);
-    // Extend palette to full width of controls area
-    controls = bottom;
-
-    m_palette.setBounds(controls);
-    m_tools.setBounds(toolsArea);
+    // Palette takes full width of bottom area
+    m_palette.setBounds(bottom);
 }
 
 void CanvasModule::refreshStatus()

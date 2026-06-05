@@ -117,7 +117,6 @@ private:
     const ThemeManager& m_theme;
     PixelCanvasComponent m_pixelCanvas;
     ColorPalette m_palette;
-    CanvasTools m_tools;
 
     std::function<void()> m_onClear;
 };
