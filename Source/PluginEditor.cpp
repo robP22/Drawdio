@@ -146,7 +146,8 @@ void ColorPalette::paint(juce::Graphics& g)
 
 void ColorPalette::resized()
 {
-    auto area = getLocalBounds();
+    // Reduce component bounds (shrink the container)
+    auto area = getLocalBounds().withTrimmedLeft(30).withTrimmedRight(30).withTrimmedTop(20).withTrimmedBottom(20);
 
     // Position blobs using constants, shifted left by 10px (no internal padding)
     const auto blobSize = juce::jmin(area.getHeight() - 10.0f, BlobMaxSize);
@@ -165,12 +166,13 @@ void ColorPalette::resized()
 
     // Position buttons on right side of palette, vertically centered
     const auto totalH = ButtonHeight * 2 + ButtonSpacing;
-    // Right-align buttons within palette bounds (with 10px padding from right edge)
-    int rightX = juce::jmin(area.getRight() - 10, area.getRight() - 10 - ButtonWidth + area.getWidth()) - ButtonWidth;
-    rightX = juce::jmax(rightX, area.getRight() - 10 - ButtonWidth);
+    // Double button width, shift left by 15px (reduced padding from 10 to 25)
+    const int buttonW = ButtonWidth * 2;
+    int rightX = juce::jmin(area.getRight() - 25, area.getRight() - 25 - buttonW + area.getWidth()) - buttonW;
+    rightX = juce::jmax(rightX, area.getRight() - 25 - buttonW);
     int buttonY = area.getCentreY() - totalH / 2;
-    m_undoButton.setBounds(rightX, buttonY, ButtonWidth, ButtonHeight);
-    m_clearButton.setBounds(rightX, buttonY + ButtonHeight + ButtonSpacing, ButtonWidth, ButtonHeight);
+    m_undoButton.setBounds(rightX, buttonY, buttonW, ButtonHeight);
+    m_clearButton.setBounds(rightX, buttonY + ButtonHeight + ButtonSpacing, buttonW, ButtonHeight);
 }
 
 void ColorPalette::mouseDown(const juce::MouseEvent& event)
