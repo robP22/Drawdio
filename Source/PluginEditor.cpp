@@ -317,13 +317,14 @@ void CanvasModule::paint(juce::Graphics& g)
 
 void CanvasModule::resized()
 {
-    auto area = getLocalBounds().reduced(22, 20).translated(0, 85);
-    auto bottom = area.removeFromBottom(380);
-    area.removeFromBottom(14);
+    auto area = getLocalBounds().reduced(22, 20);
+    // Move bottom section down by 85px
+    auto bottom = juce::Rectangle<int>(area.getX(), area.getBottom() - 394, area.getWidth(), 380);
+    auto canvasArea = area.withHeight(area.getHeight() - 394).reduced(8);
 
-    const auto square = juce::jmin(area.getWidth(), area.getHeight()) + 140;
-    auto canvasArea = area.withSizeKeepingCentre(square, square).translated(0, -5);
-    m_pixelCanvas.setBounds(canvasArea.reduced(8));
+    const auto square = juce::jmin(canvasArea.getWidth(), canvasArea.getHeight()) + 140;
+    auto centeredCanvas = canvasArea.withSizeKeepingCentre(square, square);
+    m_pixelCanvas.setBounds(centeredCanvas.withY(canvasArea.getCentreY() - square / 2 - 5));
 
     // Position palette and tools side by side (palette 50px wider)
     auto controls = bottom;
@@ -428,7 +429,8 @@ void DrawdioProcessorEditor::resized()
     // Pedalboard sprite on right side only
     m_pedalboardBackground.setBounds(pedalArea);
 
-    m_canvasModule.setBounds(content.withTrimmedRight(pedalW + 60));
+    // Canvas module gets remaining content area
+    m_canvasModule.setBounds(content);
     m_pedalboardGrid.setBounds(gridArea);
 }
 
