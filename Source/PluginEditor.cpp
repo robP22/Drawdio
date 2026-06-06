@@ -419,23 +419,8 @@ DrawdioProcessorEditor::~DrawdioProcessorEditor()
 
 void DrawdioProcessorEditor::paint(juce::Graphics& g)
 {
-    // DEBUG: Draw main border first
-    g.setColour(juce::Colours::green.withAlpha(0.5f));
-    g.drawRect(getLocalBounds(), 2);
-
-    g.fillAll(m_theme.editorBackground());
-
-    // DEBUG: Draw grid lines on top (foreground)
-    g.setColour(juce::Colours::white.withAlpha(0.2f));
-    auto bounds = getLocalBounds();
-    for (int x = 0; x < bounds.getWidth(); x += 50)
-    {
-        g.drawLine(static_cast<float>(x), 0, static_cast<float>(x), static_cast<float>(bounds.getHeight()));
-    }
-    for (int y = 0; y < bounds.getHeight(); y += 50)
-    {
-        g.drawLine(0, static_cast<float>(y), static_cast<float>(bounds.getWidth()), static_cast<float>(y));
-    }
+    // Don't draw anything - let child components (wood grain, pedalboard backgrounds) show through
+    // The child components m_woodGrainBackground and m_pedalboardBackground handle the background rendering
 }
 
 void DrawdioProcessorEditor::resized()
