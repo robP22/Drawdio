@@ -80,9 +80,16 @@ WoodGrainBackground::WoodGrainBackground(const ResourceManager& resources, const
     setInterceptsMouseClicks(false, false);
 }
 
-void WoodGrainBackground::paint(juce::Graphics&)
+void WoodGrainBackground::paint(juce::Graphics& g)
 {
-    // COMMENTED OUT FOR DEBUG - wood grain disabled
+    auto bounds = getLocalBounds().toFloat();
+    const auto& woodTexture = m_resources.getTexture(ResourceManager::TextureId::WorkspaceWood);
+    if (woodTexture.isValid())
+    {
+        g.drawImage(woodTexture, bounds.getX(), bounds.getY(), 
+                   bounds.getWidth(), bounds.getHeight(),
+                   0, 0, woodTexture.getWidth(), woodTexture.getHeight());
+    }
 }
 
 PedalboardBackground::PedalboardBackground(const ResourceManager& resources, const ThemeManager& theme)
