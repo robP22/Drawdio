@@ -90,29 +90,9 @@ PedalComponent::~PedalComponent()
 {
 }
 
-void PedalComponent::paint(juce::Graphics& g)
+void PedalComponent::paint(juce::Graphics&)
 {
-    auto bounds = getLocalBounds().toFloat();
-
-    // Draw pedal enclosure sprite
-    const auto& enclosureTexture = m_resources.getTexture(ResourceManager::TextureId::PedalEnclosure);
-    if (enclosureTexture.isValid())
-    {
-        g.drawImage(enclosureTexture,
-                   bounds.getX(), bounds.getY(),
-                   bounds.getWidth(), bounds.getHeight(),
-                   0, 0, enclosureTexture.getWidth(), enclosureTexture.getHeight());
-    }
-
-    // Pedal type name text (top center area)
-    auto labelTop = bounds.reduced(bounds.getWidth() * 0.08f, bounds.getHeight() * 0.06f);
-    labelTop = labelTop.withTrimmedTop(labelTop.getHeight() * 0.72f);
-    g.setFont(juce::FontOptions(11.0f, juce::Font::bold));
-    g.setColour(juce::Colours::black.withAlpha(0.8f));
-    g.drawFittedText(typeName(m_currentType),
-                     labelTop.toNearestInt(),
-                     juce::Justification::centred,
-                     1);
+    // COMMENTED OUT FOR DEBUG - pedal rendering disabled
 }
 
 void PedalComponent::setSkin(PedalSkinManager::PedalSkin skin)
