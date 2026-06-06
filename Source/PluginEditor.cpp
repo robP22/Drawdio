@@ -86,9 +86,7 @@ void WoodGrainBackground::paint(juce::Graphics& g)
     const auto& woodTexture = m_resources.getTexture(ResourceManager::TextureId::WorkspaceWood);
     if (woodTexture.isValid())
     {
-        g.drawImage(woodTexture, bounds.getX(), bounds.getY(), 
-                   bounds.getWidth(), bounds.getHeight(),
-                   0, 0, woodTexture.getWidth(), woodTexture.getHeight());
+        g.drawImage(woodTexture, bounds, juce::RectanglePlacement::centred);
     }
 }
 
