@@ -80,16 +80,9 @@ WoodGrainBackground::WoodGrainBackground(const ResourceManager& resources, const
     setInterceptsMouseClicks(false, false);
 }
 
-void WoodGrainBackground::paint(juce::Graphics& g)
+void WoodGrainBackground::paint(juce::Graphics&)
 {
-    auto bounds = getLocalBounds().toFloat();
-    const auto& woodTexture = m_resources.getTexture(ResourceManager::TextureId::WorkspaceWood);
-    if (woodTexture.isValid())
-    {
-        g.drawImage(woodTexture, bounds.getX(), bounds.getY(), 
-                   bounds.getWidth(), bounds.getHeight(),
-                   0, 0, woodTexture.getWidth(), woodTexture.getHeight());
-    }
+    // COMMENTED OUT FOR DEBUG - wood grain disabled
 }
 
 PedalboardBackground::PedalboardBackground(const ResourceManager& resources, const ThemeManager& theme)
@@ -348,8 +341,8 @@ DrawdioProcessorEditor::~DrawdioProcessorEditor()
 
 void DrawdioProcessorEditor::paint(juce::Graphics& g)
 {
-    // Don't draw anything - let child components (wood grain, pedalboard backgrounds) show through
-    // The child components m_woodGrainBackground and m_pedalboardBackground handle the background rendering
+    // DEBUG: Fill entire window with WHITE to identify black rectangle source
+    g.fillAll(juce::Colours::white);
 }
 
 void DrawdioProcessorEditor::resized()
