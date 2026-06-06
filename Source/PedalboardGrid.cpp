@@ -40,15 +40,9 @@ PedalboardGrid::PedalboardGrid(DrawdioProcessor& processor,
     }
 }
 
-void PedalboardGrid::paint(juce::Graphics& g)
+void PedalboardGrid::paint(juce::Graphics&)
 {
-    // DEBUG: Draw border
-    g.setColour(juce::Colours::cyan.withAlpha(0.5f));
-    g.drawRect(getLocalBounds(), 2);
-
-    // Keep bezier cables only
-    drawRoutingCables(g);
-    drawActiveDraggingCable(g);
+    // COMMENTED OUT FOR DEBUG - grid rendering disabled
 }
 
 void PedalboardGrid::resized()

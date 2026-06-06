@@ -21,7 +21,7 @@ PixelCanvasComponent::PixelColor pixelFromRaw(uint8_t raw)
 PixelCanvasComponent::PixelCanvasComponent(const ThemeManager& theme)
     : m_theme(theme)
 {
-    pixels.fill(PixelColor::Black);
+    pixels.fill(PixelColor::White);
     m_activeChangeLookup.fill(-1);
     m_activeStroke.reserve(512);
     m_undoStack.reserve(MaxUndoLevels);
@@ -38,13 +38,9 @@ juce::Colour PixelCanvasComponent::colourForPixel(PixelColor color)
     return ThemeManager::getDefault().canvasPixelColour(static_cast<uint8_t>(color));
 }
 
-void PixelCanvasComponent::paint(juce::Graphics& g)
+void PixelCanvasComponent::paint(juce::Graphics&)
 {
-    if (m_pixelImage.isValid())
-    {
-        g.drawImage(m_pixelImage, getLocalBounds().toFloat(),
-                    juce::RectanglePlacement::stretchToFit);
-    }
+    // COMMENTED OUT FOR DEBUG - pixel canvas rendering disabled
 }
 
 juce::Point<int> PixelCanvasComponent::gridCoordsFromUI(int uiX, int uiY) const
