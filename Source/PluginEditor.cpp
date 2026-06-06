@@ -192,17 +192,10 @@ void ColorPalette::resized()
         .removeFromTop(Layout::PaletteTopMargin)
         .removeFromBottom(Layout::PaletteBottomMargin);
 
-    // Calculate blob size to use available height minus some padding
-    const auto blobSize = juce::jmin(area.getHeight() - 20.0f, BlobMaxSize);
-    
-    // Position blobs horizontally, spread across the available width
-    // Leave space on right for buttons (button area width = 60)
-    const float availableForBlobs = area.getWidth() - 70.0f;  // 60 for buttons + 10 padding
-    const float totalBlobWidth = blobSize * BlobCount + BlobSpacing * (BlobCount - 1);
-    
-    // Center blobs in the available space (left portion)
-    const float startX = area.getX() + (availableForBlobs - totalBlobWidth) / 2.0f;
-    const float blobY = area.getCentreY() - blobSize / 2.0f;
+    const auto blobSize = juce::jmin(area.getHeight() - 10.0f, BlobMaxSize);
+    const float totalWidth = blobSize * BlobCount + BlobSpacing * (BlobCount - 1);
+    float startX = area.getCentreX() - totalWidth / 2.0f - Layout::PaletteBlobShift;
+    float blobY = area.getCentreY() - blobSize / 2.0f;
 
     for (int i = 0; i < static_cast<int>(m_blobs.size()); ++i)
     {
@@ -213,13 +206,12 @@ void ColorPalette::resized()
         m_blobs[static_cast<size_t>(i)].bounds = slot;
     }
 
-    // Position buttons on the right side, vertically centered
     const auto totalH = ButtonHeight * 2 + ButtonSpacing;
     const int buttonW = ButtonWidth * 2;
     const int buttonY = area.getCentreY() - totalH / 2;
-    const int rightX = area.getRight() - 10;  // 10px from right edge
-    m_undoButton.setBounds(rightX - buttonW, buttonY, buttonW, ButtonHeight);
-    m_clearButton.setBounds(rightX - buttonW, buttonY + ButtonHeight + ButtonSpacing, buttonW, ButtonHeight);
+    const int rightX = area.getRight() - Layout::PaletteButtonRightPadding - buttonW;
+    m_undoButton.setBounds(rightX, buttonY, buttonW, ButtonHeight);
+    m_clearButton.setBounds(rightX, buttonY + ButtonHeight + ButtonSpacing, buttonW, ButtonHeight);
 }
 
 void ColorPalette::mouseDown(const juce::MouseEvent& event)
@@ -350,13 +342,10 @@ void CanvasModule::resized()
 
     auto paletteArea = area.removeFromBottom(Layout::PaletteHeight);
 
-    // Canvas gets the remaining area
     auto canvasArea = area;
 
-    // Make canvas a fixed square size and center it
-    constexpr int CanvasSize = 400;
-    auto centeredCanvas = canvasArea.withSizeKeepingCentre(CanvasSize, CanvasSize);
-    m_pixelCanvas.setBounds(centeredCanvas);
+    // Canvas fills the remaining area (not centered)
+    m_pixelCanvas.setBounds(canvasArea);
 
     m_palette.setBounds(paletteArea);
 }
