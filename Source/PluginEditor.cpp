@@ -97,9 +97,21 @@ PedalboardBackground::PedalboardBackground(const ResourceManager& resources, con
     setInterceptsMouseClicks(false, false);
 }
 
-void PedalboardBackground::paint(juce::Graphics&)
+void PedalboardBackground::paint(juce::Graphics& g)
 {
-    // COMMENTED OUT FOR DEBUG - pedalboard background disabled
+    auto bounds = getLocalBounds().toFloat();
+    const auto& texture = m_resources.getTexture(ResourceManager::TextureId::PedalboardSprite);
+    
+    // DEBUG: Draw border
+    g.setColour(juce::Colours::red);
+    g.drawRect(bounds, 2);
+    
+    if (texture.isValid())
+    {
+        g.drawImage(texture, bounds.getX(), bounds.getY(), 
+                   bounds.getWidth(), bounds.getHeight(),
+                   0, 0, texture.getWidth(), texture.getHeight());
+    }
 }
 
 ColorPalette::ColorPalette(const ResourceManager& resources, const ThemeManager& theme)
@@ -119,9 +131,21 @@ ColorPalette::ColorPalette(const ResourceManager& resources, const ThemeManager&
     styleButton(m_clearButton, juce::Colour(0xFFE74C3C));
 }
 
-void ColorPalette::paint(juce::Graphics&)
+void ColorPalette::paint(juce::Graphics& g)
 {
-    // COMMENTED OUT FOR DEBUG - palette rendering disabled
+    auto bounds = getLocalBounds().toFloat();
+    const auto& texture = m_resources.getTexture(ResourceManager::TextureId::ColorPaletteBody);
+    
+    // DEBUG: Draw border
+    g.setColour(juce::Colours::red);
+    g.drawRect(bounds, 2);
+    
+    if (texture.isValid())
+    {
+        g.drawImage(texture, bounds.getX(), bounds.getY(), 
+                   bounds.getWidth(), bounds.getHeight(),
+                   0, 0, texture.getWidth(), texture.getHeight());
+    }
 }
 
 void ColorPalette::resized()
