@@ -90,9 +90,21 @@ PedalComponent::~PedalComponent()
 {
 }
 
-void PedalComponent::paint(juce::Graphics&)
+void PedalComponent::paint(juce::Graphics& g)
 {
-    // COMMENTED OUT FOR DEBUG - pedal rendering disabled
+    auto bounds = getLocalBounds().toFloat();
+    const auto& texture = m_resources.getTexture(ResourceManager::TextureId::PedalEnclosure);
+    
+    // DEBUG: Draw border
+    g.setColour(juce::Colours::red);
+    g.drawRect(bounds, 2);
+    
+    if (texture.isValid())
+    {
+        g.drawImage(texture, bounds.getX(), bounds.getY(), 
+                   bounds.getWidth(), bounds.getHeight(),
+                   0, 0, texture.getWidth(), texture.getHeight());
+    }
 }
 
 void PedalComponent::setSkin(PedalSkinManager::PedalSkin skin)
