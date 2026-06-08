@@ -146,20 +146,30 @@ void PedalComponent::updateKnobBounds()
 
     // Knob size: 43x43 pixels
     constexpr float kKnobSize = 43.0f;
-    constexpr float kSpacingOffsetX = -8.0f;
-    constexpr float kSpacingOffsetY = -8.0f;
+    constexpr float kSpacingY = -8.0f;
     constexpr float kYShift = -10.0f;
     const float halfKnob = kKnobSize / 2.0f;
+
+    // Calculate current X spread from normalized coordinates
+    float minCentreX = 1.0f, maxCentreX = 0.0f;
+    for (int i = 0; i < kKnobCount; ++i)
+    {
+        minCentreX = juce::jmin(minCentreX, m_definition->knobLayout[static_cast<size_t>(i)].centreX);
+        maxCentreX = juce::jmax(maxCentreX, m_definition->knobLayout[static_cast<size_t>(i)].centreX);
+    }
+    const float currentSpreadX = (maxCentreX - minCentreX) * pedalWidth;
+    const float groupCenterX = pedalBounds.getX() + pedalWidth * (minCentreX + maxCentreX) / 2.0f;
+    const float targetSpreadX = 80.0f;  // Target spacing between columns
+    const float scaleX = targetSpreadX / currentSpreadX;
 
     for (int i = 0; i < kKnobCount; ++i)
     {
         const auto& normBounds = m_definition->knobLayout[static_cast<size_t>(i)];
         
-        // Calculate center position from normalized coordinates with adjustments
-        const float centerX = pedalBounds.getX() + (normBounds.centreX + kSpacingOffsetX / pedalWidth) * pedalWidth;
-        const float centerY = pedalBounds.getY() + (normBounds.centreY + kSpacingOffsetY / pedalHeight + kYShift / pedalHeight) * pedalHeight;
+        // Anchor X to center, scale the spread
+        const float centerX = groupCenterX + (normBounds.centreX - (minCentreX + maxCentreX) / 2.0f) * scaleX * pedalWidth;
+        const float centerY = pedalBounds.getY() + (normBounds.centreY + kSpacingY / pedalHeight + kYShift / pedalHeight) * pedalHeight;
 
-        // Create square bounds centered at the adjusted position
         m_knobBounds[static_cast<size_t>(i)] = juce::Rectangle<float>(
             centerX - halfKnob,
             centerY - halfKnob,
