@@ -166,26 +166,28 @@ void PedalComponent::drawKnob(juce::Graphics& g, int knobIdx, float value)
     const auto& bounds = m_knobBounds[static_cast<size_t>(knobIdx)];
     if (!bounds.isEmpty())
     {
-        // Use the knob image directly from images (not sprite sheets)
         const auto& knobImage = m_resources.getImage(ResourceManager::ImageId::PedalKnobImage);
         
         if (knobImage.isValid())
         {
-            // Calculate which frame to show based on knob value (0.0-1.0)
             constexpr int kFrameCount = 32;
             const int frameIndex = static_cast<int>(value * (kFrameCount - 1));
             
             const int frameWidth = knobImage.getWidth() / kFrameCount;
             const int frameHeight = knobImage.getHeight();
             
-            // Calculate source rectangle for this frame
             const int frameX = frameIndex * frameWidth;
             
+            // Draw to a square destination to preserve circular knob shape
+            const float squareSize = juce::jmin(bounds.getWidth(), bounds.getHeight());
+            const float destX = bounds.getX() + (bounds.getWidth() - squareSize) / 2.0f;
+            const float destY = bounds.getY() + (bounds.getHeight() - squareSize) / 2.0f;
+            
             g.drawImage(knobImage,
-                       static_cast<int>(bounds.getX()),
-                       static_cast<int>(bounds.getY()),
-                       static_cast<int>(bounds.getWidth()),
-                       static_cast<int>(bounds.getHeight()),
+                       static_cast<int>(destX),
+                       static_cast<int>(destY),
+                       static_cast<int>(squareSize),
+                       static_cast<int>(squareSize),
                        frameX, 0, frameWidth, frameHeight);
         }
     }
