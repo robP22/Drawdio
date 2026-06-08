@@ -144,10 +144,10 @@ void PedalComponent::updateKnobBounds()
     const float pedalWidth = pedalBounds.getWidth();
     const float pedalHeight = pedalBounds.getHeight();
 
-    // Knob size: 43x43 pixels (increased 10% from 39)
+    // Knob size: 43x43 pixels
     constexpr float kKnobSize = 43.0f;
-    constexpr float kSpacingOffsetX = -2.0f;
-    constexpr float kSpacingOffsetY = -2.0f;
+    constexpr float kSpacingOffsetX = -8.0f;
+    constexpr float kSpacingOffsetY = -8.0f;
     constexpr float kYShift = -10.0f;
     const float halfKnob = kKnobSize / 2.0f;
 
