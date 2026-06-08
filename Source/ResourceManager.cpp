@@ -3,6 +3,11 @@
 
 #include <utility>
 
+namespace
+{
+constexpr int kKnobFrameCount = 32;  // Number of frames in knob rotation sprite sheet
+}
+
 ResourceManager::ResourceManager()
 {
     loadAll();
@@ -54,6 +59,7 @@ std::unique_ptr<juce::Drawable> ResourceManager::createSvgDrawable(SvgId id) con
 void ResourceManager::loadAll()
 {
     loadProceduralTextures();
+    loadSpriteSheets();
 }
 
 void ResourceManager::loadProceduralTextures()
@@ -67,6 +73,46 @@ void ResourceManager::loadProceduralTextures()
         decodeImageFromBinaryData(BinaryData::colorpalette_final_png, BinaryData::colorpalette_final_pngSize);
     m_images[static_cast<size_t>(ImageId::PedalEnclosure)] =
         decodeImageFromBinaryData(BinaryData::pedalenclosure_final_png, BinaryData::pedalenclosure_final_pngSize);
+    m_images[static_cast<size_t>(ImageId::PedalKnobImage)] =
+        decodeImageFromBinaryData(BinaryData::Knob_Generic_alpha_cutout_png, BinaryData::Knob_Generic_alpha_cutout_pngSize);
+}
+
+void ResourceManager::loadSpriteSheets()
+{
+    // Set up knob sprite sheet from the loaded image
+    const auto& knobImage = m_images[static_cast<size_t>(ImageId::PedalKnobImage)];
+    if (knobImage.isValid())
+    {
+        // Assume horizontal strip of frames
+        const int totalWidth = knobImage.getWidth();
+        const int frameWidth = totalWidth / kKnobFrameCount;
+        const int frameHeight = knobImage.getHeight();
+
+        m_spriteSheets[static_cast<size_t>(SpriteSheetId::PedalParts)].image = knobImage;
+        m_spriteSheets[static_cast<size_t>(SpriteSheetId::PedalParts)].frameWidth = frameWidth;
+        m_spriteSheets[static_cast<size_t>(SpriteSheetId::PedalParts)].frameHeight = frameHeight;
+
+        // Set up PedalKnob sprite frame - frame 0 at default position
+        m_spriteFrames[static_cast<size_t>(SpriteId::PedalKnob)] = {
+            SpriteSheetId::PedalParts,
+            juce::Rectangle<int>(0, 0, frameWidth, frameHeight)
+        };
+
+        // Set up other sprite frames (these would need actual sprite sheet data)
+        // For now, placeholder frames that use the full image area
+        m_spriteFrames[static_cast<size_t>(SpriteId::PedalBody)] = {
+            SpriteSheetId::PedalParts,
+            juce::Rectangle<int>(0, 0, frameWidth, frameHeight)
+        };
+        m_spriteFrames[static_cast<size_t>(SpriteId::PedalLed)] = {
+            SpriteSheetId::PedalParts,
+            juce::Rectangle<int>(0, 0, frameWidth, frameHeight)
+        };
+        m_spriteFrames[static_cast<size_t>(SpriteId::PedalJack)] = {
+            SpriteSheetId::PedalParts,
+            juce::Rectangle<int>(0, 0, frameWidth, frameHeight)
+        };
+    }
 }
 
 juce::Image ResourceManager::decodeImageFromBinaryData(const void* data, size_t sizeInBytes)

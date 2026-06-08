@@ -50,3 +50,9 @@ ResourceManager::SpriteId PedalSkinManager::getJackSpriteId(PedalSkin skin)
         default:                  return ResourceManager::SpriteId::PedalJack;
     }
 }
+
+ResourceManager::SpriteId PedalSkinManager::getKnobSpriteId(PedalSkin)
+{
+    // All skins use the same generic knob sprite for now
+    return ResourceManager::SpriteId::PedalKnob;
+}
