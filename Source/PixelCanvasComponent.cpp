@@ -31,7 +31,6 @@ PixelCanvasComponent::PixelCanvasComponent(const ThemeManager& theme)
     rebuildGridCache();
     rebuildPixelImage();
 
-    setBufferedToImage(true);
     setRepaintsOnMouseActivity(true);
 }
 
@@ -42,15 +41,29 @@ juce::Colour PixelCanvasComponent::colourForPixel(PixelColor color)
 
 void PixelCanvasComponent::paint(juce::Graphics& g)
 {
-    if (m_pixelImage.isValid())
+    if (!m_pixelImage.isValid())
+        return;
+
+    const float cellW = static_cast<float>(getWidth()) / GridSize;
+    const float cellH = static_cast<float>(getHeight()) / GridSize;
+
+    for (int y = 0; y < GridSize; ++y)
     {
-        constexpr float imageScale = 0.95f;
-        constexpr int canvasPadding = 20;
-        const int size = juce::roundToInt((juce::jmin(getWidth(), getHeight()) - canvasPadding * 2) * imageScale);
-        const auto imageArea = getLocalBounds().withSizeKeepingCentre(size, size).translated(0, 20).toFloat();
-        g.drawImage(m_pixelImage, imageArea, juce::RectanglePlacement::stretchToFit);
-        RenderUtils::paintSurfaceDepth(g, imageArea);
+        for (int x = 0; x < GridSize; ++x)
+        {
+            const auto color = m_theme.canvasPixelColour(static_cast<uint8_t>(pixels[static_cast<size_t>(y * GridSize + x)]));
+            g.setColour(color);
+            g.fillRect(static_cast<float>(x) * cellW,
+                       static_cast<float>(y) * cellH,
+                       cellW,
+                       cellH);
+        }
     }
+
+    auto bounds = getLocalBounds().toFloat();
+    const float size = juce::jmin(getWidth(), getHeight()) * 0.95f;
+    const auto imageArea = bounds.withSizeKeepingCentre(size, size).translated(0, 20).toFloat();
+    RenderUtils::paintSurfaceDepth(g, imageArea);
 }
 
 juce::Point<int> PixelCanvasComponent::gridCoordsFromUI(int uiX, int uiY) const
