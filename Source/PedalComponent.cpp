@@ -173,15 +173,20 @@ void PedalComponent::drawKnob(juce::Graphics& g, int knobIdx, float value)
             constexpr int kFrameCount = 32;
             const int frameIndex = static_cast<int>(value * (kFrameCount - 1));
             
+            // Each frame is 1254x1254 pixels
             const int frameWidth = knobImage.getWidth() / kFrameCount;
             const int frameHeight = knobImage.getHeight();
             const int frameX = frameIndex * frameWidth;
             
-            // Render at native size, centered within bounds
-            const int destX = static_cast<int>(bounds.getX() + (bounds.getWidth() - frameWidth) / 2.0f);
-            const int destY = static_cast<int>(bounds.getY() + (bounds.getHeight() - frameHeight) / 2.0f);
+            // Scale to fill square bounds while keeping square
+            const float scale = juce::jmin(bounds.getWidth(), bounds.getHeight());
+            const int destSize = static_cast<int>(scale);
             
-            g.drawImage(knobImage, destX, destY, frameWidth, frameHeight,
+            // Center within bounds
+            const int destX = static_cast<int>(bounds.getX() + (bounds.getWidth() - destSize) / 2.0f);
+            const int destY = static_cast<int>(bounds.getY() + (bounds.getHeight() - destSize) / 2.0f);
+            
+            g.drawImage(knobImage, destX, destY, destSize, destSize,
                        frameX, 0, frameWidth, frameHeight);
         }
     }
