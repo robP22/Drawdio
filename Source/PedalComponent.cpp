@@ -178,16 +178,15 @@ void PedalComponent::drawKnob(juce::Graphics& g, int knobIdx, float value)
             
             const int frameX = frameIndex * frameWidth;
             
-            // Draw to a square destination to preserve circular knob shape
-            const float squareSize = juce::jmin(bounds.getWidth(), bounds.getHeight());
-            const float destX = bounds.getX() + (bounds.getWidth() - squareSize) / 2.0f;
-            const float destY = bounds.getY() + (bounds.getHeight() - squareSize) / 2.0f;
+            // Render sprite at native size, centered within bounds
+            const float destX = bounds.getX() + (bounds.getWidth() - frameWidth) / 2.0f;
+            const float destY = bounds.getY() + (bounds.getHeight() - frameHeight) / 2.0f;
             
             g.drawImage(knobImage,
                        static_cast<int>(destX),
                        static_cast<int>(destY),
-                       static_cast<int>(squareSize),
-                       static_cast<int>(squareSize),
+                       frameWidth,
+                       frameHeight,
                        frameX, 0, frameWidth, frameHeight);
         }
     }
