@@ -1,5 +1,7 @@
 #include "PixelCanvasComponent.h"
 
+#include "PixelCanvasComponent.h"
+#include "RenderUtils.h"
 #include <cmath>
 #include <utility>
 
@@ -38,9 +40,17 @@ juce::Colour PixelCanvasComponent::colourForPixel(PixelColor color)
     return ThemeManager::getDefault().canvasPixelColour(static_cast<uint8_t>(color));
 }
 
-void PixelCanvasComponent::paint(juce::Graphics&)
+void PixelCanvasComponent::paint(juce::Graphics& g)
 {
-    // COMMENTED OUT FOR DEBUG - pixel canvas rendering disabled
+    if (m_pixelImage.isValid())
+    {
+        constexpr float imageScale = 0.95f;
+        constexpr int canvasPadding = 20;
+        const int size = juce::roundToInt((juce::jmin(getWidth(), getHeight()) - canvasPadding * 2) * imageScale);
+        const auto imageArea = getLocalBounds().withSizeKeepingCentre(size, size).translated(0, 20).toFloat();
+        g.drawImage(m_pixelImage, imageArea, juce::RectanglePlacement::stretchToFit);
+        RenderUtils::paintSurfaceDepth(g, imageArea);
+    }
 }
 
 juce::Point<int> PixelCanvasComponent::gridCoordsFromUI(int uiX, int uiY) const

@@ -52,34 +52,38 @@ void PedalboardGrid::resized()
                                         .withTrimmedTop(GridLayout::GridSidePadding)
                                         .withTrimmedBottom(GridLayout::GridSidePadding);
 
-    const int colW = bounds.getWidth() / GridLayout::ColCount;
-    const int rowH = bounds.getHeight() / GridLayout::RowCount;
+    // Determine pedal size from available grid space, then scale down 5%.
+    const int pedalW = juce::roundToInt(juce::jlimit(
+        GridLayout::PedalWidthMin,
+        GridLayout::PedalWidthMax,
+        bounds.getWidth() / GridLayout::ColCount - 16) * 0.95f);
+    const int pedalH = juce::roundToInt(juce::jlimit(
+        GridLayout::PedalHeightMin,
+        GridLayout::PedalHeightMax,
+        bounds.getHeight() / GridLayout::RowCount - 16) * 0.95f);
+
+    // Inter-pedal x gap is fixed; the pedal group is centred horizontally.
+    constexpr int xInnerGap = 7;
+    const int groupW  = pedalW * GridLayout::ColCount + xInnerGap * (GridLayout::ColCount - 1);
+    const int xOrigin = bounds.getX() + (bounds.getWidth() - groupW) / 2;
+
+    // Inter-row y gap is fixed; the pedal group is centred vertically then
+    // shifted down by VerticalGroupOffset fraction of the total grid height.
+    constexpr float VerticalGroupOffset = 0.0375f;  // tune to shift group down; 0 = centred
+    constexpr int yInnerGap = 70;
+    const int groupH  = pedalH * GridLayout::RowCount + yInnerGap * (GridLayout::RowCount - 1);
+    const int yOrigin = bounds.getY() + (bounds.getHeight() - groupH) / 2
+                        + juce::roundToInt(bounds.getHeight() * VerticalGroupOffset);
 
     for (int slot = 0; slot < PedalSlotCount; ++slot)
     {
         const int row = slot / GridLayout::ColCount;
         const int col = slot % GridLayout::ColCount;
 
-        auto slotBounds = juce::Rectangle<int>(
-            col * colW,
-            row * rowH,
-            colW,
-            rowH).withTrimmedLeft(GridLayout::GridSidePadding)
-               .withTrimmedRight(GridLayout::GridSidePadding)
-               .withTrimmedTop(GridLayout::GridSidePadding)
-               .withTrimmedBottom(GridLayout::GridSidePadding);
+        const int x = xOrigin + col * (pedalW + xInnerGap);
+        const int y = yOrigin + row * (pedalH + yInnerGap);
 
-        const int pedalW = juce::jlimit(
-            GridLayout::PedalWidthMin,
-            GridLayout::PedalWidthMax,
-            slotBounds.getWidth() - 16);
-        const int pedalH = juce::jlimit(
-            GridLayout::PedalHeightMin,
-            GridLayout::PedalHeightMax,
-            slotBounds.getHeight() - 16);
-
-        auto pedalBounds = slotBounds.withSizeKeepingCentre(pedalW, pedalH);
-        m_pedalComponents[static_cast<size_t>(slot)]->setBounds(pedalBounds);
+        m_pedalComponents[static_cast<size_t>(slot)]->setBounds(x, y, pedalW, pedalH);
     }
 }
 

@@ -23,41 +23,39 @@ juce::String colorName(PixelCanvasComponent::PixelColor color)
 constexpr int WindowWidth = 1400;
 constexpr int WindowHeight = 800;
 constexpr int BlobCount = 5;
-constexpr float BlobSpacing = 8.0f;
+constexpr float BlobSpacing = 10.5f;
 constexpr float BlobMaxSize = 72.0f;
 constexpr float BlobPadding = 20.0f;
-constexpr int ButtonWidth = 20;
-constexpr int ButtonHeight = 14;
-constexpr int ButtonSpacing = 5;
+constexpr int ButtonWidth = 38;
+constexpr int ButtonHeight = 38;
+constexpr int ButtonSpacing = 6;
 constexpr int ButtonAreaHeight = 80;
 }
 
 // Layout constants namespace for consistent spacing across all components
 namespace Layout
 {
-    // CanvasModule layout
-    constexpr int CanvasOuterMargin = 22;
-    constexpr int CanvasVerticalMargin = 20;
-    constexpr int PaletteHeight = 300;
-    constexpr int CanvasPadding = 8;
-    constexpr int CanvasTopMargin = 24;
+    // ---- Proportional split ratios (Layer 1 surfaces) ----
+    // PedalboardWidthRatio: fraction of the full editor width given to the pedalboard region.
+    // CanvasWidthRatio is the complement (1.0 - PedalboardWidthRatio).
+    constexpr float PedalboardWidthRatio = 0.55f;
 
-    // ColorPalette layout
-    constexpr int PaletteLeftMargin = 30;
-    constexpr int PaletteRightMargin = 30;
-    constexpr int PaletteTopMargin = 20;
-    constexpr int PaletteBottomMargin = 20;
-    constexpr float PaletteBlobShift = 10.0f;
-    constexpr int PaletteButtonRightPadding = 25;
+    // PaletteHeightRatio: fraction of the canvas module height reserved for the colour palette.
+    constexpr float PaletteHeightRatio = 0.26f;
 
-    // Editor layout
-    constexpr int EditorContentLeftMargin = 50;
-    constexpr int EditorPedalAreaMinWidth = 680;
-    constexpr int EditorPedalAreaMaxWidth = 780;
-    constexpr int EditorPedalAreaExtraDeduction = 40;
-    constexpr int EditorGridBottomTrim = 30;
-    constexpr int EditorGridWidthDeduction = 60;
-    constexpr int EditorGridHeightDeduction = 20;
+    // ---- Fixed structural margins (Layer 1 → Layer 2 insets) ----
+    // These are intentional insets that detach child content from the raw structural
+    // surface boundary.  They are NOT compensatory corrections.
+    constexpr int CanvasOuterMargin   = 22;   // horizontal inset inside CanvasModule
+    constexpr int CanvasVerticalMargin = 20;  // vertical inset inside CanvasModule
+
+    // ---- ColorPalette internal margins ----
+    constexpr int PaletteLeftMargin   = 30;
+    constexpr int PaletteRightMargin  = 30;
+    constexpr int PaletteTopMargin    = 20;
+    constexpr int PaletteBottomMargin = 35;
+    constexpr float PaletteBlobShift  = 10.0f;
+    constexpr int PaletteButtonRightPadding = 8;
 }
 
 namespace GridLayout
@@ -86,7 +84,7 @@ void WoodGrainBackground::paint(juce::Graphics& g)
     const auto& woodTexture = m_resources.getTexture(ResourceManager::TextureId::WorkspaceWood);
     if (woodTexture.isValid())
     {
-        g.drawImage(woodTexture, bounds, juce::RectanglePlacement::centred);
+        g.drawImage(woodTexture, bounds, juce::RectanglePlacement::stretchToFit);
     }
 }
 
@@ -103,8 +101,8 @@ void PedalboardBackground::paint(juce::Graphics& g)
     const auto& texture = m_resources.getTexture(ResourceManager::TextureId::PedalboardSprite);
     
     // DEBUG: Draw border
-    g.setColour(juce::Colours::red);
-    g.drawRect(bounds, 2);
+    //g.setColour(juce::Colours::blue);
+    //g.drawRect(bounds, 2);
     
     if (texture.isValid())
     {
@@ -135,45 +133,78 @@ void ColorPalette::paint(juce::Graphics& g)
 {
     auto bounds = getLocalBounds().toFloat();
     const auto& texture = m_resources.getTexture(ResourceManager::TextureId::ColorPaletteBody);
-    
-    // DEBUG: Draw border
-    g.setColour(juce::Colours::red);
-    g.drawRect(bounds, 2);
-    
+
     if (texture.isValid())
-    {
-        g.drawImage(texture, bounds.getX(), bounds.getY(), 
+        g.drawImage(texture, bounds.getX(), bounds.getY(),
                    bounds.getWidth(), bounds.getHeight(),
                    0, 0, texture.getWidth(), texture.getHeight());
+
+    //g.setColour(juce::Colours::red);
+    //g.drawRect(bounds, 2);
+
+    for (int i = 0; i < static_cast<int>(m_blobs.size()); ++i)
+    {
+        const auto& blob = m_blobs[static_cast<size_t>(i)];
+        const bool isSelected = blob.color == m_selectedColor;
+        const bool isHovered  = i == m_hoveredBlob;
+
+        auto colour = PixelCanvasComponent::colourForPixel(blob.color);
+        if (isHovered) colour = colour.brighter(0.12f);
+
+        const auto drawBounds = isSelected ? blob.bounds.expanded(2.0f) : blob.bounds;
+
+        if (isSelected)
+        {
+            for (int g2 = 4; g2 >= 1; --g2)
+            {
+                g.setColour(colour.withAlpha(0.04f));
+                g.fillEllipse(drawBounds.expanded(static_cast<float>(g2) * 2.0f));
+            }
+        }
+
+        juce::ColourGradient gradient(colour.brighter(0.04f),
+                                      drawBounds.getCentreX(), drawBounds.getCentreY(),
+                                      colour.darker(0.18f),
+                                      drawBounds.getRight(), drawBounds.getBottom(),
+                                      true);
+        gradient.addColour(0.6, colour);  // flat zone from centre out to 60% radius
+        g.setGradientFill(gradient);
+        g.fillEllipse(drawBounds);
+
+        // Outer rim darkening — 1px at perimeter, darker blob colour, very low contrast
+        g.setColour(colour.darker(0.30f).withAlpha(0.22f));
+        g.drawEllipse(drawBounds, 1.0f);
+
+        // Inner highlight ring — slightly brighter, low opacity, 1.5px inside perimeter
+        g.setColour(colour.brighter(0.25f).withAlpha(0.18f));
+        g.drawEllipse(drawBounds.reduced(1.5f), 1.0f);
     }
 }
 
 void ColorPalette::resized()
 {
+    // Use withTrimmed* so every margin is applied to the same starting rectangle,
+    // not chained on the strip returned by the previous removeFrom* call.
     auto area = getLocalBounds()
-        .removeFromLeft(Layout::PaletteLeftMargin)
-        .removeFromRight(Layout::PaletteRightMargin)
-        .removeFromTop(Layout::PaletteTopMargin)
-        .removeFromBottom(Layout::PaletteBottomMargin);
+        .withTrimmedLeft(Layout::PaletteLeftMargin)
+        .withTrimmedRight(Layout::PaletteRightMargin)
+        .withTrimmedTop(Layout::PaletteTopMargin)
+        .withTrimmedBottom(Layout::PaletteBottomMargin);
 
     const auto blobSize = juce::jmin(area.getHeight() - 10.0f, BlobMaxSize);
-    const float totalWidth = blobSize * BlobCount + BlobSpacing * (BlobCount - 1);
-    float startX = area.getCentreX() - totalWidth / 2.0f - Layout::PaletteBlobShift;
-    float blobY = area.getCentreY() - blobSize / 2.0f;
+    float startX = area.getX() + blobSize * 0.25f + 1.0f;
+    float blobY = area.getCentreY() - blobSize / 2.0f - 1.0f;
 
     for (int i = 0; i < static_cast<int>(m_blobs.size()); ++i)
     {
-        auto slot = juce::Rectangle<float>(startX + static_cast<float>(i) * (blobSize + BlobSpacing),
-                                           blobY,
-                                           blobSize,
-                                           blobSize);
+        auto slot = juce::Rectangle<float>(startX + static_cast<float>(i) * (blobSize + BlobSpacing), blobY, blobSize, blobSize);
         m_blobs[static_cast<size_t>(i)].bounds = slot;
     }
 
     const auto totalH = ButtonHeight * 2 + ButtonSpacing;
     const int buttonW = ButtonWidth * 2;
-    const int buttonY = area.getCentreY() - totalH / 2;
-    const int rightX = area.getRight() - Layout::PaletteButtonRightPadding - buttonW;
+    const int buttonY = area.getCentreY() - totalH / 2 + 2 - 1;
+    const int rightX = area.getRight() - Layout::PaletteButtonRightPadding - buttonW - 5;
     m_undoButton.setBounds(rightX, buttonY, buttonW, ButtonHeight);
     m_clearButton.setBounds(rightX, buttonY + ButtonHeight + ButtonSpacing, buttonW, ButtonHeight);
 }
@@ -300,16 +331,23 @@ void CanvasModule::paint(juce::Graphics&)
 
 void CanvasModule::resized()
 {
-    auto area = getLocalBounds().reduced(Layout::CanvasOuterMargin, Layout::CanvasVerticalMargin);
+    auto full = getLocalBounds();
+    auto area = full.reduced(Layout::CanvasOuterMargin, Layout::CanvasVerticalMargin);
 
-    auto paletteArea = area.removeFromBottom(Layout::PaletteHeight);
+    // Palette anchored to the bottom of the full (unreduced) bounds so its
+    // bottom edge aligns with the window bottom.
+    const int paletteH = juce::roundToInt(full.getHeight() * Layout::PaletteHeightRatio);
+    auto paletteArea = full.removeFromBottom(paletteH);
 
-    auto canvasArea = area;
-
-    // Canvas fills the remaining area (not centered)
-    m_pixelCanvas.setBounds(canvasArea);
-
-    m_palette.setBounds(paletteArea);
+    // Canvas component is a square (height-constrained), right-edge aligned
+    // with the canvas module right edge (= pedalboard left boundary).
+    auto canvasArea = full;
+    canvasArea.setBottom(paletteArea.getY());
+    const int squareSize = canvasArea.getHeight();
+    const auto pixelCanvasBounds = canvasArea.withSizeKeepingCentre(squareSize, squareSize)
+                                              .withRightX(canvasArea.getRight());
+    m_pixelCanvas.setBounds(pixelCanvasBounds);
+    m_palette.setBounds(paletteArea.withTrimmedLeft(pixelCanvasBounds.getX()).withTrimmedRight(3).withTrimmedTop(2));
 }
 
 void CanvasModule::refreshStatus()
@@ -376,23 +414,27 @@ void DrawdioProcessorEditor::paint(juce::Graphics& g)
 
 void DrawdioProcessorEditor::resized()
 {
-    auto bounds = getLocalBounds();
+    // ── Layer 0: wood grain background fills the entire window ──────────────
+    // No deductions. This is the root visual surface.
+    const auto fullWindow = getLocalBounds();
+    m_woodGrainBackground.setBounds(fullWindow);
 
-    auto content = bounds.removeFromLeft(bounds.getWidth() - Layout::EditorContentLeftMargin);
-    const auto pedalW = juce::jlimit(
-        Layout::EditorPedalAreaMinWidth,
-        Layout::EditorPedalAreaMaxWidth,
-        content.getWidth() - 400) - Layout::EditorPedalAreaExtraDeduction;
-    auto pedalArea = content.removeFromRight(pedalW);
+    // ── Layer 1: major structural surfaces ──────────────────────────────────
+    // Split the full window left/right using PedalboardWidthRatio.
+    // The pedalboard owns the right portion; the canvas module owns the left.
+    const int pedalW  = juce::roundToInt(fullWindow.getWidth() * Layout::PedalboardWidthRatio);
+    const int canvasW = fullWindow.getWidth() - pedalW;
 
-    auto gridArea = pedalArea.withTrimmedLeft(Layout::EditorGridWidthDeduction / 2)
-                                .withTrimmedRight(Layout::EditorGridWidthDeduction / 2)
-                                .withTrimmedBottom(Layout::EditorGridBottomTrim);
+    const auto pedalboardArea = fullWindow.withTrimmedLeft(canvasW);  // right portion
+    const auto canvasArea     = fullWindow.withTrimmedRight(pedalW);  // left portion
 
-    m_woodGrainBackground.setBounds(bounds);
-    m_pedalboardBackground.setBounds(pedalArea);
-    m_canvasModule.setBounds(content);
-    m_pedalboardGrid.setBounds(gridArea);
+    m_pedalboardBackground.setBounds(pedalboardArea);
+    m_canvasModule.setBounds(canvasArea);
+
+    // ── Layer 1 → Layer 2: pedalboard grid ──────────────────────────────────
+    // PedalboardGrid sits inside the pedalboard region. Its own resized()
+    // applies GridSidePadding internally to position the pedal slots.
+    m_pedalboardGrid.setBounds(pedalboardArea);
 }
 
 void DrawdioProcessorEditor::triggerRecompile()
