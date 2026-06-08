@@ -177,19 +177,11 @@ void PedalComponent::drawKnob(juce::Graphics& g, int knobIdx, float value)
             const int frameHeight = knobImage.getHeight();
             const int frameX = frameIndex * frameWidth;
             
-            // Scale sprite to fit within bounds, preserving aspect ratio
-            const float scaleX = bounds.getWidth() / frameWidth;
-            const float scaleY = bounds.getHeight() / frameHeight;
-            const float scale = std::min(scaleX, scaleY);
+            // Render at native size, centered within bounds
+            const int destX = static_cast<int>(bounds.getX() + (bounds.getWidth() - frameWidth) / 2.0f);
+            const int destY = static_cast<int>(bounds.getY() + (bounds.getHeight() - frameHeight) / 2.0f);
             
-            const int destWidth = static_cast<int>(frameWidth * scale);
-            const int destHeight = static_cast<int>(frameHeight * scale);
-            
-            // Center within bounds
-            const int destX = static_cast<int>(bounds.getX() + (bounds.getWidth() - destWidth) / 2.0f);
-            const int destY = static_cast<int>(bounds.getY() + (bounds.getHeight() - destHeight) / 2.0f);
-            
-            g.drawImage(knobImage, destX, destY, destWidth, destHeight,
+            g.drawImage(knobImage, destX, destY, frameWidth, frameHeight,
                        frameX, 0, frameWidth, frameHeight);
         }
     }
