@@ -144,17 +144,24 @@ void PedalComponent::updateKnobBounds()
     const float pedalWidth = pedalBounds.getWidth();
     const float pedalHeight = pedalBounds.getHeight();
 
+    // Fixed knob size: 35x35 pixels, made square
+    constexpr float kKnobSize = 35.0f;
+    const float halfKnob = kKnobSize / 2.0f;
+
     for (int i = 0; i < kKnobCount; ++i)
     {
         const auto& normBounds = m_definition->knobLayout[static_cast<size_t>(i)];
         
-        // Calculate absolute position from normalized coordinates
-        const float absX = pedalBounds.getX() + normBounds.centreX * pedalWidth - (normBounds.width * pedalWidth) / 2.0f;
-        const float absY = pedalBounds.getY() + normBounds.centreY * pedalHeight - (normBounds.height * pedalHeight) / 2.0f;
-        const float absW = normBounds.width * pedalWidth;
-        const float absH = normBounds.height * pedalHeight;
+        // Calculate center position from normalized coordinates
+        const float centerX = pedalBounds.getX() + normBounds.centreX * pedalWidth;
+        const float centerY = pedalBounds.getY() + normBounds.centreY * pedalHeight;
 
-        m_knobBounds[static_cast<size_t>(i)] = juce::Rectangle<float>(absX, absY, absW, absH);
+        // Create square bounds centered at the normalized position
+        m_knobBounds[static_cast<size_t>(i)] = juce::Rectangle<float>(
+            centerX - halfKnob,
+            centerY - halfKnob,
+            kKnobSize,
+            kKnobSize);
     }
 }
 
@@ -178,15 +185,13 @@ void PedalComponent::drawKnob(juce::Graphics& g, int knobIdx, float value)
             const int frameHeight = knobImage.getHeight();
             const int frameX = frameIndex * frameWidth;
             
-            // Scale to fill square bounds while keeping square
-            const float scale = juce::jmin(bounds.getWidth(), bounds.getHeight());
-            const int destSize = static_cast<int>(scale);
+            // Scale to fill the 35x35 square bounds
+            const int destSize = static_cast<int>(bounds.getWidth());
             
-            // Center within bounds
-            const int destX = static_cast<int>(bounds.getX() + (bounds.getWidth() - destSize) / 2.0f);
-            const int destY = static_cast<int>(bounds.getY() + (bounds.getHeight() - destSize) / 2.0f);
-            
-            g.drawImage(knobImage, destX, destY, destSize, destSize,
+            g.drawImage(knobImage,
+                       static_cast<int>(bounds.getX()),
+                       static_cast<int>(bounds.getY()),
+                       destSize, destSize,
                        frameX, 0, frameWidth, frameHeight);
         }
     }
