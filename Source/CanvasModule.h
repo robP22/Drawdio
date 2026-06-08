@@ -1,6 +1,8 @@
 #pragma once
 #include <JuceHeader.h>
 #include <functional>
+#include "ColorPalette.h"
+#include "PixelCanvasComponent.h"
 
 class ResourceManager;
 class ThemeManager;
@@ -13,8 +15,8 @@ public:
     void paint(juce::Graphics& g) override;
     void resized() override;
 
-    class PixelCanvasComponent& getPixelCanvas();
-    const class PixelCanvasComponent& getPixelCanvas() const;
+    PixelCanvasComponent& getPixelCanvas();
+    const PixelCanvasComponent& getPixelCanvas() const;
 
     void setOnClear(std::function<void()> cb);
     void refreshStatus();
@@ -22,8 +24,8 @@ public:
 private:
     const ResourceManager& m_resources;
     const ThemeManager& m_theme;
-    class PixelCanvasComponent m_pixelCanvas;
-    class ColorPalette m_palette;
+    PixelCanvasComponent m_pixelCanvas;
+    ColorPalette m_palette;
 
     std::function<void()> m_onClear;
 };
