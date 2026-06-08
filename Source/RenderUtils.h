@@ -7,4 +7,5 @@ namespace RenderUtils
 {
     void drawImageScaled(juce::Graphics& g, const juce::Image& image, juce::Rectangle<float> bounds);
     void strokeCable(juce::Graphics& g, const juce::Path& path, juce::Colour colour, float thickness);
+    void paintSurfaceDepth(juce::Graphics& g, juce::Rectangle<float> bounds);
 }
