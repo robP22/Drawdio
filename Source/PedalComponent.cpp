@@ -177,22 +177,14 @@ void PedalComponent::drawKnob(juce::Graphics& g, int knobIdx, float value)
         
         if (knobImage.isValid())
         {
-            constexpr int kFrameCount = 32;
-            const int frameIndex = static_cast<int>(value * (kFrameCount - 1));
-            
-            // Each frame is 1254x1254 pixels
-            const int frameWidth = knobImage.getWidth() / kFrameCount;
-            const int frameHeight = knobImage.getHeight();
-            const int frameX = frameIndex * frameWidth;
-            
-            // Scale to fill the 35x35 square bounds
+            // Scale entire sprite sheet to fit the 35x35 square bounds
             const int destSize = static_cast<int>(bounds.getWidth());
             
             g.drawImage(knobImage,
                        static_cast<int>(bounds.getX()),
                        static_cast<int>(bounds.getY()),
                        destSize, destSize,
-                       frameX, 0, frameWidth, frameHeight);
+                       0, 0, knobImage.getWidth(), knobImage.getHeight());
         }
     }
 }
