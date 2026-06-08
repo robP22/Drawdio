@@ -44,8 +44,15 @@ void PixelCanvasComponent::paint(juce::Graphics& g)
     if (!m_pixelImage.isValid())
         return;
 
-    const float cellW = static_cast<float>(getWidth()) / GridSize;
-    const float cellH = static_cast<float>(getHeight()) / GridSize;
+    // Scale canvas visual size to 70% of component
+    constexpr float kCanvasScale = 0.70f;
+    const float canvasW = getWidth() * kCanvasScale;
+    const float canvasH = getHeight() * kCanvasScale;
+    const float offsetX = (getWidth() - canvasW) / 2.0f;
+    const float offsetY = (getHeight() - canvasH) / 2.0f;
+
+    const float cellW = canvasW / GridSize;
+    const float cellH = canvasH / GridSize;
 
     for (int y = 0; y < GridSize; ++y)
     {
@@ -53,15 +60,15 @@ void PixelCanvasComponent::paint(juce::Graphics& g)
         {
             const auto color = m_theme.canvasPixelColour(static_cast<uint8_t>(pixels[static_cast<size_t>(y * GridSize + x)]));
             g.setColour(color);
-            g.fillRect(static_cast<float>(x) * cellW,
-                       static_cast<float>(y) * cellH,
+            g.fillRect(offsetX + static_cast<float>(x) * cellW,
+                       offsetY + static_cast<float>(y) * cellH,
                        cellW,
                        cellH);
         }
     }
 
     auto bounds = getLocalBounds().toFloat();
-    const float size = juce::jmin(getWidth(), getHeight()) * 0.95f;
+    const float size = juce::jmin(getWidth(), getHeight()) * kCanvasScale;
     const auto imageArea = bounds.withSizeKeepingCentre(size, size).translated(0, 20).toFloat();
     RenderUtils::paintSurfaceDepth(g, imageArea);
 }
@@ -72,8 +79,19 @@ juce::Point<int> PixelCanvasComponent::gridCoordsFromUI(int uiX, int uiY) const
     if (bounds.isEmpty())
         return {};
 
-    const int gridX = (uiX * GridSize) / juce::jmax(1, bounds.getWidth());
-    const int gridY = (uiY * GridSize) / juce::jmax(1, bounds.getHeight());
+    // Calculate canvas position (same as paint())
+    constexpr float kCanvasScale = 0.70f;
+    const float canvasW = bounds.getWidth() * kCanvasScale;
+    const float canvasH = bounds.getHeight() * kCanvasScale;
+    const float offsetX = (bounds.getWidth() - canvasW) / 2.0f;
+    const float offsetY = (bounds.getHeight() - canvasH) / 2.0f;
+
+    // Adjust coordinates relative to canvas
+    const int relX = uiX - static_cast<int>(offsetX);
+    const int relY = uiY - static_cast<int>(offsetY);
+
+    const int gridX = (relX * GridSize) / juce::jmax(1, static_cast<int>(canvasW));
+    const int gridY = (relY * GridSize) / juce::jmax(1, static_cast<int>(canvasH));
     return { juce::jlimit(0, GridSize - 1, gridX),
              juce::jlimit(0, GridSize - 1, gridY) };
 }
@@ -82,14 +100,21 @@ juce::Rectangle<int> PixelCanvasComponent::cellBoundsForIndex(int index) const
 {
     const int x = index % GridSize;
     const int y = index / GridSize;
-    auto bounds = getLocalBounds().toFloat();
-    const float cellW = bounds.getWidth() / static_cast<float>(GridSize);
-    const float cellH = bounds.getHeight() / static_cast<float>(GridSize);
+    
+    // Calculate canvas position (same as paint())
+    constexpr float kCanvasScale = 0.70f;
+    const float canvasW = getWidth() * kCanvasScale;
+    const float canvasH = getHeight() * kCanvasScale;
+    const float offsetX = (getWidth() - canvasW) / 2.0f;
+    const float offsetY = (getHeight() - canvasH) / 2.0f;
 
-    return juce::Rectangle<float>(bounds.getX() + static_cast<float>(x) * cellW,
-                                  bounds.getY() + static_cast<float>(y) * cellH,
-                                  cellW + 1.0f,
-                                  cellH + 1.0f).getSmallestIntegerContainer();
+    const float cellW = canvasW / GridSize;
+    const float cellH = canvasH / GridSize;
+
+    return juce::Rectangle<float>(offsetX + static_cast<float>(x) * cellW,
+                                   offsetY + static_cast<float>(y) * cellH,
+                                   cellW + 1.0f,
+                                   cellH + 1.0f).getSmallestIntegerContainer();
 }
 
 void PixelCanvasComponent::beginStroke()
