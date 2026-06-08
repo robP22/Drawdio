@@ -19,4 +19,5 @@ public:
     static ResourceManager::SpriteSheetId getSkinSpriteSheetId(PedalSkin skin);
     static ResourceManager::SpriteId getLedSpriteId(PedalSkin skin);
     static ResourceManager::SpriteId getJackSpriteId(PedalSkin skin);
+    static ResourceManager::SpriteId getKnobSpriteId(PedalSkin skin);
 };

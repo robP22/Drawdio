@@ -1,6 +1,7 @@
 #include "PedalComponent.h"
 #include "PluginProcessor.h"
 #include "RenderUtils.h"
+#include "PedalDefinition.h"
 
 namespace
 {
@@ -14,63 +15,6 @@ juce::Colour skinColourForSlot(int slot)
 }
 }
 
-const char* PedalComponent::typeName(DspModuleType t)
-{
-    switch (t)
-    {
-        case DspModuleType::BYPASS:                   return "Bypass";
-        case DspModuleType::WAVESHAPER_DISTORTION:    return "Waveshaper Dist.";
-        case DspModuleType::MODULATED_DELAY_LINE:     return "Mod. Delay";
-        case DspModuleType::BIQUAD_FILTER:            return "Biquad Filter";
-        case DspModuleType::DYNAMIC_RING_BUFFER:       return "Dyn. Ring Buffer";
-        case DspModuleType::PITCH_SHIFTER_GRANULAR:   return "Pitch Shifter";
-        case DspModuleType::ENVELOPE_VCA_COMPRESSOR:  return "VCA Compressor";
-        case DspModuleType::PITCH_DETECTOR_OSCILLATOR:return "Pitch Detector";
-        case DspModuleType::DIFFUSED_DELAY_NETWORK:   return "Diff. Delay Net";
-        case DspModuleType::ALLPASS_FILTER_CASCADE:   return "Allpass Cascade";
-        case DspModuleType::FREQUENCY_SHIFTER:        return "Freq. Shifter";
-        case DspModuleType::MATHEMATICAL_WAVEFOLDER:  return "Wavefolder";
-        case DspModuleType::SAMPLE_RATE_DEGRADER:     return "Sample Rate Deg.";
-        case DspModuleType::FORMANT_VOCAL_SHIFTER:    return "Formant Shifter";
-        case DspModuleType::TAPE_STOP_REVERSE_ECHO:   return "Tape Stop Echo";
-        case DspModuleType::SIMPLE_DELAY:             return "Simple Delay";
-        case DspModuleType::PLATE_REVERB:             return "Plate Reverb";
-        case DspModuleType::SOFT_DISTORTION:          return "Soft Distortion";
-        case DspModuleType::GRANULAR_DELAY:           return "Gran. Delay";
-        default: return "Unknown";
-    }
-}
-
-juce::String PedalComponent::knobLabel(DspModuleType t, int knobIdx)
-{
-    if (knobIdx == 0) return "Wet";
-    if (knobIdx == 1) return "Dry";
-    if (knobIdx == 2) return "Vol";
-
-    switch (t)
-    {
-        case DspModuleType::WAVESHAPER_DISTORTION:     return "Drive";
-        case DspModuleType::MODULATED_DELAY_LINE:      return "Rate";
-        case DspModuleType::BIQUAD_FILTER:             return "Cutoff";
-        case DspModuleType::DYNAMIC_RING_BUFFER:        return "Size";
-        case DspModuleType::PITCH_SHIFTER_GRANULAR:    return "Pitch";
-        case DspModuleType::ENVELOPE_VCA_COMPRESSOR:   return "Thresh";
-        case DspModuleType::PITCH_DETECTOR_OSCILLATOR: return "Octave";
-        case DspModuleType::DIFFUSED_DELAY_NETWORK:    return "Decay";
-        case DspModuleType::ALLPASS_FILTER_CASCADE:    return "Coeff";
-        case DspModuleType::FREQUENCY_SHIFTER:         return "Shift";
-        case DspModuleType::MATHEMATICAL_WAVEFOLDER:   return "Fold";
-        case DspModuleType::SAMPLE_RATE_DEGRADER:      return "Bits";
-        case DspModuleType::FORMANT_VOCAL_SHIFTER:     return "Formant";
-        case DspModuleType::TAPE_STOP_REVERSE_ECHO:    return "Brake";
-        case DspModuleType::SIMPLE_DELAY:              return "Time";
-        case DspModuleType::PLATE_REVERB:              return "Decay";
-        case DspModuleType::SOFT_DISTORTION:           return "Drive";
-        case DspModuleType::GRANULAR_DELAY:            return "Pitch";
-        default: return "Param";
-    }
-}
-
 PedalComponent::PedalComponent(DrawdioProcessor& processor,
                                int slotIndex,
                                DspModuleType initialType,
@@ -82,8 +26,14 @@ PedalComponent::PedalComponent(DrawdioProcessor& processor,
       m_theme(theme),
       m_slotIndex(slotIndex),
       m_currentType(initialType),
-      m_skin(skin)
+      m_skin(skin),
+      m_definition(&PedalDefinitions::get(initialType))
 {
+    // Initialize knob values from definition defaults
+    for (int i = 0; i < kKnobCount; ++i)
+    {
+        m_knobValues[i] = m_definition->parameters[static_cast<size_t>(i)].defaultValue;
+    }
 }
 
 PedalComponent::~PedalComponent()
@@ -105,6 +55,12 @@ void PedalComponent::paint(juce::Graphics& g)
                    bounds.getWidth(), bounds.getHeight(),
                    0, 0, texture.getWidth(), texture.getHeight());
     }
+    
+    // Draw all 4 knobs in 2x2 grid layout
+    for (int i = 0; i < kKnobCount; ++i)
+    {
+        drawKnob(g, i, m_knobValues[i]);
+    }
 }
 
 void PedalComponent::setSkin(PedalSkinManager::PedalSkin skin)
@@ -118,7 +74,7 @@ void PedalComponent::setSkin(PedalSkinManager::PedalSkin skin)
 
 void PedalComponent::resized()
 {
-    // No rotary knob sliders - sprite-based knobs will be rendered later
+    updateKnobBounds();
 }
 
 void PedalComponent::mouseDown(const juce::MouseEvent& event)
@@ -147,7 +103,7 @@ void PedalComponent::showTypePopup()
     for (int t = 0; t <= static_cast<int>(DspModuleType::GRANULAR_DELAY); ++t)
     {
         auto type = static_cast<DspModuleType>(t);
-        menu.addItem(t + 1, typeName(type), true, type == m_currentType);
+        menu.addItem(t + 1, PedalDefinitions::getDisplayName(type), true, type == m_currentType);
     }
 
     menu.showMenuAsync(juce::PopupMenu::Options(),
@@ -169,14 +125,75 @@ void PedalComponent::syncFromProcessor()
     if (type != m_currentType)
     {
         m_currentType = type;
+        m_definition = &PedalDefinitions::get(type);
         repaint();
     }
 }
 
 void PedalComponent::setKnobValue(int knobIdx, float value)
 {
-    // Knob values handled by sprite-based knobs (to be implemented)
-    juce::ignoreUnused(knobIdx, value);
+    if (knobIdx >= 0 && knobIdx < kKnobCount)
+    {
+        m_knobValues[static_cast<size_t>(knobIdx)] = value;
+        repaint();
+    }
+}
+
+void PedalComponent::updateKnobBounds()
+{
+    if (m_definition == nullptr)
+        return;
+
+    auto pedalBounds = getLocalBounds().toFloat();
+    const float pedalWidth = pedalBounds.getWidth();
+    const float pedalHeight = pedalBounds.getHeight();
+
+    for (int i = 0; i < kKnobCount; ++i)
+    {
+        const auto& normBounds = m_definition->knobLayout[static_cast<size_t>(i)];
+        
+        // Calculate absolute position from normalized coordinates
+        const float absX = pedalBounds.getX() + normBounds.centreX * pedalWidth - (normBounds.width * pedalWidth) / 2.0f;
+        const float absY = pedalBounds.getY() + normBounds.centreY * pedalHeight - (normBounds.height * pedalHeight) / 2.0f;
+        const float absW = normBounds.width * pedalWidth;
+        const float absH = normBounds.height * pedalHeight;
+
+        m_knobBounds[static_cast<size_t>(i)] = juce::Rectangle<float>(absX, absY, absW, absH);
+    }
+}
+
+void PedalComponent::drawKnob(juce::Graphics& g, int knobIdx, float value)
+{
+    if (knobIdx < 0 || knobIdx >= kKnobCount)
+        return;
+
+    const auto& bounds = m_knobBounds[static_cast<size_t>(knobIdx)];
+    if (!bounds.isEmpty())
+    {
+        const auto spriteId = PedalSkinManager::getKnobSpriteId(m_skin);
+        const auto& spriteSheet = m_resources.getSpriteSheet(PedalSkinManager::getSkinSpriteSheetId(m_skin));
+        const auto& spriteFrame = m_resources.getSpriteFrame(spriteId);
+
+        if (spriteSheet.image.isValid() && spriteFrame.source.getWidth() > 0)
+        {
+            // Calculate which frame to show based on knob value (0.0-1.0)
+            constexpr int kFrameCount = 32;
+            const int frameIndex = static_cast<int>(value * (kFrameCount - 1));
+            
+            // Extract the frame from the sprite sheet
+            const int frameX = spriteFrame.source.getX() + frameIndex * spriteFrame.source.getWidth();
+            const int frameY = spriteFrame.source.getY();
+            const int frameW = spriteFrame.source.getWidth();
+            const int frameH = spriteFrame.source.getHeight();
+
+            g.drawImage(spriteSheet.image,
+                       static_cast<int>(bounds.getX()),
+                       static_cast<int>(bounds.getY()),
+                       static_cast<int>(bounds.getWidth()),
+                       static_cast<int>(bounds.getHeight()),
+                       frameX, frameY, frameW, frameH);
+        }
+    }
 }
 
 juce::Point<float> PedalComponent::getInputJackPos() const

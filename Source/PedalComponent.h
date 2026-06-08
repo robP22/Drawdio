@@ -1,5 +1,6 @@
 #pragma once
 #include <JuceHeader.h>
+#include <array>
 #include "PedalDefinition.h"
 #include "PedalStructures.h"
 #include "ResourceManager.h"
@@ -31,12 +32,13 @@ public:
     juce::Point<float> getInputJackPos() const;
     juce::Point<float> getOutputJackPos() const;
 
-    static const char* typeName(DspModuleType t);
-    static juce::String knobLabel(DspModuleType t, int idx);
-
 private:
     void showTypePopup();
     void updateDefinition();
+    void updateKnobBounds();
+    void drawKnob(juce::Graphics& g, int knobIdx, float value);
+
+    static constexpr int kKnobCount = 4;
 
     DrawdioProcessor& audioProcessor;
     const ResourceManager& m_resources;
@@ -45,4 +47,6 @@ private:
     DspModuleType m_currentType;
     const PedalDefinition* m_definition = nullptr;
     PedalSkinManager::PedalSkin m_skin;
+    std::array<float, kKnobCount> m_knobValues = { 0.5f, 0.5f, 0.5f, 0.5f };
+    std::array<juce::Rectangle<float>, kKnobCount> m_knobBounds;
 };

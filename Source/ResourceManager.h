@@ -16,6 +16,7 @@ public:
         PedalEnclosure,
         PedalFaceGrain,
         OverlayGloss,
+        PedalKnobImage,
         Count
     };
 
@@ -58,6 +59,7 @@ public:
         GenPedalBody,
         GenPedalLed,
         GenPedalJack,
+        PedalKnob,
         Count
     };
 
@@ -99,6 +101,7 @@ public:
 private:
     void loadAll();
     void loadProceduralTextures();
+    void loadSpriteSheets();
 
     static juce::Image decodeImageFromBinaryData(const void* data, size_t sizeInBytes);
 
