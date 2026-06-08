@@ -144,19 +144,22 @@ void PedalComponent::updateKnobBounds()
     const float pedalWidth = pedalBounds.getWidth();
     const float pedalHeight = pedalBounds.getHeight();
 
-    // Fixed knob size: 35x35 pixels, made square
-    constexpr float kKnobSize = 35.0f;
+    // Knob size: 39x39 pixels (scaled up 10%)
+    constexpr float kKnobSize = 39.0f;
+    constexpr float kSpacingOffsetX = -5.0f;
+    constexpr float kSpacingOffsetY = -5.0f;
+    constexpr float kYShift = -10.0f;
     const float halfKnob = kKnobSize / 2.0f;
 
     for (int i = 0; i < kKnobCount; ++i)
     {
         const auto& normBounds = m_definition->knobLayout[static_cast<size_t>(i)];
         
-        // Calculate center position from normalized coordinates
-        const float centerX = pedalBounds.getX() + normBounds.centreX * pedalWidth;
-        const float centerY = pedalBounds.getY() + normBounds.centreY * pedalHeight;
+        // Calculate center position from normalized coordinates with adjustments
+        const float centerX = pedalBounds.getX() + (normBounds.centreX + kSpacingOffsetX / pedalWidth) * pedalWidth;
+        const float centerY = pedalBounds.getY() + (normBounds.centreY + kSpacingOffsetY / pedalHeight + kYShift / pedalHeight) * pedalHeight;
 
-        // Create square bounds centered at the normalized position
+        // Create square bounds centered at the adjusted position
         m_knobBounds[static_cast<size_t>(i)] = juce::Rectangle<float>(
             centerX - halfKnob,
             centerY - halfKnob,
