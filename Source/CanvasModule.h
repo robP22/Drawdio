@@ -1,8 +1,8 @@
 #pragma once
 #include <JuceHeader.h>
 #include <functional>
-#include "ColorPalette.h"
 #include "PixelCanvasComponent.h"
+#include "ColorPalette.h"
 
 class ResourceManager;
 class ThemeManager;
