@@ -45,10 +45,6 @@ void PedalComponent::paint(juce::Graphics& g)
     auto bounds = getLocalBounds().toFloat();
     const auto& texture = m_resources.getTexture(ResourceManager::TextureId::PedalEnclosure);
     
-    // DEBUG: Draw border
-    g.setColour(juce::Colours::red);
-    g.drawRect(bounds, 2);
-    
     if (texture.isValid())
     {
         g.drawImage(texture, bounds.getX(), bounds.getY(), 
@@ -170,28 +166,27 @@ void PedalComponent::drawKnob(juce::Graphics& g, int knobIdx, float value)
     const auto& bounds = m_knobBounds[static_cast<size_t>(knobIdx)];
     if (!bounds.isEmpty())
     {
-        const auto spriteId = PedalSkinManager::getKnobSpriteId(m_skin);
-        const auto& spriteSheet = m_resources.getSpriteSheet(PedalSkinManager::getSkinSpriteSheetId(m_skin));
-        const auto& spriteFrame = m_resources.getSpriteFrame(spriteId);
-
-        if (spriteSheet.image.isValid() && spriteFrame.source.getWidth() > 0)
+        // Use the knob image directly from images (not sprite sheets)
+        const auto& knobImage = m_resources.getImage(ResourceManager::ImageId::PedalKnobImage);
+        
+        if (knobImage.isValid())
         {
             // Calculate which frame to show based on knob value (0.0-1.0)
             constexpr int kFrameCount = 32;
             const int frameIndex = static_cast<int>(value * (kFrameCount - 1));
             
-            // Extract the frame from the sprite sheet
-            const int frameX = spriteFrame.source.getX() + frameIndex * spriteFrame.source.getWidth();
-            const int frameY = spriteFrame.source.getY();
-            const int frameW = spriteFrame.source.getWidth();
-            const int frameH = spriteFrame.source.getHeight();
-
-            g.drawImage(spriteSheet.image,
+            const int frameWidth = knobImage.getWidth() / kFrameCount;
+            const int frameHeight = knobImage.getHeight();
+            
+            // Calculate source rectangle for this frame
+            const int frameX = frameIndex * frameWidth;
+            
+            g.drawImage(knobImage,
                        static_cast<int>(bounds.getX()),
                        static_cast<int>(bounds.getY()),
                        static_cast<int>(bounds.getWidth()),
                        static_cast<int>(bounds.getHeight()),
-                       frameX, frameY, frameW, frameH);
+                       frameX, 0, frameWidth, frameHeight);
         }
     }
 }

@@ -53,6 +53,8 @@ juce_generate_juce_header(Drawdio)
 target_sources(Drawdio PRIVATE
     Source/PluginProcessor.cpp
     Source/PluginEditor.cpp
+    Source/ColorPalette.cpp
+    Source/CanvasModule.cpp
     Source/UnifiedPedalProcessor.cpp
     Source/CompilerThread.cpp
     Source/CanvasMessageQueue.cpp
