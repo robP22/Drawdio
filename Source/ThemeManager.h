@@ -39,8 +39,8 @@ public:
     juce::Colour clearButtonAccent() const override;
     juce::Colour cableColour() const override;
 
-    const ThemeManager::PedalStyle& pedalStyle() const noexcept override { return m_pedalStyle; }
+    const PedalStyle& pedalStyle() const noexcept override { return m_pedalStyle; }
 
 private:
-    ThemeManager::PedalStyle m_pedalStyle;
+    PedalStyle m_pedalStyle;
 };

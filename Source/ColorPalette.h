@@ -3,6 +3,7 @@
 #include <array>
 #include <functional>
 #include "IThemeProvider.h"
+#include "ResourceManager.h"
 
 class ColorPalette : public juce::Component
 {
