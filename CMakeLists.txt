@@ -68,6 +68,7 @@ target_sources(Drawdio PRIVATE
     Source/HeadlessDspTest.cpp
     Source/StateSerializer.cpp
     Source/DspGraph.cpp
+    Source/EffectConfigRegistry.cpp
     Source/Effects/GranularBaseEffect.cpp
     Source/Effects/DistortionEffects.cpp
     Source/Effects/FilterEffects.cpp
