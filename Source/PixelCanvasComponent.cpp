@@ -1,5 +1,6 @@
 #include "PixelCanvasComponent.h"
 #include "RenderUtils.h"
+#include "ThemeManager.h"
 #include <cmath>
 #include <utility>
 

@@ -6,7 +6,6 @@
 #include "ColorPalette.h"
 
 class ResourceManager;
-class ThemeManager;
 
 class CanvasModule : public juce::Component
 {

@@ -11,7 +11,7 @@ constexpr int CanvasVerticalMargin = 20;
 constexpr float PaletteHeightRatio = 0.26f;
 }
 
-CanvasModule::CanvasModule(const ResourceManager& resources, const ThemeManager& theme)
+CanvasModule::CanvasModule(const ResourceManager& resources, const IThemeProvider& theme)
     : m_resources(resources),
       m_theme(theme),
       m_pixelCanvas(theme),

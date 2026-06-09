@@ -42,13 +42,10 @@ void paintSurfaceDepth(juce::Graphics& g, juce::Rectangle<float> r)
 void styleAccentButton(juce::TextButton& button, juce::Colour accentColour)
 {
     const auto baseColour = juce::Colour(0xFF25292C);
+    const auto hoverColour = baseColour.brighter(0.15f);
     button.setColour(juce::TextButton::buttonColourId, baseColour);
     button.setColour(juce::TextButton::buttonOnColourId, accentColour.darker(0.2f));
     button.setColour(juce::TextButton::textColourOffId, juce::Colours::whitesmoke);
     button.setColour(juce::TextButton::textColourOnId, juce::Colours::white);
-    
-    // Add hover state feedback
-    button.setColour(juce::TextButton::buttonOverColourId, baseColour.brighter(0.15f));
-    button.setColour(juce::TextButton::textColourOnOverId, accentColour.brighter(0.10f));
 }
 }

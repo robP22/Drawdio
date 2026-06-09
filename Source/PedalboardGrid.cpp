@@ -14,7 +14,7 @@ constexpr int kPedalboardColumns = 3;
 
 PedalboardGrid::PedalboardGrid(DrawdioProcessor& processor,
                                    const ResourceManager& resources,
-                                   const ThemeManager& theme,
+                                   const IThemeProvider& theme,
                                    CanvasRoutingManager& routingManager)
     : audioProcessor(processor),
       m_resources(resources),
