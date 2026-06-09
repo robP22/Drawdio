@@ -11,7 +11,7 @@ namespace Layout
 }
 
 // Background component implementations - flat textures without decorative frames
-WoodGrainBackground::WoodGrainBackground(const ResourceManager& resources, const ThemeManager& theme)
+WoodGrainBackground::WoodGrainBackground(const ResourceManager& resources, const IThemeProvider& theme)
     : m_resources(resources),
       m_theme(theme)
 {
@@ -28,7 +28,7 @@ void WoodGrainBackground::paint(juce::Graphics& g)
     }
 }
 
-PedalboardBackground::PedalboardBackground(const ResourceManager& resources, const ThemeManager& theme)
+PedalboardBackground::PedalboardBackground(const ResourceManager& resources, const IThemeProvider& theme)
     : m_resources(resources),
       m_theme(theme)
 {

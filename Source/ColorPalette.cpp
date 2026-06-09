@@ -21,7 +21,7 @@ namespace Layout
     constexpr int ButtonSpacing = 6;
 }
 
-ColorPalette::ColorPalette(const ResourceManager& resources, const ThemeManager& theme)
+ColorPalette::ColorPalette(const ResourceManager& resources, const IThemeProvider& theme)
     : m_resources(resources),
       m_theme(theme),
       m_blobs {{

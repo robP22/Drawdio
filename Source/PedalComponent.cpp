@@ -19,7 +19,7 @@ PedalComponent::PedalComponent(DrawdioProcessor& processor,
                                int slotIndex,
                                DspModuleType initialType,
                                const ResourceManager& resources,
-                               const ThemeManager& theme,
+                               const IThemeProvider& theme,
                                PedalSkinManager::PedalSkin skin)
     : audioProcessor(processor),
       m_resources(resources),
