@@ -8,6 +8,7 @@
 #include "PedalboardGrid.h"
 #include "PluginProcessor.h"
 #include "ResourceManager.h"
+#include "ThemeManager.h"
 #include "IThemeProvider.h"
 #include "CanvasRoutingManager.h"
 
