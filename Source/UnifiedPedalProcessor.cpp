@@ -130,7 +130,12 @@ std::vector<ParameterDescriptor> UnifiedPedalProcessor::getCurrentParams() const
     return {};
 }
 
-std::shared_ptr<PedalAssetPayload> UnifiedPedalProcessor::getCurrentConfig() const
+std::shared_ptr<const PedalAssetPayload> UnifiedPedalProcessor::getCurrentConfig() const
+{
+    return m_currentConfig.load();
+}
+
+std::shared_ptr<PedalAssetPayload> UnifiedPedalProcessor::getCurrentConfig()
 {
     return m_currentConfig.load();
 }

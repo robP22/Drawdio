@@ -19,7 +19,8 @@ public:
     void loadPedalConfiguration(std::shared_ptr<PedalAssetPayload> config);
     void processAudioBlock(float** buffer, int numChannels, int numSamples);
     std::vector<ParameterDescriptor> getCurrentParams() const;
-    std::shared_ptr<PedalAssetPayload> getCurrentConfig() const;
+    std::shared_ptr<const PedalAssetPayload> getCurrentConfig() const;
+    std::shared_ptr<PedalAssetPayload> getCurrentConfig();
 
     void updateParameter(int physicalSlot, int knobIdx, float newValue);
 
