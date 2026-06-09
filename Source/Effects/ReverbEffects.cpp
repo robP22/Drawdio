@@ -1,24 +1,5 @@
 #include "Effects/ReverbEffects.h"
-
-namespace {
-
-constexpr ReverbNetworkConfig kDiffReverbConfig = {
-    0.2, 0.7,
-    { 0.8f, 0.7f, 0.6f, 0.5f },
-    0.6f,
-    { 30, 37, 41, 47 },
-    { 5, 2 }
-};
-
-constexpr ReverbNetworkConfig kPlateReverbConfig = {
-    0.3, 0.6,
-    { 0.9f, 0.85f, 0.78f, 0.7f },
-    0.7f,
-    { 25, 32, 38, 44 },
-    { 4, 3 }
-};
-
-}
+#include "EffectConfigRegistry.h"
 
 ReverbNetworkEffect::ReverbNetworkEffect(const ReverbNetworkConfig& config)
     : m_config(config)
@@ -49,5 +30,5 @@ void ReverbNetworkEffect::processSample(float** b, int c, int s, float effectPar
     if (c > 1) b[1][s] = wetR;
 }
 
-DiffusedReverbEffect::DiffusedReverbEffect() : ReverbNetworkEffect(kDiffReverbConfig) {}
-PlateReverbEffect::PlateReverbEffect() : ReverbNetworkEffect(kPlateReverbConfig) {}
+DiffusedReverbEffect::DiffusedReverbEffect() : ReverbNetworkEffect(EffectConfigRegistry::getDiffusedReverbConfig()) {}
+PlateReverbEffect::PlateReverbEffect() : ReverbNetworkEffect(EffectConfigRegistry::getPlateReverbConfig()) {}

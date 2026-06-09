@@ -1,6 +1,6 @@
 #include "PluginEditor.h"
-#include "RenderUtils.h"
 #include "GridLayout.h"
+#include "RenderUtils.h"
 
 #include <cmath>
 
@@ -80,9 +80,9 @@ DrawdioProcessorEditor::DrawdioProcessorEditor(DrawdioProcessor& p)
 
     m_canvasModule.setOnClear([this]()
     {
-        m_routingManager.clearManualRouting();
-        m_pedalboardGrid.updateRouting({});
+        // Consolidate to single authoritative source - only update audioProcessor
         audioProcessor.setManualRouting({});
+        m_pedalboardGrid.updateRouting({});
     });
 
     setSize(1400, 800);

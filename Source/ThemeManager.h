@@ -2,8 +2,9 @@
 
 #include <JuceHeader.h>
 #include <cstdint>
+#include "IThemeProvider.h"
 
-class ThemeManager final
+class ThemeManager final : public IThemeProvider
 {
 public:
     struct PedalStyle

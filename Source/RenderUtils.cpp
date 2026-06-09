@@ -38,4 +38,17 @@ void paintSurfaceDepth(juce::Graphics& g, juce::Rectangle<float> r)
     g.setColour(juce::Colours::white.withAlpha(0.10f));
     g.drawRoundedRectangle(r.reduced(1.0f), 1.0f, 1.0f);
 }
+
+void styleAccentButton(juce::TextButton& button, juce::Colour accentColour)
+{
+    const auto baseColour = juce::Colour(0xFF25292C);
+    button.setColour(juce::TextButton::buttonColourId, baseColour);
+    button.setColour(juce::TextButton::buttonOnColourId, accentColour.darker(0.2f));
+    button.setColour(juce::TextButton::textColourOffId, juce::Colours::whitesmoke);
+    button.setColour(juce::TextButton::textColourOnId, juce::Colours::white);
+    
+    // Add hover state feedback
+    button.setColour(juce::TextButton::buttonOverColourId, baseColour.brighter(0.15f));
+    button.setColour(juce::TextButton::textColourOnOverId, accentColour.brighter(0.10f));
+}
 }
