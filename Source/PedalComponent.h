@@ -1,11 +1,12 @@
 #pragma once
 #include <JuceHeader.h>
 #include <array>
+
 #include "PedalDefinition.h"
+#include "PedalSkinManager.h"
 #include "PedalStructures.h"
 #include "ResourceManager.h"
-#include "ThemeManager.h"
-#include "PedalSkinManager.h"
+#include "IThemeProvider.h"
 
 class DrawdioProcessor;
 
@@ -16,7 +17,7 @@ public:
                    int slotIndex,
                    DspModuleType initialType,
                    const ResourceManager& resources,
-                   const ThemeManager& theme,
+                   const IThemeProvider& theme,
                    PedalSkinManager::PedalSkin skin = PedalSkinManager::PedalSkin::Default);
     ~PedalComponent() override;
 
@@ -42,7 +43,7 @@ private:
 
     DrawdioProcessor& audioProcessor;
     const ResourceManager& m_resources;
-    const ThemeManager& m_theme;
+    const IThemeProvider& m_theme;
     int m_slotIndex;
     DspModuleType m_currentType;
     const PedalDefinition* m_definition = nullptr;

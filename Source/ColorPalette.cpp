@@ -1,42 +1,54 @@
 #include "ColorPalette.h"
 #include "PixelCanvasComponent.h"
+#include "RenderUtils.h"
 #include "ResourceManager.h"
 #include "ThemeManager.h"
 
 namespace Layout
 {
-constexpr int PaletteLeftMargin   = 30;
-constexpr int PaletteRightMargin  = 30;
-constexpr int PaletteTopMargin    = 20;
-constexpr int PaletteBottomMargin = 35;
-constexpr float PaletteBlobShift  = 10.0f;
-constexpr int PaletteButtonRightPadding = 8;
-}
-
-namespace
-{
-constexpr float BlobSpacing = 10.5f;
-constexpr float BlobMaxSize = 72.0f;
-constexpr int ButtonWidth = 38;
-constexpr int ButtonHeight = 38;
-constexpr int ButtonSpacing = 6;
+    constexpr int PaletteLeftMargin   = 30;
+    constexpr int PaletteRightMargin  = 30;
+    constexpr int PaletteTopMargin    = 20;
+    constexpr int PaletteBottomMargin = 35;
+    constexpr float PaletteBlobShift  = 10.0f;
+    constexpr int PaletteButtonRightPadding = 8;
+    
+    // Button dimensions
+    constexpr float BlobSpacing = 10.5f;
+    constexpr float BlobMaxSize = 72.0f;
+    constexpr int ButtonWidth = 38;
+    constexpr int ButtonHeight = 38;
+    constexpr int ButtonSpacing = 6;
 }
 
 ColorPalette::ColorPalette(const ResourceManager& resources, const ThemeManager& theme)
     : m_resources(resources),
       m_theme(theme),
       m_blobs {{
-          { PixelCanvasComponent::PixelColor::Red,   {} },
-          { PixelCanvasComponent::PixelColor::Green, {} },
-          { PixelCanvasComponent::PixelColor::Blue,  {} },
-          { PixelCanvasComponent::PixelColor::White, {} },
-          { PixelCanvasComponent::PixelColor::Black, {} }
+          { 3, {} },   // Red
+          { 2, {} },   // Green
+          { 1, {} },   // Blue
+          { 4, {} },   // White
+          { 0, {} }    // Black
       }}
 {
     addAndMakeVisible(m_undoButton);
     addAndMakeVisible(m_clearButton);
-    styleButton(m_undoButton, juce::Colour(0xFF4A90D9));
-    styleButton(m_clearButton, juce::Colour(0xFFE74C3C));
+    RenderUtils::styleAccentButton(m_undoButton, juce::Colour(0xFF4A90D9));
+    RenderUtils::styleAccentButton(m_clearButton, juce::Colour(0xFFE74C3C));
+
+    // Attach click listeners to buttons
+    m_undoButton.onClick = [this]()
+    {
+        if (m_onUndo)
+            m_onUndo();
+    };
+
+    m_clearButton.onClick = [this]()
+    {
+        if (m_onClear)
+            m_onClear();
+    };
 }
 
 void ColorPalette::paint(juce::Graphics& g)
@@ -94,22 +106,22 @@ void ColorPalette::resized()
         .withTrimmedTop(Layout::PaletteTopMargin)
         .withTrimmedBottom(Layout::PaletteBottomMargin);
 
-    const auto blobSize = juce::jmin(area.getHeight() - 10.0f, BlobMaxSize);
+    const auto blobSize = juce::jmin(area.getHeight() - 10.0f, Layout::BlobMaxSize);
     float startX = area.getX() + blobSize * 0.25f + 1.0f;
     float blobY = area.getCentreY() - blobSize / 2.0f - 1.0f;
 
     for (int i = 0; i < static_cast<int>(m_blobs.size()); ++i)
     {
-        auto slot = juce::Rectangle<float>(startX + static_cast<float>(i) * (blobSize + BlobSpacing), blobY, blobSize, blobSize);
+        auto slot = juce::Rectangle<float>(startX + static_cast<float>(i) * (blobSize + Layout::BlobSpacing), blobY, blobSize, blobSize);
         m_blobs[static_cast<size_t>(i)].bounds = slot;
     }
 
-    const auto totalH = ButtonHeight * 2 + ButtonSpacing;
-    const int buttonW = ButtonWidth * 2;
+    const auto totalH = Layout::ButtonHeight * 2 + Layout::ButtonSpacing;
+    const int buttonW = Layout::ButtonWidth * 2;
     const int buttonY = area.getCentreY() - totalH / 2 + 2 - 1;
     const int rightX = area.getRight() - Layout::PaletteButtonRightPadding - buttonW - 5;
-    m_undoButton.setBounds(rightX, buttonY, buttonW, ButtonHeight);
-    m_clearButton.setBounds(rightX, buttonY + ButtonHeight + ButtonSpacing, buttonW, ButtonHeight);
+    m_undoButton.setBounds(rightX, buttonY, buttonW, Layout::ButtonHeight);
+    m_clearButton.setBounds(rightX, buttonY + Layout::ButtonHeight + Layout::ButtonSpacing, buttonW, Layout::ButtonHeight);
 }
 
 void ColorPalette::mouseDown(const juce::MouseEvent& event)
@@ -143,7 +155,7 @@ void ColorPalette::mouseExit(const juce::MouseEvent&)
     repaint();
 }
 
-void ColorPalette::setSelectedColor(PixelCanvasComponent::PixelColor color)
+void ColorPalette::setSelectedColor(uint8_t color)
 {
     m_selectedColor = color;
     repaint();
@@ -156,12 +168,4 @@ int ColorPalette::hitTestBlob(juce::Point<float> position) const
             return i;
 
     return -1;
-}
-
-void ColorPalette::styleButton(juce::TextButton& button, juce::Colour accent)
-{
-    button.setColour(juce::TextButton::buttonColourId, juce::Colour(0xFF25292C));
-    button.setColour(juce::TextButton::buttonOnColourId, accent.darker(0.2f));
-    button.setColour(juce::TextButton::textColourOffId, juce::Colours::whitesmoke);
-    button.setColour(juce::TextButton::textColourOnId, juce::Colours::white);
 }

@@ -7,7 +7,7 @@
 #include "CanvasRoutingManager.h"
 #include "PedalComponent.h"
 #include "ResourceManager.h"
-#include "ThemeManager.h"
+#include "IThemeProvider.h"
 
 class DrawdioProcessor;
 
@@ -20,7 +20,7 @@ class PedalboardGrid : public juce::Component
 public:
     PedalboardGrid(DrawdioProcessor& processor,
                    const ResourceManager& resources,
-                   const ThemeManager& theme,
+                   const IThemeProvider& theme,
                    CanvasRoutingManager& routingManager);
     ~PedalboardGrid() override = default;
 
@@ -53,7 +53,7 @@ private:
 
     DrawdioProcessor& audioProcessor;
     const ResourceManager& m_resources;
-    const ThemeManager& m_theme;
+    const IThemeProvider& m_theme;
     CanvasRoutingManager& m_routingManager;
     std::array<std::unique_ptr<PedalComponent>, PedalSlotCount> m_pedalComponents;
 

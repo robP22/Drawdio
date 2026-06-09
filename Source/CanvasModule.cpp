@@ -20,9 +20,9 @@ CanvasModule::CanvasModule(const ResourceManager& resources, const ThemeManager&
     addAndMakeVisible(m_pixelCanvas);
     addAndMakeVisible(m_palette);
 
-    m_palette.setOnColorSelected([this](auto color)
+    m_palette.setOnColorSelected([this](uint8_t color)
     {
-        m_pixelCanvas.setCurrentColor(color);
+        m_pixelCanvas.setCurrentColor(static_cast<PixelCanvasComponent::PixelColor>(color));
     });
 
     m_palette.setOnUndo([this]()
@@ -57,8 +57,8 @@ void CanvasModule::resized()
     auto canvasArea = full;
     canvasArea.setBottom(paletteArea.getY());
     const int squareSize = canvasArea.getHeight();
-    const auto pixelCanvasBounds = canvasArea.withSizeKeepingCentre(squareSize, squareSize)
-                                              .withRightX(canvasArea.getRight());
+    // Properly center the canvas using withSizeKeepingCentre only
+    const auto pixelCanvasBounds = canvasArea.withSizeKeepingCentre(squareSize, squareSize);
     m_pixelCanvas.setBounds(pixelCanvasBounds);
     m_palette.setBounds(paletteArea.withTrimmedLeft(pixelCanvasBounds.getX()).withTrimmedRight(3).withTrimmedTop(2));
 }

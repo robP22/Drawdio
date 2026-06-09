@@ -2,6 +2,7 @@
 #include <JuceHeader.h>
 #include <functional>
 #include "PixelCanvasComponent.h"
+#include "IThemeProvider.h"
 #include "ColorPalette.h"
 
 class ResourceManager;
@@ -10,7 +11,7 @@ class ThemeManager;
 class CanvasModule : public juce::Component
 {
 public:
-    CanvasModule(const ResourceManager& resources, const ThemeManager& theme);
+    CanvasModule(const ResourceManager& resources, const IThemeProvider& theme);
 
     void paint(juce::Graphics& g) override;
     void resized() override;
@@ -23,7 +24,7 @@ public:
 
 private:
     const ResourceManager& m_resources;
-    const ThemeManager& m_theme;
+    const IThemeProvider& m_theme;
     PixelCanvasComponent m_pixelCanvas;
     ColorPalette m_palette;
 

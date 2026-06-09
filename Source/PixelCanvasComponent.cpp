@@ -1,6 +1,4 @@
 #include "PixelCanvasComponent.h"
-
-#include "PixelCanvasComponent.h"
 #include "RenderUtils.h"
 #include <cmath>
 #include <utility>
@@ -20,7 +18,7 @@ PixelCanvasComponent::PixelColor pixelFromRaw(uint8_t raw)
 }
 }
 
-PixelCanvasComponent::PixelCanvasComponent(const ThemeManager& theme)
+PixelCanvasComponent::PixelCanvasComponent(const IThemeProvider& theme)
     : m_theme(theme)
 {
     pixels.fill(PixelColor::White);
@@ -44,12 +42,17 @@ void PixelCanvasComponent::paint(juce::Graphics& g)
     if (!m_pixelImage.isValid())
         return;
 
-    // Scale canvas visual size to 70% of component
-    constexpr float kCanvasScale = 0.70f;
-    const float canvasW = getWidth() * kCanvasScale;
-    const float canvasH = getHeight() * kCanvasScale;
+    // Calculate scaled canvas dimensions using the class constant
+    const float canvasW = getWidth() * CanvasScaleRatio;
+    const float canvasH = getHeight() * CanvasScaleRatio;
     const float offsetX = (getWidth() - canvasW) / 2.0f;
     const float offsetY = (getHeight() - canvasH) / 2.0f;
+
+    // Draw shadow beneath the canvas layer
+    auto bounds = getLocalBounds().toFloat();
+    const float size = juce::jmin(getWidth(), getHeight()) * CanvasScaleRatio;
+    const auto imageArea = bounds.withSizeKeepingCentre(size, size).toFloat();
+    drawCanvasShadow(g, imageArea);
 
     const float cellW = canvasW / GridSize;
     const float cellH = canvasH / GridSize;
@@ -66,11 +69,12 @@ void PixelCanvasComponent::paint(juce::Graphics& g)
                        cellH);
         }
     }
+}
 
-    auto bounds = getLocalBounds().toFloat();
-    const float size = juce::jmin(getWidth(), getHeight()) * kCanvasScale;
-    const auto imageArea = bounds.withSizeKeepingCentre(size, size).translated(0, 20).toFloat();
-    RenderUtils::paintSurfaceDepth(g, imageArea);
+void PixelCanvasComponent::drawCanvasShadow(juce::Graphics& g, const juce::Rectangle<float>& bounds)
+{
+    // Render the shadow effect beneath the canvas layer
+    RenderUtils::paintSurfaceDepth(g, bounds);
 }
 
 juce::Point<int> PixelCanvasComponent::gridCoordsFromUI(int uiX, int uiY) const
@@ -80,9 +84,8 @@ juce::Point<int> PixelCanvasComponent::gridCoordsFromUI(int uiX, int uiY) const
         return {};
 
     // Calculate canvas position (same as paint())
-    constexpr float kCanvasScale = 0.70f;
-    const float canvasW = bounds.getWidth() * kCanvasScale;
-    const float canvasH = bounds.getHeight() * kCanvasScale;
+    const float canvasW = bounds.getWidth() * CanvasScaleRatio;
+    const float canvasH = bounds.getHeight() * CanvasScaleRatio;
     const float offsetX = (bounds.getWidth() - canvasW) / 2.0f;
     const float offsetY = (bounds.getHeight() - canvasH) / 2.0f;
 
@@ -102,9 +105,8 @@ juce::Rectangle<int> PixelCanvasComponent::cellBoundsForIndex(int index) const
     const int y = index / GridSize;
     
     // Calculate canvas position (same as paint())
-    constexpr float kCanvasScale = 0.70f;
-    const float canvasW = getWidth() * kCanvasScale;
-    const float canvasH = getHeight() * kCanvasScale;
+    const float canvasW = getWidth() * CanvasScaleRatio;
+    const float canvasH = getHeight() * CanvasScaleRatio;
     const float offsetX = (getWidth() - canvasW) / 2.0f;
     const float offsetY = (getHeight() - canvasH) / 2.0f;
 

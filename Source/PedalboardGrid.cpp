@@ -1,7 +1,7 @@
 #include "PedalboardGrid.h"
+#include "GridLayout.h"
 #include "PluginProcessor.h"
 #include "RenderUtils.h"
-#include "GridLayout.h"
 
 #include <algorithm>
 #include <cmath>

@@ -5,32 +5,31 @@
 #include <vector>
 
 #include "CanvasModule.h"
-#include "ColorPalette.h"
 #include "PedalboardGrid.h"
 #include "PluginProcessor.h"
 #include "ResourceManager.h"
-#include "ThemeManager.h"
+#include "IThemeProvider.h"
 #include "CanvasRoutingManager.h"
 
 // Background components for left (wood) and right (pedalboard) halves
 class WoodGrainBackground : public juce::Component
 {
 public:
-    WoodGrainBackground(const ResourceManager& resources, const ThemeManager& theme);
+    WoodGrainBackground(const ResourceManager& resources, const IThemeProvider& theme);
     void paint(juce::Graphics& g) override;
 private:
     const ResourceManager& m_resources;
-    const ThemeManager& m_theme;
+    const IThemeProvider& m_theme;
 };
 
 class PedalboardBackground : public juce::Component
 {
 public:
-    PedalboardBackground(const ResourceManager& resources, const ThemeManager& theme);
+    PedalboardBackground(const ResourceManager& resources, const IThemeProvider& theme);
     void paint(juce::Graphics& g) override;
 private:
     const ResourceManager& m_resources;
-    const ThemeManager& m_theme;
+    const IThemeProvider& m_theme;
 };
 
 class DrawdioProcessorEditor : public juce::AudioProcessorEditor, private juce::Timer

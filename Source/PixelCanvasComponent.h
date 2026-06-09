@@ -8,12 +8,13 @@
 #include <vector>
 
 #include "PedalStructures.h"
-#include "ThemeManager.h"
+#include "IThemeProvider.h"
 
 class PixelCanvasComponent : public juce::Component
 {
 public:
     static constexpr int MaxUndoLevels = 32;
+    static constexpr float CanvasScaleRatio = 0.80f;  ///< Scale factor for pixel canvas (80% of component)
 
     enum class PixelColor : uint8_t
     {
@@ -41,7 +42,7 @@ public:
     using CanvasSnapshotCallback = std::function<void(const std::array<uint8_t, TotalCells>&)>;
     using CanvasPenCallback = std::function<void()>;
 
-    explicit PixelCanvasComponent(const ThemeManager& theme = ThemeManager::getDefault());
+    explicit PixelCanvasComponent(const IThemeProvider& theme);
     ~PixelCanvasComponent() override = default;
 
     void paint(juce::Graphics& g) override;
@@ -72,6 +73,7 @@ public:
 private:
     juce::Point<int> gridCoordsFromUI(int uiX, int uiY) const;
     juce::Rectangle<int> cellBoundsForIndex(int index) const;
+    void drawCanvasShadow(juce::Graphics& g, const juce::Rectangle<float>& bounds);
 
     void beginStroke();
     void commitStroke(bool shouldNotify);
@@ -84,7 +86,7 @@ private:
     void updatePixelImage(int index);
     void notifySnapshot();
 
-    const ThemeManager& m_theme;
+    const IThemeProvider& m_theme;
     PixelArray pixels;
     std::array<uint8_t, TotalCells> m_gridCache;
 
