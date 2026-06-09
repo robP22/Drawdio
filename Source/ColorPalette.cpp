@@ -67,7 +67,7 @@ void ColorPalette::paint(juce::Graphics& g)
         const bool isSelected = blob.color == m_selectedColor;
         const bool isHovered  = i == m_hoveredBlob;
 
-        auto colour = PixelCanvasComponent::colourForPixel(blob.color);
+        auto colour = PixelCanvasComponent::colourForPixel(static_cast<PixelCanvasComponent::PixelColor>(blob.color));
         if (isHovered) colour = colour.brighter(0.12f);
 
         const auto drawBounds = isSelected ? blob.bounds.expanded(2.0f) : blob.bounds;
