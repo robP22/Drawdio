@@ -7,51 +7,40 @@
 class ThemeManager final : public IThemeProvider
 {
 public:
-    struct PedalStyle
-    {
-        juce::Colour backgroundColour = juce::Colour(0xFF24292A);
-        float bodyRadius = 13.0f;
-        float faceRadius = 10.0f;
-        float lcdRadius = 5.0f;
-        float shadowOffsetX = 2.0f;
-        float shadowOffsetY = 6.0f;
-        float shadowAlpha = 0.38f;
-    };
-
     static const ThemeManager& getDefault();
 
-    juce::Colour editorBackground() const;
-    juce::Colour workspaceFallback() const;
-    juce::Colour workspaceVignette() const;
+    juce::Colour editorBackground() const override;
+    juce::Colour workspaceFallback() const override;
+    juce::Colour workspaceVignette() const override;
 
-    juce::Colour panelTop() const;
-    juce::Colour panelBottom() const;
-    juce::Colour panelEdge() const;
-    juce::Colour insetPanelTop() const;
-    juce::Colour insetPanelBottom() const;
+    juce::Colour panelTop() const override;
+    juce::Colour panelBottom() const override;
+    juce::Colour panelEdge() const override;
+    juce::Colour insetPanelTop() const override;
+    juce::Colour insetPanelBottom() const override;
 
-    juce::Colour pedalSkin(int slot) const;
-    juce::Colour pedalSideBottom() const;
-    juce::Colour pedalLcdTop() const;
-    juce::Colour pedalLcdBottom() const;
-    juce::Colour pedalActiveLed() const;
-    juce::Colour pedalInactiveLed() const;
+    juce::Colour pedalSkin(int slot) const override;
+    juce::Colour pedalSideBottom() const override;
+    juce::Colour pedalLcdTop() const override;
+    juce::Colour pedalLcdBottom() const override;
+    juce::Colour pedalActiveLed() const override;
+    juce::Colour pedalInactiveLed() const override;
 
-    juce::Colour canvasPixelColour(uint8_t rawColor) const;
-    juce::Colour canvasSurface() const;
-    juce::Colour canvasGrid() const;
+    juce::Colour canvasPixelColour(uint8_t rawColor) const override;
+    juce::Colour canvasSurface() const override;
+    juce::Colour canvasGrid() const override;
 
-    juce::Colour paletteSelectionFill(juce::Colour paintColour) const;
-    juce::Colour paletteSelectionOutline() const;
-    juce::Colour paletteHoverOutline() const;
+    juce::Colour paletteSelectionFill(juce::Colour paintColour) const override;
+    juce::Colour paletteSelectionOutline() const override;
+    juce::Colour paletteHoverOutline() const override;
 
-    juce::Colour drawButtonAccent() const;
-    juce::Colour undoButtonAccent() const;
-    juce::Colour clearButtonAccent() const;
-    juce::Colour cableColour() const;
+    juce::Colour drawButtonAccent() const override;
+    juce::Colour undoButtonAccent() const override;
+    juce::Colour clearButtonAccent() const override;
+    juce::Colour cableColour() const override;
 
-    const PedalStyle& pedalStyle() const noexcept { return m_pedalStyle; }
+    const ThemeManager::PedalStyle& pedalStyle() const noexcept override { return m_pedalStyle; }
 
 private:
-    PedalStyle m_pedalStyle;
+    ThemeManager::PedalStyle m_pedalStyle;
 };
