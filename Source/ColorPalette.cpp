@@ -11,10 +11,10 @@ namespace Layout
     constexpr int PaletteTopMargin    = 20;
     constexpr int PaletteBottomMargin = 35;
     constexpr float PaletteBlobShift  = 10.0f;
-    constexpr int PaletteButtonRightPadding = 8;
+    constexpr int PaletteButtonRightPadding = 15;
     
     // Button dimensions
-    constexpr float BlobSpacing = 10.5f;
+    constexpr float BlobSpacing = 13.5f;
     constexpr float BlobMaxSize = 72.0f;
     constexpr int ButtonWidth = 38;
     constexpr int ButtonHeight = 38;
@@ -107,7 +107,7 @@ void ColorPalette::resized()
         .withTrimmedBottom(Layout::PaletteBottomMargin);
 
     const auto blobSize = juce::jmin(area.getHeight() - 10.0f, Layout::BlobMaxSize);
-    float startX = area.getX() + blobSize * 0.25f + 1.0f;
+    float startX = area.getX() + blobSize * 0.30f;
     float blobY = area.getCentreY() - blobSize / 2.0f - 1.0f;
 
     for (int i = 0; i < static_cast<int>(m_blobs.size()); ++i)
@@ -118,8 +118,8 @@ void ColorPalette::resized()
 
     const auto totalH = Layout::ButtonHeight * 2 + Layout::ButtonSpacing;
     const int buttonW = Layout::ButtonWidth * 2;
-    const int buttonY = area.getCentreY() - totalH / 2 + 2 - 1;
-    const int rightX = area.getRight() - Layout::PaletteButtonRightPadding - buttonW - 5;
+    const int buttonY = area.getCentreY() - totalH / 2 + 3;
+    const int rightX = area.getRight() - Layout::PaletteButtonRightPadding - buttonW;
     m_undoButton.setBounds(rightX, buttonY, buttonW, Layout::ButtonHeight);
     m_clearButton.setBounds(rightX, buttonY + Layout::ButtonHeight + Layout::ButtonSpacing, buttonW, Layout::ButtonHeight);
 }

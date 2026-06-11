@@ -10,14 +10,12 @@ class CanvasModule : public juce::Component
 public:
     CanvasModule(const ResourceManager& resources, const IThemeProvider& theme);
 
-    void paint(juce::Graphics& g) override;
     void resized() override;
 
     PixelCanvasComponent& getPixelCanvas();
     const PixelCanvasComponent& getPixelCanvas() const;
 
     void setOnClear(std::function<void()> cb);
-    void refreshStatus();
 
 private:
     const ResourceManager& m_resources;

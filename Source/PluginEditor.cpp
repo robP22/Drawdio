@@ -74,7 +74,6 @@ DrawdioProcessorEditor::DrawdioProcessorEditor(DrawdioProcessor& p)
     pixelCanvas.setOnCanvasSnapshot([this](const auto&)
     {
         triggerRecompile();
-        m_canvasModule.refreshStatus();
         checkForUpdates();
     });
 
@@ -96,7 +95,7 @@ DrawdioProcessorEditor::~DrawdioProcessorEditor()
 
 void DrawdioProcessorEditor::paint(juce::Graphics& g)
 {
-    g.fillAll(juce::Colours::white);
+    g.fillAll(juce::Colours::black);
 }
 
 void DrawdioProcessorEditor::resized()
@@ -161,7 +160,6 @@ void DrawdioProcessorEditor::checkForUpdates()
         m_pedalboardGrid.updateRouting(m_lastRoutingOrder);
     }
 
-    m_canvasModule.refreshStatus();
     repaint();
 }
 
