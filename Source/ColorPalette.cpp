@@ -4,21 +4,22 @@
 #include "ResourceManager.h"
 #include "ThemeManager.h"
 
-namespace Layout
+namespace PaletteLayout
 {
-    constexpr int PaletteLeftMargin   = 30;
-    constexpr int PaletteRightMargin  = 30;
-    constexpr int PaletteTopMargin    = 20;
-    constexpr int PaletteBottomMargin = 35;
-    constexpr float PaletteBlobShift  = 10.0f;
-    constexpr int PaletteButtonRightPadding = 15;
+    // Blob layout (5 blobs): centers as ratio of palette width
+    constexpr float Blob0CenterX = 0.15f;  // First blob at 15% of width
+    constexpr float BlobSpacingRatio = 0.15f;  // Each blob spaced by 15% of width
+    constexpr float BlobSizeRatio = 0.45f;  // Blob diameter = 45% of palette height
+    constexpr float BlobMaxSize = 72.0f;  // Maximum blob size in pixels
+    constexpr float BlobCenterY = 0.50f;  // Vertically centered
     
-    // Button dimensions
-    constexpr float BlobSpacing = 13.5f;
-    constexpr float BlobMaxSize = 72.0f;
+    // Button layout: positioned at right side
+    constexpr float ButtonAreaCenterX = 0.85f;  // Buttons at 85% of width
+    constexpr float ButtonAreaWidthRatio = 0.25f;  // Button area = 25% of palette width
+    constexpr float UndoButtonCenterY = 0.38f;  // Undo at 38% of palette height
+    constexpr float ClearButtonCenterY = 0.62f;  // Clear at 62% of palette height
     constexpr int ButtonWidth = 38;
     constexpr int ButtonHeight = 38;
-    constexpr int ButtonSpacing = 6;
 }
 
 ColorPalette::ColorPalette(const ResourceManager& resources, const IThemeProvider& theme)
@@ -100,28 +101,36 @@ void ColorPalette::paint(juce::Graphics& g)
 
 void ColorPalette::resized()
 {
-    auto area = getLocalBounds()
-        .withTrimmedLeft(Layout::PaletteLeftMargin)
-        .withTrimmedRight(Layout::PaletteRightMargin)
-        .withTrimmedTop(Layout::PaletteTopMargin)
-        .withTrimmedBottom(Layout::PaletteBottomMargin);
-
-    const auto blobSize = juce::jmin(area.getHeight() - 10.0f, Layout::BlobMaxSize);
-    float startX = area.getX() + blobSize * 0.30f;
-    float blobY = area.getCentreY() - blobSize / 2.0f - 1.0f;
-
+    auto bounds = getLocalBounds().toFloat();
+    const float paletteW = bounds.getWidth();
+    const float paletteH = bounds.getHeight();
+    
+    // Calculate blob size (bounded by ratio and max pixel size)
+    const float blobSizeFromRatio = paletteH * PaletteLayout::BlobSizeRatio;
+    const float blobSize = juce::jmin(blobSizeFromRatio, PaletteLayout::BlobMaxSize);
+    const float halfBlob = blobSize * 0.5f;
+    
+    // Position blobs using normalized center ratios
     for (int i = 0; i < static_cast<int>(m_blobs.size()); ++i)
     {
-        auto slot = juce::Rectangle<float>(startX + static_cast<float>(i) * (blobSize + Layout::BlobSpacing), blobY, blobSize, blobSize);
-        m_blobs[static_cast<size_t>(i)].bounds = slot;
+        const float centerX = paletteW * (PaletteLayout::Blob0CenterX + 
+                      static_cast<float>(i) * PaletteLayout::BlobSpacingRatio);
+        const float centerY = paletteH * PaletteLayout::BlobCenterY;
+        m_blobs[static_cast<size_t>(i)].bounds = juce::Rectangle<float>(
+            centerX - halfBlob, centerY - halfBlob, blobSize, blobSize);
     }
-
-    const auto totalH = Layout::ButtonHeight * 2 + Layout::ButtonSpacing;
-    const int buttonW = Layout::ButtonWidth * 2;
-    const int buttonY = area.getCentreY() - totalH / 2 + 3;
-    const int rightX = area.getRight() - Layout::PaletteButtonRightPadding - buttonW;
-    m_undoButton.setBounds(rightX, buttonY, buttonW, Layout::ButtonHeight);
-    m_clearButton.setBounds(rightX, buttonY + Layout::ButtonHeight + Layout::ButtonSpacing, buttonW, Layout::ButtonHeight);
+    
+    // Position buttons using normalized ratios
+    const float buttonW = PaletteLayout::ButtonAreaWidthRatio * paletteW;
+    const float buttonX = paletteW * PaletteLayout::ButtonAreaCenterX - buttonW * 0.5f;
+    
+    const float undoY = paletteH * PaletteLayout::UndoButtonCenterY - PaletteLayout::ButtonHeight * 0.5f;
+    const float clearY = paletteH * PaletteLayout::ClearButtonCenterY - PaletteLayout::ButtonHeight * 0.5f;
+    
+    m_undoButton.setBounds(static_cast<int>(buttonX), static_cast<int>(undoY), 
+                          static_cast<int>(buttonW), PaletteLayout::ButtonHeight);
+    m_clearButton.setBounds(static_cast<int>(buttonX), static_cast<int>(clearY), 
+                          static_cast<int>(buttonW), PaletteLayout::ButtonHeight);
 }
 
 void ColorPalette::mouseDown(const juce::MouseEvent& event)
