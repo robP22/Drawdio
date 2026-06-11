@@ -55,7 +55,7 @@ void CanvasModule::resized()
     // Properly center the canvas using withSizeKeepingCentre only
     const auto pixelCanvasBounds = canvasArea.withSizeKeepingCentre(squareSize, squareSize);
     m_pixelCanvas.setBounds(pixelCanvasBounds);
-    m_palette.setBounds(paletteArea.withTrimmedLeft(pixelCanvasBounds.getX()).withTrimmedRight(3).withTrimmedTop(2));
+    m_palette.setBounds(paletteArea);
 }
 
 PixelCanvasComponent& CanvasModule::getPixelCanvas()
