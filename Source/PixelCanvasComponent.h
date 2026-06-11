@@ -14,7 +14,7 @@ class PixelCanvasComponent : public juce::Component
 {
 public:
     static constexpr int MaxUndoLevels = 32;
-    static constexpr float CanvasScaleRatio = 0.80f;  ///< Scale factor for pixel canvas (80% of component)
+    static constexpr float CanvasScaleRatio = 0.90f;  ///< Scale factor for pixel canvas (80% of component)
 
     enum class PixelColor : uint8_t
     {

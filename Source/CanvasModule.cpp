@@ -7,7 +7,7 @@
 namespace Layout
 {
 constexpr int CanvasOuterMargin   = 22;
-constexpr int CanvasVerticalMargin = 20;
+constexpr int CanvasVerticalMargin = 25;
 constexpr float PaletteHeightRatio = 0.26f;
 }
 
@@ -39,11 +39,6 @@ CanvasModule::CanvasModule(const ResourceManager& resources, const IThemeProvide
     });
 
     m_pixelCanvas.setCurrentColor(PixelCanvasComponent::PixelColor::Red);
-}
-
-void CanvasModule::paint(juce::Graphics&)
-{
-    // COMMENTED OUT FOR DEBUG - canvas module rendering disabled
 }
 
 void CanvasModule::resized()
@@ -78,7 +73,3 @@ void CanvasModule::setOnClear(std::function<void()> cb)
     m_onClear = std::move(cb);
 }
 
-void CanvasModule::refreshStatus()
-{
-    // Status display removed - no-op
-}
