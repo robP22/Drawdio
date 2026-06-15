@@ -17,10 +17,10 @@ public:
 
 private:
     float m_phase = 0.0f;
-    float m_allpassZ[2] = {};
+    std::vector<float> m_allpassZ;
 };
 
-class SubSynthEffect : public DspEffect
+class GlitchStutterEffect : public DspEffect
 {
 public:
     void prepare(double sampleRate, int numChannels) override;
@@ -28,10 +28,17 @@ public:
     void processSample(float** b, int c, int s, float effectParam) override;
 
 private:
-    float m_phase = 0.0f;
-    float m_prevSample = 0.0f;
-    int m_zeroCount = 0;
-    float m_measuredFreq = 100.0f;
-    int m_silenceCounter = 0;
-    static constexpr int kGateSamples = 2048;
+    struct GlitchState {
+        std::vector<float> buf;
+        size_t writePtr = 0;
+        int sliceCounter = 0;
+        int playCounter = 0;
+        int repeatCount = 0;
+        size_t sliceStart = 0;
+        size_t sliceLen = 0;
+        int gateCounter = 0;
+        enum Mode { RECORDING, PLAYING, GATED };
+        Mode mode = RECORDING;
+    };
+    std::vector<GlitchState> m_states;
 };

@@ -1,5 +1,4 @@
 #include "HeadlessDspTest.h"
-#include "DspState.h"
 #include "UnifiedPedalProcessor.h"
 #include <cmath>
 #include <algorithm>
@@ -19,7 +18,6 @@ bool HeadlessDspTest::initialize(double sampleRate, int maxSamplesPerBlock, int 
     m_maxSamplesPerBlock = maxSamplesPerBlock;
     m_numChannels = numChannels;
 
-    m_dspState = std::make_unique<DspState>();
     m_dspProcessor = std::make_unique<UnifiedPedalProcessor>();
 
     m_dspProcessor->prepareToPlay(sampleRate, maxSamplesPerBlock, numChannels);
@@ -31,10 +29,9 @@ bool HeadlessDspTest::initialize(double sampleRate, int maxSamplesPerBlock, int 
 void HeadlessDspTest::shutdown()
 {
     m_dspProcessor.reset();
-    m_dspState.reset();
 }
 
-void HeadlessDspTest::loadConfiguration(std::shared_ptr<PedalAssetPayload> config)
+void HeadlessDspTest::loadConfiguration(const PedalAssetPayload* config)
 {
     if (m_dspProcessor && config)
     {
@@ -66,15 +63,3 @@ void HeadlessDspTest::reset()
         m_dspProcessor->reset();
 }
 
-float HeadlessDspTest::getPeakOutputLevel() const
-{
-    // This would need to track peak levels during processing
-    // For now, return a placeholder
-    return 0.0f;
-}
-
-bool HeadlessDspTest::hasNaNOrInf() const
-{
-    // Would check processed buffers for NaN/Inf
-    return false;
-}

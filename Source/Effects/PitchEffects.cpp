@@ -1,3 +1,4 @@
+#include <JuceHeader.h>
 #include "Effects/PitchEffects.h"
 
 #include <algorithm>
@@ -7,19 +8,18 @@ void FrequencyShifterEffect::prepare(double sampleRate, int numChannels)
 {
     DspEffect::prepare(sampleRate, numChannels);
     m_phase = 0.0f;
-    m_allpassZ[0] = 0.0f;
-    m_allpassZ[1] = 0.0f;
+    m_allpassZ.assign(static_cast<size_t>(numChannels), 0.0f);
 }
 
 void FrequencyShifterEffect::reset()
 {
     m_phase = 0.0f;
-    m_allpassZ[0] = 0.0f;
-    m_allpassZ[1] = 0.0f;
+    std::fill(m_allpassZ.begin(), m_allpassZ.end(), 0.0f);
 }
 
 void FrequencyShifterEffect::processSample(float** b, int c, int s, float effectParam)
 {
+    juce::ScopedNoDenormals noDenorm;
     float shift = effectParam;
     float shiftHz = shift * shift * 2000.0f;
 
@@ -33,10 +33,11 @@ void FrequencyShifterEffect::processSample(float** b, int c, int s, float effect
     float tanHalf = std::tan(w);
     float a = (tanHalf - 1.0f) / (tanHalf + 1.0f);
 
-    for (int ch = 0; ch < c && ch < 2; ++ch)
+    int chCount = std::min(c, static_cast<int>(m_allpassZ.size()));
+    for (int ch = 0; ch < chCount; ++ch)
     {
         float x = b[ch][s];
-        float& z = m_allpassZ[ch];
+        float& z = m_allpassZ[static_cast<size_t>(ch)];
         float q = a * x + z;
         z = x - a * q;
 
@@ -45,63 +46,103 @@ void FrequencyShifterEffect::processSample(float** b, int c, int s, float effect
     }
 }
 
-void SubSynthEffect::prepare(double sampleRate, int numChannels)
+void GlitchStutterEffect::prepare(double sampleRate, int numChannels)
 {
     DspEffect::prepare(sampleRate, numChannels);
-    reset();
-}
-
-void SubSynthEffect::reset()
-{
-    m_phase = 0.0f;
-    m_prevSample = 0.0f;
-    m_zeroCount = 0;
-    m_measuredFreq = 100.0f;
-    m_silenceCounter = 0;
-}
-
-void SubSynthEffect::processSample(float** b, int c, int s, float effectParam)
-{
-    float octave = effectParam;
-    int octDiv = (octave < 0.5f) ? 2 : 4;
-
-    float x0 = (c > 0) ? b[0][s] : 0.0f;
-
-    // Input gate: track silence, freeze oscillator when no signal.
-    float peak = std::abs(x0);
-    if (peak < 0.001f)
-        m_silenceCounter = std::min(m_silenceCounter + 1, kGateSamples);
-    else
-        m_silenceCounter = 0;
-
-    if ((m_prevSample <= 0.0f && x0 > 0.0f) || (m_prevSample >= 0.0f && x0 < 0.0f))
+    m_states.resize(static_cast<size_t>(numChannels));
+    for (auto& s : m_states)
     {
-        if (m_zeroCount > 0)
+        s.buf.assign(static_cast<size_t>(sampleRate * 2.0), 0.0f);
+        s.writePtr = 0;
+        s.sliceCounter = 0;
+        s.playCounter = 0;
+        s.repeatCount = 0;
+        s.sliceStart = 0;
+        s.sliceLen = 0;
+        s.gateCounter = 0;
+        s.mode = GlitchState::RECORDING;
+    }
+}
+
+void GlitchStutterEffect::reset()
+{
+    for (auto& s : m_states)
+    {
+        std::fill(s.buf.begin(), s.buf.end(), 0.0f);
+        s.writePtr = 0;
+        s.sliceCounter = 0;
+        s.playCounter = 0;
+        s.repeatCount = 0;
+        s.sliceStart = 0;
+        s.sliceLen = 0;
+        s.gateCounter = 0;
+        s.mode = GlitchState::RECORDING;
+    }
+}
+
+void GlitchStutterEffect::processSample(float** b, int c, int s, float effectParam)
+{
+    juce::ScopedNoDenormals noDenorm;
+    float sliceLenSec = 0.05f + effectParam * 0.45f;
+    int maxRepeats = 1 + static_cast<int>((1.0f - effectParam) * 4.0f);
+
+    int chCount = std::min(c, static_cast<int>(m_states.size()));
+    for (int ch = 0; ch < chCount; ++ch)
+    {
+        auto& gs = m_states[static_cast<size_t>(ch)];
+        size_t bufSize = gs.buf.size();
+        if (bufSize == 0) continue;
+
+        gs.buf[gs.writePtr] = b[ch][s];
+
+        size_t sliceSamples = static_cast<size_t>(m_sampleRate * sliceLenSec + 0.5f);
+        if (sliceSamples < 2) sliceSamples = 2;
+        size_t gateSamples = sliceSamples / 4;
+        if (gateSamples < 1) gateSamples = 1;
+
+        if (gs.mode == GlitchState::RECORDING)
         {
-            int subPeriodSamples = m_zeroCount;
-            m_measuredFreq = static_cast<float>(m_sampleRate) / static_cast<float>(subPeriodSamples);
+            gs.sliceCounter++;
+            b[ch][s] = gs.buf[gs.writePtr];
+
+            if (gs.sliceCounter >= static_cast<int>(sliceSamples))
+            {
+                gs.sliceStart = (gs.writePtr + bufSize - sliceSamples) % bufSize;
+                gs.sliceLen = sliceSamples;
+                gs.playCounter = 0;
+                gs.repeatCount = 0;
+                gs.mode = GlitchState::PLAYING;
+                gs.sliceCounter = 0;
+            }
         }
-        m_zeroCount = 0;
+        else if (gs.mode == GlitchState::PLAYING)
+        {
+            size_t pos = (gs.sliceStart + static_cast<size_t>(gs.playCounter)) % bufSize;
+            b[ch][s] = gs.buf[pos];
+            gs.playCounter++;
+
+            if (gs.playCounter >= static_cast<int>(gs.sliceLen))
+            {
+                gs.playCounter = 0;
+                gs.repeatCount++;
+                if (gs.repeatCount >= maxRepeats)
+                {
+                    gs.mode = GlitchState::GATED;
+                    gs.gateCounter = 0;
+                }
+            }
+        }
+        else
+        {
+            b[ch][s] = 0.0f;
+            gs.gateCounter++;
+            if (gs.gateCounter >= static_cast<int>(gateSamples))
+            {
+                gs.mode = GlitchState::RECORDING;
+                gs.sliceCounter = 0;
+            }
+        }
+
+        gs.writePtr = (gs.writePtr + 1) % bufSize;
     }
-    m_zeroCount++;
-    m_prevSample = x0;
-
-    float subFreq = m_measuredFreq / static_cast<float>(octDiv);
-    if (subFreq > 0.0f && subFreq < static_cast<float>(m_sampleRate) * 0.45f)
-    {
-        m_phase += static_cast<float>(subFreq / m_sampleRate);
-        if (m_phase >= 1.0f) m_phase -= 1.0f;
-    }
-
-    // Replace hard square wave with bandlimited sawtooth
-    float subOut = 2.0f * m_phase - 1.0f;  // Bandlimited sawtooth instead of square
-
-    if (m_silenceCounter >= kGateSamples)
-        subOut = 0.0f;
-
-    // Reduce gain for higher harmonics to reduce aliasing
-    float gain = (octDiv > 2) ? 0.8f : 1.0f;
-
-    for (int ch = 0; ch < c; ++ch)
-        b[ch][s] = subOut * gain;
 }

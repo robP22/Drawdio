@@ -45,6 +45,7 @@ public:
 private:
     void triggerRecompile();
     void checkForUpdates();  // Change-driven update check
+    void refreshRoutingFromConfig();  // Sync routing from current config
     void timerCallback() override;  // JUCE Timer callback
 
     DrawdioProcessor& audioProcessor;

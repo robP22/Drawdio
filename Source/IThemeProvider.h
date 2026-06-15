@@ -47,7 +47,8 @@ public:
     virtual juce::Colour drawButtonAccent() const = 0;
     virtual juce::Colour undoButtonAccent() const = 0;
     virtual juce::Colour clearButtonAccent() const = 0;
-    virtual juce::Colour cableColour() const = 0;
+    virtual juce::Colour cableInColour() const = 0;
+    virtual juce::Colour cableOutColour() const = 0;
 
     virtual const PedalStyle& pedalStyle() const noexcept = 0;
 };

@@ -57,6 +57,8 @@ public:
     const std::array<uint8_t, TotalCells>& getGridData() const { return m_gridData; }
 
     void setManualRouting(const std::vector<uint8_t>& routing);
+    const std::vector<uint8_t>& getManualRouting() const { return m_manualRouting; }
+    std::array<float, PedalSlotCount * 4> getKnobValues() const { return m_dspProcessor.getSnapshot().values; }
 
     float getInputMeterLevel() const { return m_inputMeterLevel.load(std::memory_order_relaxed); }
     float getOutputMeterLevel() const { return m_outputMeterLevel.load(std::memory_order_relaxed); }

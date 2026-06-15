@@ -6,21 +6,25 @@ size_t StateSerializer::calculateSize(const SerializedState& state)
     // Header: 3 bytes (magic) + 1 byte (version) = 4 bytes
     // Grid data: TotalCells bytes
     // Pedal slots: PedalSlotCount bytes
-    // Routing: variable, up to PedalSlotCount
+    // Routing: PedalSlotCount bytes
     // Flag: 1 byte
-    return 4 + TotalCells + PedalSlotCount + PedalSlotCount + 1;
+    // Knob values: PedalSlotCount * 4 * sizeof(float) bytes
+    return 4 + TotalCells + PedalSlotCount + PedalSlotCount + 1
+         + static_cast<int>(PedalSlotCount * 4 * sizeof(float));
 }
 
 StateSerializer::SerializedState StateSerializer::createState(
     const std::array<uint8_t, TotalCells>& gridData,
     const std::array<DspModuleType, PedalSlotCount>& pedalSlots,
-    const std::vector<uint8_t>& manualRouting)
+    const std::vector<uint8_t>& manualRouting,
+    const std::array<float, PedalSlotCount * 4>& knobValues)
 {
     SerializedState state;
     state.gridData = gridData;
     for (int i = 0; i < PedalSlotCount; ++i)
         state.pedalSlots[i] = pedalSlots[i];
     state.manualRouting = manualRouting;
+    state.knobValues = knobValues;
     return state;
 }
 
@@ -56,6 +60,11 @@ void StateSerializer::serialize(const SerializedState& state, std::vector<uint8_
     // Flag (reserved for future use)
     const int flagOffset = routingOffset + PedalSlotCount;
     outBlob[flagOffset] = 0;
+
+    // Knob values (24 floats = 96 bytes)
+    const int knobOffset = flagOffset + 1;
+    std::memcpy(outBlob.data() + knobOffset, state.knobValues.data(),
+                PedalSlotCount * 4 * sizeof(float));
 }
 
 bool StateSerializer::isValidHeader(const uint8_t* data, size_t sizeInBytes)
@@ -73,8 +82,9 @@ bool StateSerializer::deserialize(const uint8_t* data, size_t sizeInBytes, Seria
     if (!isValidHeader(data, sizeInBytes))
         return false;
 
-    const size_t expectedSize = 4 + TotalCells + PedalSlotCount + PedalSlotCount + 1;
-    if (sizeInBytes < expectedSize)
+    const size_t v2Size = 4 + TotalCells + PedalSlotCount + PedalSlotCount + 1;
+    const size_t v3Size = v2Size + PedalSlotCount * 4 * sizeof(float);
+    if (sizeInBytes < v2Size)
         return false;
 
     // Grid data
@@ -82,7 +92,7 @@ bool StateSerializer::deserialize(const uint8_t* data, size_t sizeInBytes, Seria
 
     // Validate and clamp grid values
     for (auto& val : outState.gridData)
-        if (val > 4)
+        if (val > 5)
             val = 0;
 
     // Pedal slots
@@ -108,6 +118,20 @@ bool StateSerializer::deserialize(const uint8_t* data, size_t sizeInBytes, Seria
             outState.manualRouting.push_back(slot);
         }
         // If slot >= PedalSlotCount, it's 0xFF (no routing) - skip
+    }
+
+    // Knob values (v3+ only, backward compatible with v2)
+    const int flagOffset = routingOffset + PedalSlotCount;
+    const size_t knobOffset = static_cast<size_t>(flagOffset) + 1;
+    if (sizeInBytes >= knobOffset + PedalSlotCount * 4 * sizeof(float))
+    {
+        std::memcpy(outState.knobValues.data(), data + knobOffset,
+                    PedalSlotCount * 4 * sizeof(float));
+    }
+    else
+    {
+        // v2 save — leave knobValues at zero-initialized defaults
+        outState.knobValues.fill(0.5f);
     }
 
     return true;

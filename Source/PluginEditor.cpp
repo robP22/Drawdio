@@ -63,6 +63,16 @@ DrawdioProcessorEditor::DrawdioProcessorEditor(DrawdioProcessor& p)
 
     auto& pixelCanvas = m_canvasModule.getPixelCanvas();
     pixelCanvas.setGridData(audioProcessor.getGridData());
+
+    // Immediately apply restored knob values to pedals
+    {
+        auto knobVals = audioProcessor.getKnobValues();
+        for (int s = 0; s < PedalSlotCount; ++s)
+            if (auto* pedal = m_pedalboardGrid.getPedal(s))
+                for (int k = 0; k < 4; ++k)
+                    pedal->setKnobValue(k, knobVals[static_cast<size_t>(s * 4 + k)]);
+    }
+
     pixelCanvas.setOnPenDown([this]()
     {
         audioProcessor.getPenDebouncer().penDown();
@@ -74,18 +84,20 @@ DrawdioProcessorEditor::DrawdioProcessorEditor(DrawdioProcessor& p)
     pixelCanvas.setOnCanvasSnapshot([this](const auto&)
     {
         triggerRecompile();
-        checkForUpdates();
     });
 
     m_canvasModule.setOnClear([this]()
     {
-        // Consolidate to single authoritative source - only update audioProcessor
-        audioProcessor.setManualRouting({});
-        m_pedalboardGrid.updateRouting({});
+        audioProcessor.getDSPProcessor().scheduleReset();
     });
 
     setSize(1400, 800);
-    juce::MessageManager::callAsync([this]() { checkForUpdates(); });
+    startTimerHz(20);
+    juce::MessageManager::callAsync([self = juce::Component::SafePointer<DrawdioProcessorEditor>(this)]()
+    {
+        if (self != nullptr)
+            self->checkForUpdates();
+    });
 }
 
 DrawdioProcessorEditor::~DrawdioProcessorEditor()
@@ -122,33 +134,12 @@ void DrawdioProcessorEditor::triggerRecompile()
     audioProcessor.getCompilerThread().notify();
 }
 
-void DrawdioProcessorEditor::checkForUpdates()
+void DrawdioProcessorEditor::refreshRoutingFromConfig()
 {
-    if (!audioProcessor.consumeUINotification())
-        return;
-
-    const auto previousRevision = m_seenConfigRevision;
-    audioProcessor.consumeCompiledResultIfAvailable();
-    m_seenConfigRevision = audioProcessor.getConfigRevision();
-    const bool configChanged = m_seenConfigRevision != previousRevision;
-
-    m_pedalboardGrid.syncPedals();
-
     auto config = audioProcessor.getDSPProcessor().getCurrentConfig();
     if (config)
     {
-        for (auto& param : config->parameters)
-        {
-            const int chainPos = static_cast<int>(param.targetDspNodeRegister);
-            if (chainPos >= 0 && chainPos < static_cast<int>(config->routingSlotOrder.size()))
-            {
-                const int slotIdx = config->routingSlotOrder[static_cast<size_t>(chainPos)];
-                if (auto* pedal = m_pedalboardGrid.getPedal(slotIdx))
-                    pedal->setKnobValue(static_cast<int>(param.parameterToken), param.currentValue);
-            }
-        }
-
-        if (configChanged || config->routingSlotOrder != m_lastRoutingOrder)
+        if (config->routingSlotOrder != m_lastRoutingOrder)
         {
             m_lastRoutingOrder = config->routingSlotOrder;
             m_pedalboardGrid.updateRouting(m_lastRoutingOrder);
@@ -158,6 +149,60 @@ void DrawdioProcessorEditor::checkForUpdates()
     {
         m_lastRoutingOrder.clear();
         m_pedalboardGrid.updateRouting(m_lastRoutingOrder);
+    }
+}
+
+void DrawdioProcessorEditor::checkForUpdates()
+{
+    // Drain released config payloads on the message thread, not the audio thread
+    audioProcessor.getDSPProcessor().drainReleaseQueue();
+    audioProcessor.getDSPProcessor().tryApplyDeferredConfig();
+    audioProcessor.consumeCompiledResultIfAvailable();
+
+    // Always sync knob values from the current config so pedals
+    // reflect the latest compiled/manual values even without a recompile.
+    {
+        auto config = audioProcessor.getDSPProcessor().getCurrentConfig();
+        if (config)
+        {
+            for (auto& param : config->parameters)
+            {
+                const int chainPos = static_cast<int>(param.targetDspNodeRegister);
+                if (chainPos >= 0 && chainPos < static_cast<int>(config->routingSlotOrder.size()))
+                {
+                    const int slotIdx = config->routingSlotOrder[static_cast<size_t>(chainPos)];
+                    if (auto* pedal = m_pedalboardGrid.getPedal(slotIdx))
+                        pedal->setKnobValue(static_cast<int>(param.parameterToken), param.currentValue);
+                }
+            }
+        }
+    }
+
+    if (!audioProcessor.consumeUINotification())
+    {
+        refreshRoutingFromConfig();
+        return;
+    }
+
+    m_seenConfigRevision = audioProcessor.getConfigRevision();
+
+    m_pedalboardGrid.syncPedals();
+
+    {
+        auto config = audioProcessor.getDSPProcessor().getCurrentConfig();
+        if (config)
+        {
+            if (config->routingSlotOrder != m_lastRoutingOrder)
+            {
+                m_lastRoutingOrder = config->routingSlotOrder;
+                m_pedalboardGrid.updateRouting(m_lastRoutingOrder);
+            }
+        }
+        else if (!m_lastRoutingOrder.empty())
+        {
+            m_lastRoutingOrder.clear();
+            m_pedalboardGrid.updateRouting(m_lastRoutingOrder);
+        }
     }
 
     repaint();

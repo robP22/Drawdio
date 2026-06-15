@@ -1,4 +1,5 @@
 #pragma once
+#include <JuceHeader.h>
 #include <algorithm>
 #include <cstdint>
 #include <cmath>
@@ -21,31 +22,26 @@ inline float colorWeight(uint8_t pixelVal)
     {
         case 0: return -2.0f;
         case 1: return -1.0f;
-        case 2: return  0.0f;
+        case 2: return -0.33f;
         case 3: return  1.0f;
         case 4: return  2.0f;
+        case 5: return -2.0f;
         default: return -2.0f;
     }
-}
-
-inline float signedPixelContribution(uint8_t pixelVal, int cellIndex)
-{
-    float w = colorWeight(pixelVal);
-    return (cellIndex % 2 == 0) ? w : -w;
 }
 
 enum class DspModuleType : uint8_t
 {
     BYPASS = 0,
     WAVESHAPER_DISTORTION,
-    MODULATED_DELAY_LINE,
+    MICROPITCH_CHORUS,
     BIQUAD_FILTER,
     DYNAMIC_RING_BUFFER,
     PITCH_SHIFTER_GRANULAR,
     ENVELOPE_VCA_COMPRESSOR,
-    PITCH_DETECTOR_OSCILLATOR,
+    GLITCH_STUTTER,
     DIFFUSED_DELAY_NETWORK,
-    ALLPASS_FILTER_CASCADE,
+    SPECTRAL_FREEZE,
     FREQUENCY_SHIFTER,
     MATHEMATICAL_WAVEFOLDER,
     SAMPLE_RATE_DEGRADER,
@@ -53,7 +49,7 @@ enum class DspModuleType : uint8_t
     TAPE_STOP_REVERSE_ECHO,
     SIMPLE_DELAY,
     PLATE_REVERB,
-    SOFT_DISTORTION,
+    COMB_RESONATOR,
     GRANULAR_DELAY
 };
 
@@ -111,13 +107,13 @@ inline std::vector<PedalRowRange> calculateRowRanges(int activeCount)
 // -------------------------------------------------------------------
 // Accumulate weighted pixel contributions from a row-range sub-region
 // and return a normalised value in [0, 1].
-inline float calculatePixelAccumulation(const uint8_t* gridData,
+inline float calculatePixelAccumulation(const std::array<uint8_t, TotalCells>& gridData,
                                          const PedalRowRange& range,
                                          int parameterIndex,
                                          int totalParameters)
 {
     if (range.numRows == 0 || totalParameters == 0)
-        return 0.0f;
+        return 0.5f;
 
     int cellsPerParam = (GridSize * range.numRows) / totalParameters;
     int startCell = parameterIndex * cellsPerParam;
@@ -126,8 +122,8 @@ inline float calculatePixelAccumulation(const uint8_t* gridData,
                       : (startCell + cellsPerParam);
 
     float accumulator = 0.0f;
-    float aMin = 0.0f;
-    float aMax = 0.0f;
+    int paintedCount = 0;
+    int totalCells = 0;
 
     for (int localCell = startCell; localCell < endCell; ++localCell)
     {
@@ -136,16 +132,23 @@ inline float calculatePixelAccumulation(const uint8_t* gridData,
         if (gridY >= GridSize) break;
 
         uint8_t val = gridData[gridY * GridSize + gridX];
-        float contribution = signedPixelContribution(val, localCell);
-        accumulator += contribution;
-
-        aMax += 2.0f;
-        aMin += -2.0f;
+        ++totalCells;
+        if (val != 0)
+        {
+            ++paintedCount;
+            accumulator += colorWeight(val);
+        }
     }
 
-    if (aMax == aMin) return 0.0f;
-    float normalized = (accumulator - aMin) / (aMax - aMin);
-    return (normalized < 0.0f) ? 0.0f : (normalized > 1.0f ? 1.0f : normalized);
+    if (totalCells == 0 || paintedCount == 0)
+        return 0.5f;
+
+    float coverage = static_cast<float>(paintedCount) / static_cast<float>(totalCells);
+    float avgWeight = accumulator / static_cast<float>(paintedCount);
+    float bias = avgWeight * 0.25f + 0.5f;
+    float result = bias * coverage + 0.5f * (1.0f - coverage);
+
+    return (result < 0.0f) ? 0.0f : (result > 1.0f ? 1.0f : result);
 }
 
 // -------------------------------------------------------------------
@@ -219,6 +222,7 @@ inline void processReverbNetworkSample(float dryL, float dryR,
                                         float decayNormalised,
                                         float& outL, float& outR)
 {
+    juce::ScopedNoDenormals noDenorm;
     float feedback = static_cast<float>(config.feedbackBase + decayNormalised * config.feedbackRange);
     float monoIn = (dryL + dryR) * 0.5f;
 
@@ -264,7 +268,9 @@ struct GranularProcessorState
     std::vector<float> delayBuf;
     size_t writePtr;
     float readPtr;
+    float grainPhase2;
     int grainLen;
+    size_t grainBase;
 };
 
 // Prepare a granular delay line.
@@ -276,7 +282,9 @@ inline void prepareGranularProcessor(GranularProcessorState& state,
     state.delayBuf.assign(size, 0.0f);
     state.writePtr = 0;
     state.readPtr = 0.0f;
+    state.grainPhase2 = 0.0f;
     state.grainLen = 0;
+    state.grainBase = 0;
 }
 
 // Reset a granular delay line to silence.
@@ -285,35 +293,61 @@ inline void resetGranularProcessor(GranularProcessorState& state)
     std::fill(state.delayBuf.begin(), state.delayBuf.end(), 0.0f);
     state.writePtr = 0;
     state.readPtr = 0.0f;
+    state.grainPhase2 = 0.0f;
     state.grainLen = 0;
+    state.grainBase = 0;
 }
 
 // Process one sample through granular pitch shifting / delay.
 // sampleRate used for grain-length calculation when state.grainLen == 0.
 inline float processGranularSample(float input, GranularProcessorState& state,
-                                    float pitchRatio, double sampleRate,
+                                    float playbackSpeed, double sampleRate,
                                     float grainDurationSec)
 {
     size_t bufSize = state.delayBuf.size();
     if (bufSize == 0) return 0.0f;
 
     if (state.grainLen == 0 || state.readPtr >= static_cast<float>(state.grainLen))
+    {
         state.grainLen = static_cast<int>(sampleRate * grainDurationSec);
+        state.readPtr = 0.0f;
+        state.grainPhase2 = static_cast<float>(state.grainLen) * 0.5f;
+        state.grainBase = (state.writePtr + bufSize - static_cast<size_t>(state.grainLen)) % bufSize;
+    }
 
     state.delayBuf[state.writePtr] = input;
 
-    float readPos = state.readPtr;
-    size_t readIdx = static_cast<size_t>(readPos) % bufSize;
-    float frac = readPos - std::floor(readPos);
-    size_t nextIdx = (readIdx + 1) % bufSize;
-    float sample = state.delayBuf[readIdx] * (1.0f - frac) + state.delayBuf[nextIdx] * frac;
+    float grainLenF = static_cast<float>(state.grainLen);
+    float bufSizeF = static_cast<float>(bufSize);
 
-    float window = 0.5f * (1.0f - std::cos(2.0f * 3.14159265f * (readPos / static_cast<float>(state.grainLen))));
-    float out = sample * window;
+    float pos1 = static_cast<float>(state.grainBase) + state.readPtr;
+    if (pos1 >= bufSizeF) pos1 -= bufSizeF;
 
-    state.readPtr += pitchRatio;
-    if (state.readPtr >= static_cast<float>(state.grainLen))
-        state.readPtr -= static_cast<float>(state.grainLen);
+    float pos2 = static_cast<float>(state.grainBase) + state.grainPhase2;
+    if (pos2 >= bufSizeF) pos2 -= bufSizeF;
+
+    size_t idx1 = static_cast<size_t>(pos1);
+    float frac1 = pos1 - static_cast<float>(idx1);
+    size_t next1 = (idx1 + 1) % bufSize;
+    float s1 = state.delayBuf[idx1] * (1.0f - frac1) + state.delayBuf[next1] * frac1;
+
+    size_t idx2 = static_cast<size_t>(pos2);
+    float frac2 = pos2 - static_cast<float>(idx2);
+    size_t next2 = (idx2 + 1) % bufSize;
+    float s2 = state.delayBuf[idx2] * (1.0f - frac2) + state.delayBuf[next2] * frac2;
+
+    float w1 = 0.5f * (1.0f - std::cos(2.0f * 3.14159265f * (state.readPtr / grainLenF)));
+    float w2 = 0.5f * (1.0f - std::cos(2.0f * 3.14159265f * (state.grainPhase2 / grainLenF)));
+
+    float out = s1 * w1 + s2 * w2;
+
+    state.readPtr += playbackSpeed;
+    if (state.readPtr >= grainLenF)
+        state.readPtr -= grainLenF;
+
+    state.grainPhase2 += playbackSpeed;
+    if (state.grainPhase2 >= grainLenF)
+        state.grainPhase2 -= grainLenF;
 
     state.writePtr = (state.writePtr + 1) % bufSize;
 

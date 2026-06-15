@@ -3,7 +3,6 @@
 #include <atomic>
 #include <cstdint>
 #include <vector>
-#include <memory>
 #include <mutex>
 #include <condition_variable>
 #include "PedalStructures.h"
@@ -25,8 +24,8 @@ public:
 
     void notify();
 
-    bool hasCompiledResult() const;
-    std::shared_ptr<PedalAssetPayload> getCompiledPayloadPtr();
+    bool hasCompiledResult() const noexcept;
+    const PedalAssetPayload* getCompiledPayloadPtr() noexcept;
 
 private:
     void threadFunc(CanvasMessageQueue& queue, PenDebouncer& debouncer);
@@ -38,14 +37,11 @@ private:
     std::vector<uint8_t> m_manualRouting;
     std::vector<ParameterDescriptor> m_existingParams;
 
-    // Thread-safe slot: compiler thread writes, UI/Audio thread reads.
-    // Uses atomic flag for lock-free single-producer-single-consumer protocol.
-    std::shared_ptr<PedalAssetPayload> m_slot{nullptr};
+    PedalAssetPayload* m_slot{nullptr};
     std::atomic<bool> m_slotFull{false};
 
     mutable std::mutex m_configMutex;
 
-    // Atomic slot count for lock-free validation
     std::atomic<size_t> m_slotCount{0};
 
     std::mutex m_cvMutex;

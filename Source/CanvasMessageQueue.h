@@ -16,16 +16,15 @@ public:
 
     static constexpr int QueueCapacity = 8;
 
-    CanvasMessageQueue();
-    ~CanvasMessageQueue() = default;
+    CanvasMessageQueue() noexcept;
+    ~CanvasMessageQueue() noexcept = default;
 
-    void pushSnapshot(const uint8_t* gridData);
-    bool popSnapshot(CanvasMessage& outMessage);
-    bool hasMessage() const;
+    void pushSnapshot(const uint8_t* gridData) noexcept;
+    const std::array<uint8_t, PayloadSize>* popSnapshot() noexcept;
+    bool hasMessage() const noexcept;
 
 private:
     std::array<CanvasMessage, QueueCapacity> m_queue;
     std::atomic<int> m_writeIndex;
     std::atomic<int> m_readIndex;
-    std::atomic<bool> m_hasMessage;
 };

@@ -1,3 +1,4 @@
+#include <JuceHeader.h>
 #include "Effects/GranularBaseEffect.h"
 
 GranularBaseEffect::GranularBaseEffect(float grainDurationSec, float durationSec)
@@ -8,22 +9,28 @@ GranularBaseEffect::GranularBaseEffect(float grainDurationSec, float durationSec
 void GranularBaseEffect::prepare(double sampleRate, int numChannels)
 {
     DspEffect::prepare(sampleRate, numChannels);
-    prepareGranularProcessor(m_state, sampleRate, static_cast<double>(m_durationSec));
+    m_states.resize(static_cast<size_t>(numChannels));
+    for (auto& s : m_states)
+        prepareGranularProcessor(s, sampleRate, static_cast<double>(m_durationSec));
 }
 
 void GranularBaseEffect::reset()
 {
-    resetGranularProcessor(m_state);
+    for (auto& s : m_states)
+        resetGranularProcessor(s);
 }
 
 void GranularBaseEffect::processSample(float** b, int c, int s, float effectParam)
 {
-    float pitch = effectParam;
-    float pitchRatio = 0.5f + pitch * 1.5f;
+    juce::ScopedNoDenormals noDenorm;
+    float rate = effectParam;
+    float playbackSpeed = std::pow(2.0f, rate * 2.0f - 1.0f);
 
-    float input = (c > 0) ? b[0][s] : 0.0f;
-    float out = processGranularSample(input, m_state, pitchRatio, m_sampleRate, m_grainDurationSec);
-
-    for (int ch = 0; ch < c; ++ch)
+    int chCount = std::min(c, static_cast<int>(m_states.size()));
+    for (int ch = 0; ch < chCount; ++ch)
+    {
+        float out = processGranularSample(b[ch][s], m_states[static_cast<size_t>(ch)],
+                                          playbackSpeed, m_sampleRate, m_grainDurationSec);
         b[ch][s] = out;
+    }
 }

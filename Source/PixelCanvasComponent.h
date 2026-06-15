@@ -4,20 +4,23 @@
 #include <array>
 #include <cstdint>
 #include <functional>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
 #include "PedalStructures.h"
 #include "IThemeProvider.h"
+#include "ResourceManager.h"
 
 class PixelCanvasComponent : public juce::Component
 {
 public:
     static constexpr int MaxUndoLevels = 32;
-    static constexpr float CanvasScaleRatio = 0.90f;  ///< Scale factor for pixel canvas (80% of component)
+    static constexpr float CanvasScaleRatio = 0.90f;
 
     enum class PixelColor : uint8_t
     {
+        Transparent = 5,
         Black = 0,
         White = 4,
         Red = 3,
@@ -42,10 +45,11 @@ public:
     using CanvasSnapshotCallback = std::function<void(const std::array<uint8_t, TotalCells>&)>;
     using CanvasPenCallback = std::function<void()>;
 
-    explicit PixelCanvasComponent(const IThemeProvider& theme);
+    explicit PixelCanvasComponent(const ResourceManager& resources, const IThemeProvider& theme);
     ~PixelCanvasComponent() override = default;
 
     void paint(juce::Graphics& g) override;
+    void resized() override;
 
     void mouseDown(const juce::MouseEvent& event) override;
     void mouseDrag(const juce::MouseEvent& event) override;
@@ -67,13 +71,11 @@ public:
     void setOnCanvasSnapshot(CanvasSnapshotCallback cb) { m_onCanvasSnapshot = std::move(cb); }
     void setOnPenDown(CanvasPenCallback cb) { m_onPenDown = std::move(cb); }
     void setOnPenUp(CanvasPenCallback cb) { m_onPenUp = std::move(cb); }
-
-    static juce::Colour colourForPixel(PixelColor color);
+    void setOnUndo(CanvasPenCallback cb) { m_onUndo = std::move(cb); }
 
 private:
     juce::Point<int> gridCoordsFromUI(int uiX, int uiY) const;
     juce::Rectangle<int> cellBoundsForIndex(int index) const;
-    void drawCanvasShadow(juce::Graphics& g, const juce::Rectangle<float>& bounds);
 
     void beginStroke();
     void commitStroke(bool shouldNotify);
@@ -82,10 +84,11 @@ private:
     void applyPixelValue(int index, PixelColor color);
 
     void rebuildGridCache();
-    void rebuildPixelImage();
-    void updatePixelImage(int index);
+    void rebuildOverlay();
+    void updateOverlayPixel(int index);
     void notifySnapshot();
 
+    const ResourceManager& m_resources;
     const IThemeProvider& m_theme;
     PixelArray pixels;
     std::array<uint8_t, TotalCells> m_gridCache;
@@ -93,18 +96,19 @@ private:
     CanvasSnapshotCallback m_onCanvasSnapshot;
     CanvasPenCallback m_onPenDown;
     CanvasPenCallback m_onPenUp;
+    CanvasPenCallback m_onUndo;
 
     bool m_drawing = false;
-    bool m_mouseInside = false;
     bool m_activeStrokeOpen = false;
     juce::Point<int> m_lastDrawPos;
     PixelColor m_currentColor = PixelColor::Red;
 
     std::vector<PixelChange> m_activeStroke;
     std::vector<std::vector<PixelChange>> m_undoStack;
-    std::array<int, TotalCells> m_activeChangeLookup;
+    std::unordered_map<int, int> m_activeChangeLookup;
 
-    juce::Image m_pixelImage;
+    juce::Image m_pixelOverlay;
+    bool m_overlayDirty = true;
     int m_changedCellCount = 0;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PixelCanvasComponent)

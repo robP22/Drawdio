@@ -41,6 +41,8 @@ public:
 private:
     void drawRoutingCables(juce::Graphics& g);
     void drawActiveDraggingCable(juce::Graphics& g);
+    void drawInputCable(juce::Graphics& g);
+    void drawOutputCable(juce::Graphics& g);
 
     // Helpers for jack detection
     struct JackInfo {
@@ -50,6 +52,17 @@ private:
     };
     std::vector<JackInfo> getJacks() const;
     int findJackAt(juce::Point<float> pos, float radius) const;
+
+    // Cached cable paths — rebuilt when routing changes
+    struct CachedSplitCable {
+        juce::Path left;
+        juce::Path right;
+    };
+    void rebuildCableCache();
+
+    juce::Path m_cachedInputPath;
+    juce::Path m_cachedOutputPath;
+    std::vector<CachedSplitCable> m_cachedConnectionPaths;
 
     DrawdioProcessor& audioProcessor;
     const ResourceManager& m_resources;

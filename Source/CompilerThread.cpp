@@ -1,7 +1,6 @@
 #include "CompilerThread.h"
 #include "CompilerEngine.h"
 #include <chrono>
-#include <memory>
 #include <mutex>
 #include <utility>
 
@@ -29,6 +28,12 @@ void CompilerThread::stop()
     m_cv.notify_one();
     if (m_thread.joinable())
         m_thread.join();
+    if (m_slotFull.load(std::memory_order_acquire))
+    {
+        delete m_slot;
+        m_slot = nullptr;
+        m_slotFull.store(false, std::memory_order_release);
+    }
 }
 
 void CompilerThread::notify()
@@ -55,21 +60,18 @@ void CompilerThread::setExistingParameters(const std::vector<ParameterDescriptor
     m_existingParams = params;
 }
 
-bool CompilerThread::hasCompiledResult() const
+bool CompilerThread::hasCompiledResult() const noexcept
 {
     return m_slotFull.load(std::memory_order_acquire);
 }
 
-std::shared_ptr<PedalAssetPayload> CompilerThread::getCompiledPayloadPtr()
+const PedalAssetPayload* CompilerThread::getCompiledPayloadPtr() noexcept
 {
-    // Lock-free consume: only one reader (DSP thread), one writer (compiler thread)
-    // Use compare-exchange to ensure we only consume when slot is actually full
     bool expected = true;
     if (!m_slotFull.compare_exchange_strong(expected, false, std::memory_order_acq_rel, std::memory_order_acquire))
         return nullptr;
 
-    // Slot was full, now cleared - take ownership
-    auto ptr = std::move(m_slot);
+    auto* ptr = m_slot;
     m_slot = nullptr;
     return ptr;
 }
@@ -80,7 +82,7 @@ void CompilerThread::threadFunc(CanvasMessageQueue& queue, PenDebouncer& debounc
     {
         {
             std::unique_lock<std::mutex> lock(m_cvMutex);
-            m_cv.wait_for(lock, std::chrono::milliseconds(5), [&]() {
+            m_cv.wait_for(lock, std::chrono::milliseconds(50), [&]() {
                 return !m_running.load() || (debouncer.isIdle() && queue.hasMessage());
             });
         }
@@ -91,8 +93,8 @@ void CompilerThread::threadFunc(CanvasMessageQueue& queue, PenDebouncer& debounc
         if (!debouncer.isIdle())
             continue;
 
-        CanvasMessageQueue::CanvasMessage msg;
-        if (!queue.popSnapshot(msg))
+        const auto* gridSnapshot = queue.popSnapshot();
+        if (!gridSnapshot)
             continue;
 
         std::vector<DspModuleType> slots;
@@ -105,13 +107,11 @@ void CompilerThread::threadFunc(CanvasMessageQueue& queue, PenDebouncer& debounc
             existingParams = m_existingParams;
         }
 
-        // Lock-free publish: only write if slot is empty
-        bool expected = false;
-        if (m_slotFull.compare_exchange_strong(expected, true, std::memory_order_acq_rel, std::memory_order_acquire))
+        if (!m_slotFull.load(std::memory_order_acquire))
         {
-            m_slot = std::make_shared<PedalAssetPayload>(
-                compileCanvas(msg.gridSnapshot.data(), slots, manualRouting, existingParams));
+            m_slot = new PedalAssetPayload(
+                compileCanvas(*gridSnapshot, slots, manualRouting, existingParams));
+            m_slotFull.store(true, std::memory_order_release);
         }
-        // If slot was already full, skip this frame (previous result still pending)
     }
 }

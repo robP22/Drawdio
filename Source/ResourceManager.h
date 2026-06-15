@@ -17,6 +17,10 @@ public:
         PedalFaceGrain,
         OverlayGloss,
         PedalKnobImage,
+        PedalLedImage,
+        CanvasTexture,
+        ColorWell,
+        JapanesePedalSheet,
         Count
     };
 
@@ -27,7 +31,10 @@ public:
         ColorPaletteBody = static_cast<size_t>(ImageId::ColorPaletteBody),
         PedalEnclosure = static_cast<size_t>(ImageId::PedalEnclosure),
         PedalFaceGrain = static_cast<size_t>(ImageId::PedalFaceGrain),
-        OverlayGloss = static_cast<size_t>(ImageId::OverlayGloss)
+        OverlayGloss = static_cast<size_t>(ImageId::OverlayGloss),
+        CanvasTexture = static_cast<size_t>(ImageId::CanvasTexture),
+        ColorWell = static_cast<size_t>(ImageId::ColorWell),
+        JapanesePedalSheet = static_cast<size_t>(ImageId::JapanesePedalSheet)
     };
 
     enum class SpriteSheetId : size_t
@@ -60,6 +67,8 @@ public:
         GenPedalLed,
         GenPedalJack,
         PedalKnob,
+        PedalLedOn,
+        PedalLedOff,
         Count
     };
 
