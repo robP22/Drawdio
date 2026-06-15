@@ -13,5 +13,5 @@ public:
 private:
     float m_grainDurationSec;
     float m_durationSec;
-    GranularProcessorState m_state;
+    std::vector<GranularProcessorState> m_states;
 };

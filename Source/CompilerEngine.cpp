@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <numeric>
 
-PedalAssetPayload compileCanvas(const uint8_t* gridData,
+PedalAssetPayload compileCanvas(const std::array<uint8_t, TotalCells>& gridData,
                                 const std::vector<DspModuleType>& pedalSlots,
                                 const std::vector<uint8_t>& manualRouting,
                                 const std::vector<ParameterDescriptor>& existingParams)
@@ -65,13 +65,13 @@ PedalAssetPayload compileCanvas(const uint8_t* gridData,
                 }
             }
             if (totalPainted > 0)
-                scores[i] = static_cast<int>((xSum / totalPainted) * (100.0 / 127.0));
+                scores[i] = static_cast<int>((static_cast<double>(xSum) / totalPainted) * (100.0 / 127.0));
         }
 
         // Sort chain by routing score ascending (left-biased pixels processed first)
         std::vector<int> sortedOrder(activeCount);
         std::iota(sortedOrder.begin(), sortedOrder.end(), 0);
-        std::sort(sortedOrder.begin(), sortedOrder.end(),
+        std::stable_sort(sortedOrder.begin(), sortedOrder.end(),
             [&](int a, int b) { return scores[a] < scores[b]; });
 
         for (int idx : sortedOrder)

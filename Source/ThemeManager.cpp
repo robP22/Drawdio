@@ -1,12 +1,6 @@
 #include "ThemeManager.h"
 #include "PedalStructures.h"
 
-const ThemeManager& ThemeManager::getDefault()
-{
-    static const ThemeManager theme;
-    return theme;
-}
-
 juce::Colour ThemeManager::editorBackground() const { return juce::Colour(0xFF151719); }
 juce::Colour ThemeManager::workspaceFallback() const { return juce::Colour(0xFF20150D); }
 juce::Colour ThemeManager::workspaceVignette() const { return juce::Colours::black.withAlpha(0.38f); }
@@ -66,4 +60,5 @@ juce::Colour ThemeManager::paletteHoverOutline() const
 juce::Colour ThemeManager::drawButtonAccent() const { return juce::Colour(0xFF47C9A2); }
 juce::Colour ThemeManager::undoButtonAccent() const { return juce::Colour(0xFFC7B067); }
 juce::Colour ThemeManager::clearButtonAccent() const { return juce::Colour(0xFFD75B4F); }
-juce::Colour ThemeManager::cableColour() const { return juce::Colour(0xFF7E2020); }
+juce::Colour ThemeManager::cableInColour() const { return juce::Colour(0xFF2E8B57); }
+juce::Colour ThemeManager::cableOutColour() const { return juce::Colour(0xFF1565C0); }

@@ -1,4 +1,5 @@
 #include "PedalComponent.h"
+#include "GridLayout.h"
 #include "PluginProcessor.h"
 #include "RenderUtils.h"
 #include "PedalDefinition.h"
@@ -13,20 +14,31 @@ juce::Colour skinColourForSlot(int slot)
     };
     return juce::Colour(colours[static_cast<size_t>(slot % 6)]);
 }
+
+juce::Rectangle<int> japTextureCell(int idx)
+{
+    static constexpr int colW[5] = { 307, 307, 307, 307, 308 };
+    static constexpr int rowH[2] = { 274, 279 };
+    int r = idx / 5;
+    int c = idx % 5;
+    int x = 0;
+    for (int i = 0; i < c; ++i) x += colW[i];
+    int y = 0;
+    for (int i = 0; i < r; ++i) y += rowH[i];
+    return { x, y, colW[c], rowH[r] };
+}
 }
 
 PedalComponent::PedalComponent(DrawdioProcessor& processor,
                                int slotIndex,
                                DspModuleType initialType,
                                const ResourceManager& resources,
-                               const IThemeProvider& theme,
-                               PedalSkinManager::PedalSkin skin)
+                               const IThemeProvider& theme)
     : audioProcessor(processor),
       m_resources(resources),
       m_theme(theme),
       m_slotIndex(slotIndex),
       m_currentType(initialType),
-      m_skin(skin),
       m_definition(&PedalDefinitions::get(initialType))
 {
     // Initialize knob values from definition defaults
@@ -43,28 +55,128 @@ PedalComponent::~PedalComponent()
 void PedalComponent::paint(juce::Graphics& g)
 {
     auto bounds = getLocalBounds().toFloat();
-    const auto& texture = m_resources.getTexture(ResourceManager::TextureId::PedalEnclosure);
-    
-    if (texture.isValid())
+    const auto pedalW = bounds.getWidth();
+    const auto pedalH = bounds.getHeight();
+
+    const float insetX = pedalW * 0.075f;
+    const float insetY = pedalH * 0.085f;
+    const float maskW  = pedalW * 0.850f;
+    const float maskH  = pedalH * 0.88333f;
+    const float corner = pedalW * 0.08f;
+
+    const auto& enclosure = m_resources.getTexture(ResourceManager::TextureId::PedalEnclosure);
+    if (enclosure.isValid())
     {
-        g.drawImage(texture, bounds.getX(), bounds.getY(), 
+        g.drawImage(enclosure, bounds.getX(), bounds.getY(),
                    bounds.getWidth(), bounds.getHeight(),
-                   0, 0, texture.getWidth(), texture.getHeight());
+                    0, 0, enclosure.getWidth(), enclosure.getHeight());
+    }
+
+    const auto& japSheet = m_resources.getTexture(ResourceManager::TextureId::JapanesePedalSheet);
+    if (japSheet.isValid())
+    {
+        const auto srcRect = japTextureCell(m_slotIndex % 6);
+
+        g.saveState();
+        {
+            juce::Path clipPath;
+            clipPath.addRoundedRectangle(
+                bounds.getX() + insetX,
+                bounds.getY() + insetY,
+                maskW,
+                maskH,
+                corner);
+            g.reduceClipRegion(clipPath);
+        }
+        g.setOpacity(0.85f);
+        g.drawImage(japSheet,
+                    bounds.getX(), bounds.getY(),
+                    pedalW, pedalH,
+                    srcRect.getX(), srcRect.getY(),
+                    srcRect.getWidth(), srcRect.getHeight());
+        g.restoreState();
+    }
+
+    {
+        juce::Path clipPath;
+        clipPath.addRoundedRectangle(
+            bounds.getX() + insetX,
+            bounds.getY() + insetY,
+            maskW, maskH, corner);
+        g.saveState();
+        g.reduceClipRegion(clipPath);
+
+        juce::Rectangle<float> body(bounds.getX() + insetX,
+                                     bounds.getY() + insetY,
+                                     maskW, maskH);
+        RenderUtils::paintCurvatureVignette(g, body, corner);
+        RenderUtils::paintEdgeHighlight(g, body, corner);
+
+        g.setOpacity(0.03f);
+        g.drawImage(RenderUtils::getNoiseTexture(),
+                    body.getX(), body.getY(),
+                    body.getWidth(), body.getHeight(),
+                    0, 0, 128, 128);
+        g.setOpacity(1.0f);
+        g.restoreState();
+    }
+
+    const auto& ledImage = m_resources.getImage(ResourceManager::ImageId::PedalLedImage);
+    if (ledImage.isValid())
+    {
+        const float ledSize = pedalH * GridLayout::LedSizeRatio;
+        const bool isOn = (m_currentType != DspModuleType::BYPASS);
+        const auto& frame = m_resources.getSpriteFrame(
+            isOn ? ResourceManager::SpriteId::PedalLedOn
+                 : ResourceManager::SpriteId::PedalLedOff);
+        g.drawImage(ledImage,
+                    pedalW * GridLayout::LedCenterXRatio - ledSize * 0.5f,
+                    pedalH * GridLayout::LedCenterYRatio - ledSize * 0.5f,
+                    ledSize, ledSize,
+                    frame.source.getX(), frame.source.getY(),
+                    frame.source.getWidth(), frame.source.getHeight());
+    }
+
+    const auto labelArea = getLabelArea();
+    if (!labelArea.isEmpty())
+    {
+        g.setGradientFill(juce::ColourGradient(
+            m_theme.pedalLcdTop(), labelArea.getTopLeft(),
+            m_theme.pedalLcdBottom(), labelArea.getBottomLeft(), false));
+        g.fillRoundedRectangle(labelArea, m_theme.pedalStyle().lcdRadius);
+
+        g.setColour(juce::Colours::white.withAlpha(0.85f));
+        g.setFont(juce::Font(juce::FontOptions(labelArea.getHeight() * 0.45f, juce::Font::bold)));
+        g.drawText(m_definition ? juce::String(m_definition->displayName) : "---",
+                   labelArea.toNearestInt(), juce::Justification::centred, false);
     }
     
-    // Draw all 4 knobs in 2x2 grid layout
     for (int i = 0; i < kKnobCount; ++i)
     {
         drawKnob(g, i, m_knobValues[i]);
     }
-}
 
-void PedalComponent::setSkin(PedalSkinManager::PedalSkin skin)
-{
-    if (m_skin != skin)
+    if (m_definition == nullptr)
+        return;
+
+    const float fontSize = pedalH * 0.04f;
+    const float labelWidth = pedalW * 0.28f;
+    const float labelHeight = fontSize * 1.3f;
+    const float offsetY = pedalH * GridLayout::KnobLabelOffsetYRatio;
+
+    g.setColour(juce::Colours::white.withAlpha(0.75f));
+    g.setFont(juce::Font(juce::FontOptions(fontSize)));
+
+    for (int i = 0; i < kKnobCount; ++i)
     {
-        m_skin = skin;
-        repaint();
+        const auto& knobBounds = m_knobBounds[static_cast<size_t>(i)];
+        const auto& param = m_definition->parameters[static_cast<size_t>(i)];
+
+        g.drawText(param.label,
+                   (knobBounds.getCentreX() - labelWidth * 0.5f),
+                   (knobBounds.getCentreY() + offsetY - labelHeight * 0.5f),
+                   labelWidth, labelHeight,
+                   juce::Justification::centred, false);
     }
 }
 
@@ -73,22 +185,26 @@ void PedalComponent::resized()
     updateKnobBounds();
 }
 
+juce::Rectangle<float> PedalComponent::getLabelArea() const
+{
+    const float pedalW = static_cast<float>(getWidth());
+    const float pedalH = static_cast<float>(getHeight());
+    auto bounds = getLocalBounds().toFloat()
+                      .reduced(pedalW * GridLayout::LabelInsetXRatio, pedalH * GridLayout::LabelInsetYRatio);
+    bounds.removeFromTop(pedalH * GridLayout::LabelTopTrimRatio);
+    return bounds.withTrimmedTop(bounds.getHeight() * 0.67f)
+                .reduced(pedalW * GridLayout::LabelReducedXRatio, pedalH * GridLayout::LabelReducedYRatio);
+}
+
 void PedalComponent::mouseDown(const juce::MouseEvent& event)
 {
-    auto bounds = getLocalBounds().toFloat().reduced(5.0f, 9.0f);
-    bounds.removeFromTop(6.0f);
-    auto labelArea = bounds.withTrimmedTop(bounds.getHeight() * 0.67f).reduced(18.0f, 10.0f);
-
-    if (labelArea.contains(event.position))
+    if (getLabelArea().contains(event.position))
         showTypePopup();
 }
 
 void PedalComponent::mouseMove(const juce::MouseEvent& event)
 {
-    auto bounds = getLocalBounds().toFloat().reduced(5.0f, 9.0f);
-    bounds.removeFromTop(6.0f);
-    auto labelArea = bounds.withTrimmedTop(bounds.getHeight() * 0.67f).reduced(18.0f, 10.0f);
-    setMouseCursor(labelArea.contains(event.position)
+    setMouseCursor(getLabelArea().contains(event.position)
                        ? juce::MouseCursor::PointingHandCursor
                        : juce::MouseCursor::NormalCursor);
 }
@@ -109,6 +225,7 @@ void PedalComponent::showTypePopup()
             {
                 auto type = static_cast<DspModuleType>(result - 1);
                 m_currentType = type;
+                m_definition = &PedalDefinitions::get(type);
                 repaint();
                 audioProcessor.setPedalSlot(m_slotIndex, type);
             }
@@ -130,8 +247,12 @@ void PedalComponent::setKnobValue(int knobIdx, float value)
 {
     if (knobIdx >= 0 && knobIdx < kKnobCount)
     {
-        m_knobValues[static_cast<size_t>(knobIdx)] = value;
-        repaint();
+        auto& target = m_knobValues[static_cast<size_t>(knobIdx)];
+        if (target != value)
+        {
+            target = value;
+            repaint();
+        }
     }
 }
 
@@ -144,13 +265,9 @@ void PedalComponent::updateKnobBounds()
     const float pedalWidth = pedalBounds.getWidth();
     const float pedalHeight = pedalBounds.getHeight();
 
-    // Knob size: 43x43 pixels
-    constexpr float kKnobSize = 43.0f;
-    constexpr float kSpacingY = -8.0f;
-    constexpr float kYShift = -10.0f;
-    const float halfKnob = kKnobSize / 2.0f;
+    const float knobSize = pedalHeight * GridLayout::KnobSizeRatio;
+    const float halfKnob = knobSize * 0.5f;
 
-    // Calculate current X spread from normalized coordinates
     float minCentreX = 1.0f, maxCentreX = 0.0f;
     for (int i = 0; i < kKnobCount; ++i)
     {
@@ -159,22 +276,21 @@ void PedalComponent::updateKnobBounds()
     }
     const float currentSpreadX = (maxCentreX - minCentreX) * pedalWidth;
     const float groupCenterX = pedalBounds.getX() + pedalWidth * (minCentreX + maxCentreX) / 2.0f;
-    const float targetSpreadX = 80.0f;  // Target spacing between columns
+    const float targetSpreadX = pedalWidth * GridLayout::KnobSpreadRatio;
     const float scaleX = targetSpreadX / currentSpreadX;
 
     for (int i = 0; i < kKnobCount; ++i)
     {
         const auto& normBounds = m_definition->knobLayout[static_cast<size_t>(i)];
-        
-        // Anchor X to center, scale the spread
+
         const float centerX = groupCenterX + (normBounds.centreX - (minCentreX + maxCentreX) / 2.0f) * scaleX * pedalWidth;
-        const float centerY = pedalBounds.getY() + (normBounds.centreY + kSpacingY / pedalHeight + kYShift / pedalHeight) * pedalHeight;
+        const float centerY = pedalBounds.getY() + (normBounds.centreY + GridLayout::KnobCenterYShiftRatio) * pedalHeight;
 
         m_knobBounds[static_cast<size_t>(i)] = juce::Rectangle<float>(
             centerX - halfKnob,
             centerY - halfKnob,
-            kKnobSize,
-            kKnobSize);
+            knobSize,
+            knobSize);
     }
 }
 
@@ -184,32 +300,38 @@ void PedalComponent::drawKnob(juce::Graphics& g, int knobIdx, float value)
         return;
 
     const auto& bounds = m_knobBounds[static_cast<size_t>(knobIdx)];
-    if (!bounds.isEmpty())
-    {
-        const auto& knobImage = m_resources.getImage(ResourceManager::ImageId::PedalKnobImage);
-        
-        if (knobImage.isValid())
-        {
-            // Scale entire sprite sheet to fit the 35x35 square bounds
-            const int destSize = static_cast<int>(bounds.getWidth());
-            
-            g.drawImage(knobImage,
-                       static_cast<int>(bounds.getX()),
-                       static_cast<int>(bounds.getY()),
-                       destSize, destSize,
-                       0, 0, knobImage.getWidth(), knobImage.getHeight());
-        }
-    }
+    if (bounds.isEmpty())
+        return;
+
+    const auto& knobImage = m_resources.getImage(ResourceManager::ImageId::PedalKnobImage);
+    if (!knobImage.isValid())
+        return;
+
+    constexpr float kMaxAngleDegrees = 150.0f;
+    const float angle = juce::degreesToRadians((value - 0.5f) * kMaxAngleDegrees * 2.0f);
+
+    const int destSize = static_cast<int>(bounds.getWidth());
+    g.saveState();
+    g.addTransform(juce::AffineTransform::rotation(
+        angle, bounds.getCentreX(), bounds.getCentreY()));
+    g.drawImage(knobImage,
+                static_cast<int>(bounds.getX()),
+                static_cast<int>(bounds.getY()),
+                destSize, destSize,
+                0, 0, knobImage.getWidth(), knobImage.getHeight());
+    g.restoreState();
 }
 
 juce::Point<float> PedalComponent::getInputJackPos() const
 {
     auto bounds = getBounds().toFloat();
-    return { bounds.getX() + 42.0f, bounds.getY() + 15.0f };
+    return { bounds.getX() + bounds.getWidth() * GridLayout::JackInsetXRatio,
+             bounds.getY() + bounds.getHeight() * GridLayout::JackInsetYRatio };
 }
 
 juce::Point<float> PedalComponent::getOutputJackPos() const
 {
     auto bounds = getBounds().toFloat();
-    return { bounds.getRight() - 42.0f, bounds.getY() + 15.0f };
+    return { bounds.getRight() - bounds.getWidth() * GridLayout::JackInsetXRatio,
+             bounds.getY() + bounds.getHeight() * GridLayout::JackInsetYRatio };
 }

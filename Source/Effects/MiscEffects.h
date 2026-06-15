@@ -1,4 +1,5 @@
 #pragma once
+#include <vector>
 #include "Effects/DspEffect.h"
 
 class VcaCompressorEffect : public DspEffect
@@ -21,5 +22,5 @@ public:
 
 private:
     int m_sampleHold = 0;
-    float m_heldValue = 0.0f;
+    std::vector<float> m_heldValues;
 };

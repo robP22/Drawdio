@@ -12,7 +12,8 @@ constexpr auto defaultKnobLayout()
     }};
 }
 
-PedalDefinition makeDefinition(DspModuleType type, const char* displayName, const char* effectLabel)
+PedalDefinition makeDefinition(DspModuleType type, const char* displayName,
+                                const char* param2Label, const char* effectLabel)
 {
     return {
         type,
@@ -22,7 +23,7 @@ PedalDefinition makeDefinition(DspModuleType type, const char* displayName, cons
         {{
             { ParamToken::Wet, "Wet", 0.0f, 1.0f, 0.5f },
             { ParamToken::Dry, "Dry", 0.0f, 1.0f, 0.5f },
-            { ParamToken::Volume, "Vol", 0.0f, 1.0f, 0.5f },
+            { ParamToken::Volume, param2Label, 0.0f, 1.0f, 0.5f },
             { ParamToken::Effect, effectLabel, 0.0f, 1.0f, 0.5f }
         }}
     };
@@ -31,25 +32,25 @@ PedalDefinition makeDefinition(DspModuleType type, const char* displayName, cons
 const std::array<PedalDefinition, static_cast<size_t>(DspModuleType::GRANULAR_DELAY) + 1>& definitions()
 {
     static const std::array<PedalDefinition, static_cast<size_t>(DspModuleType::GRANULAR_DELAY) + 1> defs {{
-        makeDefinition(DspModuleType::BYPASS, "Bypass", "Param"),
-        makeDefinition(DspModuleType::WAVESHAPER_DISTORTION, "Waveshaper Dist.", "Drive"),
-        makeDefinition(DspModuleType::MODULATED_DELAY_LINE, "Mod. Delay", "Rate"),
-        makeDefinition(DspModuleType::BIQUAD_FILTER, "Biquad Filter", "Cutoff"),
-        makeDefinition(DspModuleType::DYNAMIC_RING_BUFFER, "Dyn. Ring Buffer", "Size"),
-        makeDefinition(DspModuleType::PITCH_SHIFTER_GRANULAR, "Pitch Shifter", "Pitch"),
-        makeDefinition(DspModuleType::ENVELOPE_VCA_COMPRESSOR, "VCA Compressor", "Thresh"),
-        makeDefinition(DspModuleType::PITCH_DETECTOR_OSCILLATOR, "Pitch Detector", "Octave"),
-        makeDefinition(DspModuleType::DIFFUSED_DELAY_NETWORK, "Diff. Delay Net", "Decay"),
-        makeDefinition(DspModuleType::ALLPASS_FILTER_CASCADE, "Allpass Cascade", "Coeff"),
-        makeDefinition(DspModuleType::FREQUENCY_SHIFTER, "Freq. Shifter", "Shift"),
-        makeDefinition(DspModuleType::MATHEMATICAL_WAVEFOLDER, "Wavefolder", "Fold"),
-        makeDefinition(DspModuleType::SAMPLE_RATE_DEGRADER, "Sample Rate Deg.", "Bits"),
-        makeDefinition(DspModuleType::FORMANT_VOCAL_SHIFTER, "Formant Shifter", "Formant"),
-        makeDefinition(DspModuleType::TAPE_STOP_REVERSE_ECHO, "Tape Stop Echo", "Brake"),
-        makeDefinition(DspModuleType::SIMPLE_DELAY, "Simple Delay", "Time"),
-        makeDefinition(DspModuleType::PLATE_REVERB, "Plate Reverb", "Decay"),
-        makeDefinition(DspModuleType::SOFT_DISTORTION, "Soft Distortion", "Drive"),
-        makeDefinition(DspModuleType::GRANULAR_DELAY, "Gran. Delay", "Pitch")
+        makeDefinition(DspModuleType::BYPASS, "Bypass", "Vol", "Param"),
+        makeDefinition(DspModuleType::WAVESHAPER_DISTORTION, "Waveshaper Dist.", "Tone", "Drive"),
+        makeDefinition(DspModuleType::MICROPITCH_CHORUS, "MicroPitch Chorus", "Depth", "Detune"),
+        makeDefinition(DspModuleType::BIQUAD_FILTER, "Biquad Filter", "Res", "Cutoff"),
+        makeDefinition(DspModuleType::DYNAMIC_RING_BUFFER, "Dyn. Ring Buffer", "Feed", "Size"),
+        makeDefinition(DspModuleType::PITCH_SHIFTER_GRANULAR, "Pitch Shifter", "Spread", "Rate"),
+        makeDefinition(DspModuleType::ENVELOPE_VCA_COMPRESSOR, "VCA Compressor", "Attack", "Thresh"),
+        makeDefinition(DspModuleType::GLITCH_STUTTER, "Glitch Stutter", "Mix", "Intensity"),
+        makeDefinition(DspModuleType::DIFFUSED_DELAY_NETWORK, "Diff. Delay Net", "Diff", "Decay"),
+        makeDefinition(DspModuleType::SPECTRAL_FREEZE, "Spectral Freeze", "Morph", "Freeze"),
+        makeDefinition(DspModuleType::FREQUENCY_SHIFTER, "Freq. Shifter", "Mix", "Shift"),
+        makeDefinition(DspModuleType::MATHEMATICAL_WAVEFOLDER, "Wavefolder", "Sym", "Fold"),
+        makeDefinition(DspModuleType::SAMPLE_RATE_DEGRADER, "Sample Rate Deg.", "Rate", "Bits"),
+        makeDefinition(DspModuleType::FORMANT_VOCAL_SHIFTER, "Formant Shifter", "Q", "Formant"),
+        makeDefinition(DspModuleType::TAPE_STOP_REVERSE_ECHO, "Tape Stop Echo", "Decay", "Brake"),
+        makeDefinition(DspModuleType::SIMPLE_DELAY, "Simple Delay", "Feed", "Time"),
+        makeDefinition(DspModuleType::PLATE_REVERB, "Plate Reverb", "Size", "Decay"),
+        makeDefinition(DspModuleType::COMB_RESONATOR, "Comb Resonator", "Feed", "Freq"),
+        makeDefinition(DspModuleType::GRANULAR_DELAY, "Gran. Delay", "Spread", "Rate")
     }};
 
     return defs;

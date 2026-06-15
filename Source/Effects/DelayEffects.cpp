@@ -1,179 +1,228 @@
+#include <JuceHeader.h>
 #include "Effects/DelayEffects.h"
 
 #include <algorithm>
 #include <cmath>
 
-void ModulatedDelayEffect::prepare(double sampleRate, int numChannels)
+void MicroPitchChorusEffect::prepare(double sampleRate, int numChannels)
 {
     DspEffect::prepare(sampleRate, numChannels);
-    prepareSimpleDelay(m_delay, sampleRate, 2.0);
-    m_lfoPhase = 0.0f;
-}
-
-void ModulatedDelayEffect::reset()
-{
-    resetSimpleDelay(m_delay);
-    m_lfoPhase = 0.0f;
-}
-
-void ModulatedDelayEffect::processSample(float** b, int c, int s, float effectParam)
-{
-    float rate = effectParam;
-    float modRate = 0.1f + rate * 9.9f;
-    size_t bufSize = m_delay.buf.size();
-    if (bufSize == 0) return;
-
-    m_lfoPhase += static_cast<float>(modRate / m_sampleRate);
-    m_lfoPhase = std::fmod(m_lfoPhase, 1.0f);
-    float lfo = std::sin(m_lfoPhase * 2.0f * 3.14159265f);
-
-    int maxDelay = static_cast<int>(m_sampleRate * 0.5);
-    int minDelay = static_cast<int>(m_sampleRate * 0.02);
-    int delayRange = static_cast<int>((maxDelay - minDelay) * 0.5f);
-    int delaySamples = minDelay + static_cast<int>((lfo * 0.5f + 0.5f) * delayRange);
-
-    // Write input to delay line
-    if (c > 0)
-        m_delay.buf[m_delay.writePtr] = b[0][s];
-    else
-        m_delay.buf[m_delay.writePtr] = 0.0f;
-
-    // Process for each channel independently
-    for (int ch = 0; ch < c; ++ch)
+    m_channels.resize(static_cast<size_t>(numChannels));
+    for (auto& ch : m_channels)
     {
-        int readPtr = (static_cast<int>(m_delay.writePtr) - delaySamples) % static_cast<int>(bufSize);
-        if (readPtr < 0) readPtr += static_cast<int>(bufSize);
-        b[ch][s] = m_delay.buf[static_cast<size_t>(readPtr)];
+        ch.buf.assign(static_cast<size_t>(sampleRate * 0.5), 0.0f);
+        ch.writePtr = 0;
+        ch.readPos1 = 0.0f;
+        ch.readPos2 = 0.0f;
+        ch.lfoPhase = 0.0f;
     }
+}
 
-    m_delay.writePtr = (m_delay.writePtr + 1) % bufSize;
+void MicroPitchChorusEffect::reset()
+{
+    for (auto& ch : m_channels)
+    {
+        std::fill(ch.buf.begin(), ch.buf.end(), 0.0f);
+        ch.writePtr = 0;
+        ch.readPos1 = 0.0f;
+        ch.readPos2 = 0.0f;
+        ch.lfoPhase = 0.0f;
+    }
+}
+
+void MicroPitchChorusEffect::processSample(float** b, int c, int s, float effectParam)
+{
+    juce::ScopedNoDenormals noDenorm;
+    float detuneCents = effectParam * 50.0f;
+    float pitch1 = 1.0f + detuneCents / 1200.0f;
+    float pitch2 = 1.0f - detuneCents / 1200.0f;
+
+    static constexpr float kLfoRate = 0.3f;
+    static constexpr float kLfoDepthSamples = 0.002f;  // 2ms
+
+    int chCount = std::min(c, static_cast<int>(m_channels.size()));
+    for (int ch = 0; ch < chCount; ++ch)
+    {
+        auto& mc = m_channels[static_cast<size_t>(ch)];
+        size_t bufSize = mc.buf.size();
+        if (bufSize == 0) continue;
+
+        mc.buf[mc.writePtr] = b[ch][s];
+
+        mc.lfoPhase += static_cast<float>(kLfoRate / m_sampleRate);
+        if (mc.lfoPhase >= 1.0f) mc.lfoPhase -= 1.0f;
+        float lfo1 = std::sin(mc.lfoPhase * 2.0f * 3.14159265f);
+        float lfo2 = std::sin((mc.lfoPhase + 0.5f) * 2.0f * 3.14159265f);
+
+        float mod1 = lfo1 * kLfoDepthSamples * static_cast<float>(m_sampleRate);
+        float mod2 = lfo2 * kLfoDepthSamples * static_cast<float>(m_sampleRate);
+
+        mc.readPos1 += pitch1 + mod1 * 0.001f;
+        if (mc.readPos1 >= static_cast<float>(bufSize))
+            mc.readPos1 -= static_cast<float>(bufSize);
+        else if (mc.readPos1 < 0.0f)
+            mc.readPos1 += static_cast<float>(bufSize);
+
+        mc.readPos2 += pitch2 + mod2 * 0.001f;
+        if (mc.readPos2 >= static_cast<float>(bufSize))
+            mc.readPos2 -= static_cast<float>(bufSize);
+        else if (mc.readPos2 < 0.0f)
+            mc.readPos2 += static_cast<float>(bufSize);
+
+        auto readTap = [&](float pos) -> float {
+            size_t idx = static_cast<size_t>(pos) % bufSize;
+            float frac = pos - std::floor(pos);
+            size_t next = (idx + 1) % bufSize;
+            return mc.buf[idx] * (1.0f - frac) + mc.buf[next] * frac;
+        };
+
+        float tap1 = readTap(mc.readPos1);
+        float tap2 = readTap(mc.readPos2);
+        b[ch][s] = tap1 * 0.35f + tap2 * 0.35f;
+
+        mc.writePtr = (mc.writePtr + 1) % bufSize;
+    }
 }
 
 void SimpleDelayEffect::prepare(double sampleRate, int numChannels)
 {
     DspEffect::prepare(sampleRate, numChannels);
-    prepareSimpleDelay(m_delay, sampleRate, 1.0);
+    m_delays.resize(static_cast<size_t>(numChannels));
+    for (auto& d : m_delays)
+        prepareSimpleDelay(d, sampleRate, 1.0);
 }
 
 void SimpleDelayEffect::reset()
 {
-    resetSimpleDelay(m_delay);
+    for (auto& d : m_delays)
+        resetSimpleDelay(d);
 }
 
 void SimpleDelayEffect::processSample(float** b, int c, int s, float effectParam)
 {
+    juce::ScopedNoDenormals noDenorm;
     float delaySec = 0.1f + effectParam * 0.9f;
-    int delaySamples = static_cast<int>(m_sampleRate * delaySec);
-    float feedback = 0.4f;
+    float feedback = 0.1f + effectParam * 0.6f;
 
-    size_t bufSize = m_delay.buf.size();
-    if (bufSize == 0) return;
-
-    if (c > 0)
+    int chCount = std::min(c, static_cast<int>(m_delays.size()));
+    for (int ch = 0; ch < chCount; ++ch)
     {
-        float in = b[0][s];
-        m_delay.buf[m_delay.writePtr] = in;
-        size_t readPtr = (m_delay.writePtr + bufSize - static_cast<size_t>(delaySamples)) % bufSize;
-        float delayed = m_delay.buf[readPtr];
-        m_delay.buf[m_delay.writePtr] = in + delayed * feedback;
-        b[0][s] = delayed;
-        if (c > 1)
-            b[1][s] = delayed;
+        auto& d = m_delays[static_cast<size_t>(ch)];
+        size_t bufSize = d.buf.size();
+        if (bufSize == 0) continue;
+
+        size_t delaySamples = static_cast<size_t>(m_sampleRate * delaySec);
+        if (delaySamples >= bufSize) delaySamples = bufSize - 1;
+
+        float in = b[ch][s];
+        d.buf[d.writePtr] = in;
+        size_t readPtr = (d.writePtr + bufSize - delaySamples) % bufSize;
+        float delayed = d.buf[readPtr];
+        d.buf[d.writePtr] = in + delayed * feedback;
+        b[ch][s] = delayed;
+        d.writePtr = (d.writePtr + 1) % bufSize;
     }
-    m_delay.writePtr = (m_delay.writePtr + 1) % bufSize;
 }
 
-void DynamicRingBufferEffect::prepare(double sampleRate, int)
+void DynamicRingBufferEffect::prepare(double sampleRate, int numChannels)
 {
-    prepareRingBuffer(m_buffer, sampleRate, 4.0);
+    DspEffect::prepare(sampleRate, numChannels);
+    m_buffers.resize(static_cast<size_t>(numChannels));
+    for (auto& b : m_buffers)
+        prepareRingBuffer(b, sampleRate, 4.0);
 }
 
 void DynamicRingBufferEffect::reset()
 {
-    resetRingBuffer(m_buffer);
+    for (auto& b : m_buffers)
+        resetRingBuffer(b);
 }
 
 void DynamicRingBufferEffect::processSample(float** b, int c, int s, float effectParam)
 {
+    juce::ScopedNoDenormals noDenorm;
     float size = effectParam;
-    size_t bufSize = m_buffer.buf.size();
-    if (bufSize == 0) return;
+    float readSpeed = 0.25f + effectParam * 0.75f;
 
-    size_t loopLen = static_cast<size_t>((0.15f + size * 0.85f) * bufSize);
-    if (loopLen == 0) loopLen = 1;  // Ensure minimum of 1
-    float readSpeed = 0.75f;
+    int chCount = std::min(c, static_cast<int>(m_buffers.size()));
+    for (int ch = 0; ch < chCount; ++ch)
+    {
+        auto& buf = m_buffers[static_cast<size_t>(ch)];
+        size_t bufSize = buf.buf.size();
+        if (bufSize == 0) continue;
 
-    if (c > 0)
-        m_buffer.buf[m_buffer.writePtr] = b[0][s];
+        size_t loopLen = static_cast<size_t>((0.15f + size * 0.85f) * bufSize);
+        if (loopLen == 0) loopLen = 1;
 
-    size_t baseRead = (m_buffer.writePtr + bufSize - loopLen) % bufSize;
-    size_t readIdx = baseRead + static_cast<size_t>(m_buffer.readHead) % loopLen;
-    if (readIdx >= bufSize) readIdx -= bufSize;
+        size_t baseRead = (buf.writePtr + bufSize - loopLen) % bufSize;
+        float safeHead = std::fmax(0.0f, buf.readHead);
+        size_t readIdx = (baseRead + static_cast<size_t>(safeHead) % loopLen) % bufSize;
 
-    float sample = m_buffer.buf[readIdx];
+        float delayed = buf.buf[readIdx];
+        buf.buf[buf.writePtr] = b[ch][s] + 0.4f * delayed;
 
-    for (int ch = 0; ch < c; ++ch)
-        b[ch][s] = sample;
+        b[ch][s] = delayed;
 
-    m_buffer.readHead += readSpeed;
-    if (m_buffer.readHead >= static_cast<float>(loopLen))
-        m_buffer.readHead -= static_cast<float>(loopLen);
+        buf.readHead = std::fmod(buf.readHead + readSpeed, static_cast<float>(loopLen));
 
-    m_buffer.writePtr = (m_buffer.writePtr + 1) % bufSize;
+        buf.writePtr = (buf.writePtr + 1) % bufSize;
+    }
 }
 
 void TapeStopEchoEffect::prepare(double sampleRate, int numChannels)
 {
     DspEffect::prepare(sampleRate, numChannels);
-    m_buf.assign(static_cast<size_t>(sampleRate * 2.0), 0.0f);
-    m_writePtr = 0;
-    m_readHead = 0.0f;
+    m_channels.resize(static_cast<size_t>(numChannels));
+    for (auto& ch : m_channels)
+    {
+        ch.buf.assign(static_cast<size_t>(sampleRate * 2.0), 0.0f);
+        ch.writePtr = 0;
+        ch.readSpeed = 1.0f;
+        float delaySamps = std::fmin(0.1f * static_cast<float>(sampleRate), static_cast<float>(ch.buf.size() - 1));
+        ch.readPos = static_cast<float>((ch.writePtr + ch.buf.size() - static_cast<size_t>(delaySamps)) % ch.buf.size());
+    }
 }
 
 void TapeStopEchoEffect::reset()
 {
-    std::fill(m_buf.begin(), m_buf.end(), 0.0f);
-    m_writePtr = 0;
-    m_readHead = 0.0f;
+    for (auto& ch : m_channels)
+    {
+        std::fill(ch.buf.begin(), ch.buf.end(), 0.0f);
+        ch.writePtr = 0;
+        ch.readPos = 0.0f;
+        ch.readSpeed = 1.0f;
+    }
 }
 
 void TapeStopEchoEffect::processSample(float** b, int c, int s, float effectParam)
 {
+    juce::ScopedNoDenormals noDenorm;
     float braking = effectParam;
-    size_t bufSize = m_buf.size();
-    if (bufSize == 0) return;
+    float brakeFactor = 0.98f - braking * 0.05f;
 
-    float brakeFactor = 0.98f - braking * 0.05f;  // Stronger decay
-
-    if (c > 0)
-        m_buf[m_writePtr] = b[0][s];
-
-    float readSpeed = 1.0f;
-    if (braking > 0.01f)
+    int chCount = std::min(c, static_cast<int>(m_channels.size()));
+    for (int ch = 0; ch < chCount; ++ch)
     {
-        // Clamp readSpeed to prevent runaway exponential growth
-        float speed = m_readHead * brakeFactor + 0.001f;
-        readSpeed = std::fmin(speed, static_cast<float>(bufSize) * 0.1f);
+        auto& chState = m_channels[static_cast<size_t>(ch)];
+        size_t bufSize = chState.buf.size();
+        if (bufSize == 0) continue;
+
+        chState.buf[chState.writePtr] = b[ch][s];
+
+        if (braking > 0.01f)
+            chState.readSpeed = std::fmax(0.001f, chState.readSpeed * brakeFactor + 0.001f);
+        else
+            chState.readSpeed = 1.0f;
+
+        chState.readPos += chState.readSpeed;
+        if (chState.readPos >= static_cast<float>(bufSize))
+            chState.readPos -= static_cast<float>(bufSize);
+
+        size_t idx = static_cast<size_t>(chState.readPos);
+        float frac = chState.readPos - static_cast<float>(idx);
+        size_t next = (idx + 1) % bufSize;
+        b[ch][s] = chState.buf[idx] * (1.0f - frac) + chState.buf[next] * frac;
+
+        chState.writePtr = (chState.writePtr + 1) % bufSize;
     }
-
-    size_t readIdx;
-    if (readSpeed >= 0)
-    {
-        size_t base = (m_writePtr + bufSize - 1) % bufSize;
-        size_t offset = static_cast<size_t>(readSpeed * 100.0f) % bufSize;
-        readIdx = (base + bufSize - offset) % bufSize;
-    }
-    else
-    {
-        size_t offset = static_cast<size_t>(-readSpeed * 100.0f) % bufSize;
-        readIdx = (m_writePtr + offset) % bufSize;
-    }
-
-    float sample = m_buf[readIdx];
-
-    for (int ch = 0; ch < c; ++ch)
-        b[ch][s] = sample;
-
-    m_readHead = readSpeed;
-    m_writePtr = (m_writePtr + 1) % bufSize;
 }

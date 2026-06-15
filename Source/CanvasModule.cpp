@@ -1,20 +1,14 @@
 #include "CanvasModule.h"
+#include "GridLayout.h"
 #include "ColorPalette.h"
 #include "PixelCanvasComponent.h"
 #include "ResourceManager.h"
 #include "ThemeManager.h"
 
-namespace Layout
-{
-constexpr int CanvasOuterMargin   = 22;
-constexpr int CanvasVerticalMargin = 25;
-constexpr float PaletteHeightRatio = 0.26f;
-}
-
 CanvasModule::CanvasModule(const ResourceManager& resources, const IThemeProvider& theme)
     : m_resources(resources),
       m_theme(theme),
-      m_pixelCanvas(theme),
+      m_pixelCanvas(resources, theme),
       m_palette(resources, theme)
 {
     addAndMakeVisible(m_pixelCanvas);
@@ -44,15 +38,16 @@ CanvasModule::CanvasModule(const ResourceManager& resources, const IThemeProvide
 void CanvasModule::resized()
 {
     auto full = getLocalBounds();
-    auto area = full.reduced(Layout::CanvasOuterMargin, Layout::CanvasVerticalMargin);
+    const int outerMargin = juce::roundToInt(full.getWidth() * GridLayout::CanvasOuterMarginRatio);
+    const int vertMargin = juce::roundToInt(full.getHeight() * GridLayout::CanvasVerticalMarginRatio);
+    auto area = full.reduced(outerMargin, vertMargin);
 
-    const int paletteH = juce::roundToInt(full.getHeight() * Layout::PaletteHeightRatio);
+    const int paletteH = juce::roundToInt(full.getHeight() * GridLayout::PaletteHeightRatio);
     auto paletteArea = full.removeFromBottom(paletteH);
 
     auto canvasArea = full;
     canvasArea.setBottom(paletteArea.getY());
     const int squareSize = canvasArea.getHeight();
-    // Properly center the canvas using withSizeKeepingCentre only
     const auto pixelCanvasBounds = canvasArea.withSizeKeepingCentre(squareSize, squareSize);
     m_pixelCanvas.setBounds(pixelCanvasBounds);
     m_palette.setBounds(paletteArea);

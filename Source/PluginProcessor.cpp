@@ -40,7 +40,9 @@ void DrawdioProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
     const int maxChannels = getTotalNumOutputChannels();
     m_dspProcessor.prepareToPlay(sampleRate, samplesPerBlock, maxChannels);
-    m_channelBuffer.resize(static_cast<size_t>(maxChannels));
+
+    // Pre-allocate channel buffer for maximum channel count — no allocations on audio thread
+    m_channelBuffer.assign(static_cast<size_t>(maxChannels), nullptr);
 
     std::vector<DspModuleType> slots(m_pedalSlots.begin(), m_pedalSlots.end());
     m_compilerThread.setPedalSlots(slots);
@@ -61,15 +63,21 @@ void DrawdioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     const auto totalNumInputChannels = getTotalNumInputChannels();
     const auto totalNumOutputChannels = getTotalNumOutputChannels();
 
-    const auto inputPeak = calculatePeak(buffer, totalNumInputChannels);
+    auto fastPeak = [&](int numCh) -> float {
+        for (int c = 0; c < std::min(numCh, buffer.getNumChannels()); ++c)
+        {
+            const auto* d = buffer.getReadPointer(c);
+            for (int s = 0; s < std::min(4, buffer.getNumSamples()); ++s)
+                if (std::abs(d[s]) > 1e-6f)
+                    return calculatePeak(buffer, numCh);
+        }
+        return 0.0f;
+    };
+
+    const auto inputPeak = fastPeak(totalNumInputChannels);
 
     for (auto ch = totalNumInputChannels; ch < totalNumOutputChannels; ++ch)
         buffer.clear(ch, 0, buffer.getNumSamples());
-
-    consumeCompiledResultIfAvailable();
-
-    if (static_cast<int>(m_channelBuffer.size()) < totalNumOutputChannels)
-        m_channelBuffer.resize(static_cast<size_t>(totalNumOutputChannels));
 
     for (int ch = 0; ch < totalNumOutputChannels; ++ch)
         m_channelBuffer[static_cast<size_t>(ch)] = buffer.getWritePointer(ch);
@@ -78,7 +86,7 @@ void DrawdioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
                                      totalNumOutputChannels,
                                      buffer.getNumSamples());
 
-    publishMeterLevels(inputPeak, calculatePeak(buffer, totalNumOutputChannels));
+    publishMeterLevels(inputPeak, fastPeak(totalNumOutputChannels));
 }
 
 juce::AudioProcessorEditor* DrawdioProcessor::createEditor()
@@ -112,8 +120,27 @@ void DrawdioProcessor::setPedalSlot(int slot, DspModuleType type)
 {
     if (slot >= 0 && slot < static_cast<int>(m_pedalSlots.size()))
     {
+        DspModuleType oldType = m_pedalSlots[static_cast<size_t>(slot)];
         m_pedalSlots[static_cast<size_t>(slot)] = type;
+
+        if (type == DspModuleType::BYPASS)
+        {
+            std::vector<uint8_t> filtered;
+            for (auto s : m_manualRouting)
+                if (s != static_cast<uint8_t>(slot))
+                    filtered.push_back(s);
+            m_manualRouting = filtered;
+        }
+        else if (oldType == DspModuleType::BYPASS && !m_manualRouting.empty())
+        {
+            if (std::find(m_manualRouting.begin(), m_manualRouting.end(),
+                          static_cast<uint8_t>(slot)) == m_manualRouting.end())
+                m_manualRouting.push_back(static_cast<uint8_t>(slot));
+        }
+
+        m_dspProcessor.invalidateParamCacheForSlot(slot);
         syncCompilerConfig();
+        triggerUINotification();
     }
 }
 
@@ -151,13 +178,13 @@ bool DrawdioProcessor::consumeCompiledResultIfAvailable()
     if (!m_compilerThread.hasCompiledResult())
         return false;
 
-    auto payloadPtr = m_compilerThread.getCompiledPayloadPtr();
+    auto* payloadPtr = m_compilerThread.getCompiledPayloadPtr();
     if (!payloadPtr)
         return false;
 
-    m_dspProcessor.loadPedalConfiguration(std::move(payloadPtr));
+    m_dspProcessor.loadPedalConfiguration(payloadPtr);
     m_configRevision.fetch_add(1, std::memory_order_acq_rel);
-    triggerUINotification();  // Signal UI that config changed
+    triggerUINotification();
     return true;
 }
 
@@ -184,7 +211,8 @@ void DrawdioProcessor::publishMeterLevels(float inputPeak, float outputPeak)
 
 void DrawdioProcessor::getStateInformation(juce::MemoryBlock& destData)
 {
-    auto state = StateSerializer::createState(m_gridData, m_pedalSlots, m_manualRouting);
+    auto snap = m_dspProcessor.getSnapshot();
+    auto state = StateSerializer::createState(m_gridData, m_pedalSlots, m_manualRouting, snap.values);
     std::vector<uint8_t> blob;
     StateSerializer::serialize(state, blob);
 
@@ -203,7 +231,13 @@ void DrawdioProcessor::setStateInformation(const void* data, int sizeInBytes)
     m_pedalSlots = state.pedalSlots;
     m_manualRouting = state.manualRouting;
 
-    m_dspProcessor.reset();
+    // Push restored knob values into the DSP parameter cache
+    for (int s = 0; s < PedalSlotCount; ++s)
+        for (int k = 0; k < 4; ++k)
+            m_dspProcessor.updateParameter(s, k, state.knobValues[static_cast<size_t>(s * 4 + k)]);
+
+    // Deferred reset — audio thread picks up the flag
+    m_dspProcessor.scheduleReset();
     syncCompilerConfig();
 }
 

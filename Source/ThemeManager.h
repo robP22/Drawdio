@@ -7,8 +7,6 @@
 class ThemeManager final : public IThemeProvider
 {
 public:
-    static const ThemeManager& getDefault();
-
     juce::Colour editorBackground() const override;
     juce::Colour workspaceFallback() const override;
     juce::Colour workspaceVignette() const override;
@@ -37,7 +35,8 @@ public:
     juce::Colour drawButtonAccent() const override;
     juce::Colour undoButtonAccent() const override;
     juce::Colour clearButtonAccent() const override;
-    juce::Colour cableColour() const override;
+    juce::Colour cableInColour() const override;
+    juce::Colour cableOutColour() const override;
 
     const PedalStyle& pedalStyle() const noexcept override { return m_pedalStyle; }
 

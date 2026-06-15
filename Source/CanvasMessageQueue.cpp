@@ -1,14 +1,13 @@
 #include "CanvasMessageQueue.h"
 #include <cstring>
 
-CanvasMessageQueue::CanvasMessageQueue()
+CanvasMessageQueue::CanvasMessageQueue() noexcept
     : m_writeIndex(0),
-      m_readIndex(0),
-      m_hasMessage(false)
+      m_readIndex(0)
 {
 }
 
-void CanvasMessageQueue::pushSnapshot(const uint8_t* gridData)
+void CanvasMessageQueue::pushSnapshot(const uint8_t* gridData) noexcept
 {
     int writeIdx = m_writeIndex.load(std::memory_order_relaxed);
     int nextWrite = (writeIdx + 1) % QueueCapacity;
@@ -19,29 +18,22 @@ void CanvasMessageQueue::pushSnapshot(const uint8_t* gridData)
     std::memcpy(m_queue[writeIdx].gridSnapshot.data(), gridData, PayloadSize);
 
     m_writeIndex.store(nextWrite, std::memory_order_release);
-    m_hasMessage.store(true, std::memory_order_release);
 }
 
-bool CanvasMessageQueue::popSnapshot(CanvasMessage& outMessage)
+const std::array<uint8_t, CanvasMessageQueue::PayloadSize>* CanvasMessageQueue::popSnapshot() noexcept
 {
-    if (!m_hasMessage.load(std::memory_order_acquire))
-        return false;
-
     int readIdx = m_readIndex.load(std::memory_order_relaxed);
 
     if (readIdx == m_writeIndex.load(std::memory_order_acquire))
-        return false;
+        return nullptr;
 
-    outMessage = m_queue[readIdx];
+    auto& result = m_queue[readIdx].gridSnapshot;
     m_readIndex.store((readIdx + 1) % QueueCapacity, std::memory_order_release);
 
-    if (m_readIndex.load(std::memory_order_relaxed) == m_writeIndex.load(std::memory_order_relaxed))
-        m_hasMessage.store(false, std::memory_order_release);
-
-    return true;
+    return &result;
 }
 
-bool CanvasMessageQueue::hasMessage() const
+bool CanvasMessageQueue::hasMessage() const noexcept
 {
-    return m_hasMessage.load(std::memory_order_acquire);
+    return m_writeIndex.load(std::memory_order_acquire) != m_readIndex.load(std::memory_order_acquire);
 }

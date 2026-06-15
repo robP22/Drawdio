@@ -1,3 +1,4 @@
+#include <JuceHeader.h>
 #include "Effects/MiscEffects.h"
 
 #include <algorithm>
@@ -16,6 +17,7 @@ void VcaCompressorEffect::reset()
 
 void VcaCompressorEffect::processSample(float** b, int c, int s, float effectParam)
 {
+    juce::ScopedNoDenormals noDenorm;
     float threshold = effectParam;
     float thresh = 0.1f + threshold * 0.8f;
     float compRatio = 4.0f;
@@ -45,33 +47,39 @@ void VcaCompressorEffect::processSample(float** b, int c, int s, float effectPar
         b[ch][s] = b[ch][s] * gain;
 }
 
-void SampleRateDegraderEffect::prepare(double, int)
+void SampleRateDegraderEffect::prepare(double sampleRate, int numChannels)
 {
+    DspEffect::prepare(sampleRate, numChannels);
     m_sampleHold = 0;
-    m_heldValue = 0.0f;
+    m_heldValues.assign(static_cast<size_t>(numChannels), 0.0f);
 }
 
 void SampleRateDegraderEffect::reset()
 {
     m_sampleHold = 0;
-    m_heldValue = 0.0f;
+    std::fill(m_heldValues.begin(), m_heldValues.end(), 0.0f);
 }
 
 void SampleRateDegraderEffect::processSample(float** b, int c, int s, float effectParam)
 {
+    juce::ScopedNoDenormals noDenorm;
     float bits = effectParam;
 
     int bitDepth = 1 + static_cast<int>(bits * 15.0f);
+    if (bitDepth < 1) bitDepth = 1;
+    if (bitDepth > 24) bitDepth = 24;
     int holdLen = 1 + static_cast<int>((1.0f - bits) * 31.0f);
+    if (holdLen < 1) holdLen = 1;
 
+    int chCount = std::min(c, static_cast<int>(m_heldValues.size()));
     if (m_sampleHold <= 0)
     {
         m_sampleHold = holdLen;
-        for (int ch = 0; ch < c; ++ch)
+        for (int ch = 0; ch < chCount; ++ch)
         {
             float x = b[ch][s];
             float maxVal = static_cast<float>((1 << bitDepth) - 1);
-            m_heldValue = std::round(x * maxVal) / maxVal;
+            m_heldValues[static_cast<size_t>(ch)] = std::round(x * maxVal) / maxVal;
         }
     }
     else
@@ -79,6 +87,6 @@ void SampleRateDegraderEffect::processSample(float** b, int c, int s, float effe
         --m_sampleHold;
     }
 
-    for (int ch = 0; ch < c; ++ch)
-        b[ch][s] = m_heldValue;
+    for (int ch = 0; ch < chCount; ++ch)
+        b[ch][s] = m_heldValues[static_cast<size_t>(ch)];
 }

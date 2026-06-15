@@ -3,7 +3,6 @@
 #include <array>
 
 #include "PedalDefinition.h"
-#include "PedalSkinManager.h"
 #include "PedalStructures.h"
 #include "ResourceManager.h"
 #include "IThemeProvider.h"
@@ -17,8 +16,7 @@ public:
                    int slotIndex,
                    DspModuleType initialType,
                    const ResourceManager& resources,
-                   const IThemeProvider& theme,
-                   PedalSkinManager::PedalSkin skin = PedalSkinManager::PedalSkin::Default);
+                   const IThemeProvider& theme);
     ~PedalComponent() override;
 
     void paint(juce::Graphics&) override;
@@ -28,8 +26,6 @@ public:
 
     void setKnobValue(int knobIdx, float value);
     void syncFromProcessor();
-    void setSkin(PedalSkinManager::PedalSkin skin);
-
     juce::Point<float> getInputJackPos() const;
     juce::Point<float> getOutputJackPos() const;
 
@@ -38,6 +34,7 @@ private:
     void updateDefinition();
     void updateKnobBounds();
     void drawKnob(juce::Graphics& g, int knobIdx, float value);
+    juce::Rectangle<float> getLabelArea() const;
 
     static constexpr int kKnobCount = 4;
 
@@ -47,7 +44,6 @@ private:
     int m_slotIndex;
     DspModuleType m_currentType;
     const PedalDefinition* m_definition = nullptr;
-    PedalSkinManager::PedalSkin m_skin;
     std::array<float, kKnobCount> m_knobValues = { 0.5f, 0.5f, 0.5f, 0.5f };
     std::array<juce::Rectangle<float>, kKnobCount> m_knobBounds;
 };
