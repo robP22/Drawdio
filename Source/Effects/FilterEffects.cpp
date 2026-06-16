@@ -6,12 +6,14 @@
 void BiquadFilterEffect::prepare(double sampleRate, int numChannels)
 {
     DspEffect::prepare(sampleRate, numChannels);
-    m_lpState.assign(static_cast<size_t>(numChannels), 0.0f);
+    m_states.resize(static_cast<size_t>(numChannels));
+    m_resonance = 0.0f;
 }
 
 void BiquadFilterEffect::reset()
 {
-    std::fill(m_lpState.begin(), m_lpState.end(), 0.0f);
+    for (auto& s : m_states)
+        s = {};
 }
 
 void BiquadFilterEffect::processSample(float** b, int c, int s, float effectParam)
@@ -19,16 +21,73 @@ void BiquadFilterEffect::processSample(float** b, int c, int s, float effectPara
     juce::ScopedNoDenormals noDenorm;
     float freq = effectParam;
     float fc = 20.0f + (20000.0f - 20.0f) * freq * freq;
-    float a = 1.0f - std::exp(-2.0f * 3.14159265f * fc / m_sampleRate);
+    float w0 = 2.0f * 3.14159265f * fc / static_cast<float>(m_sampleRate);
+    float Q = 0.5f + m_resonance * 9.5f;
+    float alpha = std::sin(w0) / (2.0f * Q);
 
-    int maxCh = std::min(c, static_cast<int>(m_lpState.size()));
+    float cosW0 = std::cos(w0);
+    float b0 = (1.0f - cosW0) * 0.5f;
+    float b1 = 1.0f - cosW0;
+    float b2 = b0;
+    float a0 = 1.0f + alpha;
+    float a1 = -2.0f * cosW0;
+    float a2 = 1.0f - alpha;
+
+    float invA0 = 1.0f / a0;
+    b0 *= invA0; b1 *= invA0; b2 *= invA0;
+    a1 *= invA0; a2 *= invA0;
+
+    int maxCh = std::min(c, static_cast<int>(m_states.size()));
     for (int ch = 0; ch < maxCh; ++ch)
     {
+        auto& st = m_states[static_cast<size_t>(ch)];
         float x = b[ch][s];
-        float& lp = m_lpState[static_cast<size_t>(ch)];
-        lp = lp + a * (x - lp);
-        b[ch][s] = lp;
+        float y = b0 * x + st.s1;
+        st.s1 = b1 * x - a1 * y + st.s2;
+        st.s2 = b2 * x - a2 * y;
+        b[ch][s] = y;
     }
+}
+
+void BiquadFilterEffect::processBlock(float** b, int c, int n, float effectParam)
+{
+    juce::ScopedNoDenormals noDenorm;
+    float freq = effectParam;
+    float fc = 20.0f + (20000.0f - 20.0f) * freq * freq;
+    float w0 = 2.0f * 3.14159265f * fc / static_cast<float>(m_sampleRate);
+    float Q = 0.5f + m_resonance * 9.5f;
+    float alpha = std::sin(w0) / (2.0f * Q);
+
+    float cosW0 = std::cos(w0);
+    float b0 = (1.0f - cosW0) * 0.5f;
+    float b1 = 1.0f - cosW0;
+    float b2 = b0;
+    float a0 = 1.0f + alpha;
+    float a1 = -2.0f * cosW0;
+    float a2 = 1.0f - alpha;
+
+    float invA0 = 1.0f / a0;
+    b0 *= invA0; b1 *= invA0; b2 *= invA0;
+    a1 *= invA0; a2 *= invA0;
+
+    int maxCh = std::min(c, static_cast<int>(m_states.size()));
+    for (int ch = 0; ch < maxCh; ++ch)
+    {
+        auto& st = m_states[static_cast<size_t>(ch)];
+        for (int s = 0; s < n; ++s)
+        {
+            float x = b[ch][s];
+            float y = b0 * x + st.s1;
+            st.s1 = b1 * x - a1 * y + st.s2;
+            st.s2 = b2 * x - a2 * y;
+            b[ch][s] = y;
+        }
+    }
+}
+
+void BiquadFilterEffect::setVolumeParam(float vol)
+{
+    m_resonance = vol;
 }
 
 void SpectralFreezeEffect::prepare(double sampleRate, int numChannels)
@@ -120,6 +179,8 @@ void FormantShifterEffect::prepare(double sampleRate, int numChannels)
     m_lp1.assign(static_cast<size_t>(numChannels), 0.0f);
     m_lp2.assign(static_cast<size_t>(numChannels), 0.0f);
     m_envState = 0.0f;
+    m_attackCoeff = static_cast<float>(std::exp(-1.0 / (m_sampleRate * 0.002)));
+    m_releaseCoeff = static_cast<float>(std::exp(-1.0 / (m_sampleRate * 0.1)));
 }
 
 void FormantShifterEffect::reset()
@@ -134,17 +195,14 @@ void FormantShifterEffect::processSample(float** b, int c, int s, float effectPa
     juce::ScopedNoDenormals noDenorm;
     float formantFreq = effectParam;
 
-    float attackCoeff = static_cast<float>(std::exp(-1.0 / (m_sampleRate * 0.002)));
-    float releaseCoeff = static_cast<float>(std::exp(-1.0 / (m_sampleRate * 0.1)));
-
     float inputLevel = 0.0f;
     for (int ch = 0; ch < c; ++ch)
         inputLevel = std::max(inputLevel, std::abs(b[ch][s]));
 
     if (inputLevel > m_envState)
-        m_envState = attackCoeff * m_envState + (1.0f - attackCoeff) * inputLevel;
+        m_envState = m_attackCoeff * m_envState + (1.0f - m_attackCoeff) * inputLevel;
     else
-        m_envState = releaseCoeff * m_envState + (1.0f - releaseCoeff) * inputLevel;
+        m_envState = m_releaseCoeff * m_envState + (1.0f - m_releaseCoeff) * inputLevel;
 
     float envMod = (m_envState > 0.5f) ? 1.0f : (m_envState / 0.5f);
     float centerHz = 200.0f + formantFreq * 1800.0f * (0.3f + envMod * 0.7f);
@@ -168,5 +226,85 @@ void FormantShifterEffect::processSample(float** b, int c, int s, float effectPa
         s1 = -a1 * y + s2;
         s2 = b0 * (-x) - a2 * y;
         b[ch][s] = y;
+    }
+}
+
+void MultiModeFilterEffect::processBlock(float** b, int c, int n, float effectParam)
+{
+    juce::ScopedNoDenormals noDenorm;
+    float cutoffParam = effectParam;
+    float fcHz = 20.0f + (20000.0f - 20.0f) * cutoffParam * cutoffParam;
+    float g = std::min<float>(1.99f, 2.0f * static_cast<float>(std::sin(3.14159265 * fcHz / m_sampleRate)));
+
+    float bandPos = m_volume * 3.0f;
+    int mode = std::min(2, static_cast<int>(bandPos));
+    float withinBand = bandPos - static_cast<float>(mode);
+    float R = 1.0f - withinBand * 0.9f;
+
+    int maxCh = std::min(c, static_cast<int>(m_states.size()));
+    for (int ch = 0; ch < maxCh; ++ch)
+    {
+        auto& st = m_states[static_cast<size_t>(ch)];
+        for (int s = 0; s < n; ++s)
+        {
+            float x = b[ch][s];
+            float hp = x - R * st.bp - st.lp;
+            st.bp = g * hp + st.bp;
+            st.lp = g * st.bp + st.lp;
+
+            float out;
+            switch (mode)
+            {
+                case 0: out = st.lp; break;
+                case 1: out = st.bp; break;
+                default: out = hp; break;
+            }
+            b[ch][s] = out;
+        }
+    }
+}
+
+void MultiModeFilterEffect::prepare(double sampleRate, int numChannels)
+{
+    DspEffect::prepare(sampleRate, numChannels);
+    m_states.resize(static_cast<size_t>(numChannels));
+}
+
+void MultiModeFilterEffect::reset()
+{
+    for (auto& s : m_states)
+        s = {};
+}
+
+void MultiModeFilterEffect::processSample(float** b, int c, int s, float effectParam)
+{
+    juce::ScopedNoDenormals noDenorm;
+    float cutoffParam = effectParam;
+    float fcHz = 20.0f + (20000.0f - 20.0f) * cutoffParam * cutoffParam;
+    float g = std::min<float>(1.99f, 2.0f * static_cast<float>(std::sin(3.14159265 * fcHz / m_sampleRate)));
+
+    float bandPos = m_volume * 3.0f;
+    int mode = std::min(2, static_cast<int>(bandPos));
+    float withinBand = bandPos - static_cast<float>(mode);
+    float R = 1.0f - withinBand * 0.9f;
+
+    int maxCh = std::min(c, static_cast<int>(m_states.size()));
+    for (int ch = 0; ch < maxCh; ++ch)
+    {
+        auto& st = m_states[static_cast<size_t>(ch)];
+        float x = b[ch][s];
+        float hp = x - R * st.bp - st.lp;
+        st.bp = g * hp + st.bp;
+        st.lp = g * st.bp + st.lp;
+
+        float out;
+        switch (mode)
+        {
+            case 0: out = st.lp; break;
+            case 1: out = st.bp; break;
+            default: out = hp; break;
+        }
+
+        b[ch][s] = out;
     }
 }

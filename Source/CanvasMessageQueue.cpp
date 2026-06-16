@@ -27,10 +27,10 @@ const std::array<uint8_t, CanvasMessageQueue::PayloadSize>* CanvasMessageQueue::
     if (readIdx == m_writeIndex.load(std::memory_order_acquire))
         return nullptr;
 
-    auto& result = m_queue[readIdx].gridSnapshot;
+    m_cachedSnapshot = m_queue[readIdx].gridSnapshot;
     m_readIndex.store((readIdx + 1) % QueueCapacity, std::memory_order_release);
 
-    return &result;
+    return &m_cachedSnapshot;
 }
 
 bool CanvasMessageQueue::hasMessage() const noexcept

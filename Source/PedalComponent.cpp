@@ -196,15 +196,51 @@ juce::Rectangle<float> PedalComponent::getLabelArea() const
                 .reduced(pedalW * GridLayout::LabelReducedXRatio, pedalH * GridLayout::LabelReducedYRatio);
 }
 
+int PedalComponent::hitTestKnob(juce::Point<float> pos) const
+{
+    for (int i = 0; i < kKnobCount; ++i)
+        if (m_knobBounds[static_cast<size_t>(i)].contains(pos))
+            return i;
+    return -1;
+}
+
 void PedalComponent::mouseDown(const juce::MouseEvent& event)
 {
+    int knob = hitTestKnob(event.position);
+    if (knob >= 0)
+    {
+        m_draggingKnob = knob;
+        m_dragStartValue = m_knobValues[static_cast<size_t>(knob)];
+        m_dragStartY = static_cast<float>(event.getMouseDownY());
+        return;
+    }
     if (getLabelArea().contains(event.position))
         showTypePopup();
 }
 
+void PedalComponent::mouseDrag(const juce::MouseEvent& event)
+{
+    if (m_draggingKnob < 0)
+        return;
+
+    float deltaY = m_dragStartY - static_cast<float>(event.getPosition().y);
+    float raw = m_dragStartValue + deltaY / 200.0f;
+    float value = std::max(0.0f, std::min(1.0f, raw));
+
+    audioProcessor.getDSPProcessor().updateParameter(m_slotIndex, m_draggingKnob, value);
+    setKnobValue(m_draggingKnob, value);
+}
+
+void PedalComponent::mouseUp(const juce::MouseEvent&)
+{
+    m_draggingKnob = -1;
+}
+
 void PedalComponent::mouseMove(const juce::MouseEvent& event)
 {
-    setMouseCursor(getLabelArea().contains(event.position)
+    bool overInteractive = getLabelArea().contains(event.position)
+                        || hitTestKnob(event.position) >= 0;
+    setMouseCursor(overInteractive
                        ? juce::MouseCursor::PointingHandCursor
                        : juce::MouseCursor::NormalCursor);
 }

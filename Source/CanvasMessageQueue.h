@@ -25,6 +25,7 @@ public:
 
 private:
     std::array<CanvasMessage, QueueCapacity> m_queue;
+    std::array<uint8_t, PayloadSize> m_cachedSnapshot;
     std::atomic<int> m_writeIndex;
     std::atomic<int> m_readIndex;
 };

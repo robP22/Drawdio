@@ -22,6 +22,8 @@ public:
     void paint(juce::Graphics&) override;
     void resized() override;
     void mouseDown(const juce::MouseEvent&) override;
+    void mouseDrag(const juce::MouseEvent&) override;
+    void mouseUp(const juce::MouseEvent&) override;
     void mouseMove(const juce::MouseEvent&) override;
 
     void setKnobValue(int knobIdx, float value);
@@ -34,6 +36,7 @@ private:
     void updateDefinition();
     void updateKnobBounds();
     void drawKnob(juce::Graphics& g, int knobIdx, float value);
+    int hitTestKnob(juce::Point<float> pos) const;
     juce::Rectangle<float> getLabelArea() const;
 
     static constexpr int kKnobCount = 4;
@@ -46,4 +49,8 @@ private:
     const PedalDefinition* m_definition = nullptr;
     std::array<float, kKnobCount> m_knobValues = { 0.5f, 0.5f, 0.5f, 0.5f };
     std::array<juce::Rectangle<float>, kKnobCount> m_knobBounds;
+
+    int m_draggingKnob = -1;
+    float m_dragStartValue = 0.0f;
+    float m_dragStartY = 0.0f;
 };

@@ -92,7 +92,7 @@ bool StateSerializer::deserialize(const uint8_t* data, size_t sizeInBytes, Seria
 
     // Validate and clamp grid values
     for (auto& val : outState.gridData)
-        if (val > 5)
+        if (val > 10)
             val = 0;
 
     // Pedal slots

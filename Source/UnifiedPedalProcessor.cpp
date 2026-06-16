@@ -5,6 +5,9 @@
 #include "Effects/DelayEffects.h"
 #include "Effects/ReverbEffects.h"
 #include "Effects/PitchEffects.h"
+#include "Effects/TimeRampEffect.h"
+#include "Effects/ShimmerGranularEffect.h"
+#include "Effects/PhaserFlangerEffect.h"
 #include "Effects/MiscEffects.h"
 #include <algorithm>
 #include <cmath>
@@ -19,23 +22,23 @@ std::unique_ptr<DspEffect> createEffectForTypeImpl(DspModuleType type)
     switch (type)
     {
         case DspModuleType::WAVESHAPER_DISTORTION:     return std::make_unique<WaveshaperEffect>();
-        case DspModuleType::COMB_RESONATOR:             return std::make_unique<CombResonatorEffect>();
+        case DspModuleType::SIDECHAIN_DUCKER:           return std::make_unique<SidechainDuckerEffect>();
         case DspModuleType::MATHEMATICAL_WAVEFOLDER:    return std::make_unique<WavefolderEffect>();
         case DspModuleType::BIQUAD_FILTER:              return std::make_unique<BiquadFilterEffect>();
-        case DspModuleType::SPECTRAL_FREEZE:            return std::make_unique<SpectralFreezeEffect>();
+        case DspModuleType::TIME_RAMP:                  return std::make_unique<TimeRampEffect>();
         case DspModuleType::FORMANT_VOCAL_SHIFTER:       return std::make_unique<FormantShifterEffect>();
         case DspModuleType::MICROPITCH_CHORUS:           return std::make_unique<MicroPitchChorusEffect>();
         case DspModuleType::SIMPLE_DELAY:               return std::make_unique<SimpleDelayEffect>();
-        case DspModuleType::DYNAMIC_RING_BUFFER:        return std::make_unique<DynamicRingBufferEffect>();
+        case DspModuleType::MULTI_MODE_FILTER:           return std::make_unique<MultiModeFilterEffect>();
         case DspModuleType::TAPE_STOP_REVERSE_ECHO:     return std::make_unique<TapeStopEchoEffect>();
         case DspModuleType::GRANULAR_DELAY:             return std::make_unique<GranularDelayEffect>();
         case DspModuleType::DIFFUSED_DELAY_NETWORK:     return std::make_unique<DiffusedReverbEffect>();
         case DspModuleType::PLATE_REVERB:               return std::make_unique<PlateReverbEffect>();
         case DspModuleType::PITCH_SHIFTER_GRANULAR:      return std::make_unique<GranularPitchEffect>();
-        case DspModuleType::FREQUENCY_SHIFTER:          return std::make_unique<FrequencyShifterEffect>();
+        case DspModuleType::SHIMMER_GRANULAR:           return std::make_unique<ShimmerGranularEffect>();
         case DspModuleType::GLITCH_STUTTER:              return std::make_unique<GlitchStutterEffect>();
         case DspModuleType::ENVELOPE_VCA_COMPRESSOR:    return std::make_unique<VcaCompressorEffect>();
-        case DspModuleType::SAMPLE_RATE_DEGRADER:       return std::make_unique<SampleRateDegraderEffect>();
+        case DspModuleType::PHASER_FLANGER:              return std::make_unique<PhaserFlangerEffect>();
         default:                                        return nullptr;
     }
 }
@@ -160,7 +163,7 @@ void UnifiedPedalProcessor::loadPedalConfiguration(const PedalAssetPayload* conf
 {
     if (!config) return;
 
-    const auto* current = m_currentConfig.load(std::memory_order_relaxed);
+    const auto* current = m_currentConfig.load(std::memory_order_acquire);
     // Discard any stale deferred config before processing a new one
     {
         auto* stale = m_deferredConfig.exchange(nullptr, std::memory_order_acq_rel);
@@ -284,6 +287,15 @@ void UnifiedPedalProcessor::scheduleReset()
     m_pendingReset.store(true, std::memory_order_release);
 }
 
+bool UnifiedPedalProcessor::isParamOverridden(int physicalSlot, int knobIdx) const
+{
+    if (physicalSlot < 0 || physicalSlot >= PedalSlotCount || knobIdx < 0 || knobIdx >= 4)
+        return false;
+    size_t idx = static_cast<size_t>(physicalSlot * 4 + knobIdx);
+    uint32_t mask = m_paramCacheValidMask.load(std::memory_order_acquire);
+    return (mask & (1u << idx)) != 0;
+}
+
 bool UnifiedPedalProcessor::hasPendingReleases() const
 {
     if (m_audioReleasePtr.load(std::memory_order_acquire) != nullptr)
@@ -332,7 +344,10 @@ void UnifiedPedalProcessor::processChainBlock(float** b, int c, int s, const Ped
 
             float wet = readCached(static_cast<uint16_t>(ParamToken::Wet), 0.5f);
             float dryLevel = readCached(static_cast<uint16_t>(ParamToken::Dry), 0.5f);
+            float volumeParam = readCached(static_cast<uint16_t>(ParamToken::Volume), 0.5f);
             float effectParam = readCached(static_cast<uint16_t>(ParamToken::Effect), 0.5f);
+
+            effectPtr->setVolumeParam(volumeParam);
 
             bool needDry = (dryLevel != 0.0f);
             if (needDry)
@@ -351,6 +366,9 @@ void UnifiedPedalProcessor::processChainBlock(float** b, int c, int s, const Ped
 
 void UnifiedPedalProcessor::processAudioBlock(float** buffer, int numChannels, int numSamples)
 {
+    int maxSamples = m_maxSamplesPerBlock.load(std::memory_order_relaxed);
+    if (numSamples > maxSamples) numSamples = maxSamples;
+
     if (m_pendingReset.exchange(false, std::memory_order_acq_rel))
         reset();
 
@@ -410,25 +428,28 @@ void UnifiedPedalProcessor::processAudioBlock(float** buffer, int numChannels, i
         processChainBlock(buffer, numChannels, numSamples, *next, m_pendingEffects);
 
         // Crossfade mix per sample + limiter
-        for (int smp = 0; smp < numSamples; ++smp)
         {
             int cc = m_crossfadeCounter.load(std::memory_order_relaxed);
-            float g = std::min(1.0f, static_cast<float>(cc) / static_cast<float>(crossfadeSamps));
-            for (int ch = 0; ch < copyCh; ++ch)
+            for (int smp = 0; smp < numSamples; ++smp)
             {
-                float x = m_crossfadeOldOut[static_cast<size_t>(ch)][static_cast<size_t>(smp)] * (1.0f - g)
-                        + buffer[ch][smp] * g;
-                float absX = std::abs(x);
-                if (absX > 0.85f)
+                float g = std::min(1.0f, static_cast<float>(cc) / static_cast<float>(crossfadeSamps));
+                for (int ch = 0; ch < copyCh; ++ch)
                 {
-                    float over = absX - 0.85f;
-                    float compressed = 0.85f + over / 3.0f;
-                    if (compressed > 1.0f) compressed = 1.0f;
-                    x = (x >= 0.0f) ? compressed : -compressed;
+                    float x = m_crossfadeOldOut[static_cast<size_t>(ch)][static_cast<size_t>(smp)] * (1.0f - g)
+                            + buffer[ch][smp] * g;
+                    float absX = std::abs(x);
+                    if (absX > 0.85f)
+                    {
+                        float over = absX - 0.85f;
+                        float compressed = 0.85f + over / 3.0f;
+                        if (compressed > 1.0f) compressed = 1.0f;
+                        x = (x >= 0.0f) ? compressed : -compressed;
+                    }
+                    buffer[ch][smp] = std::isfinite(x) ? juce::jlimit(-1.0f, 1.0f, x) : 0.0f;
                 }
-                buffer[ch][smp] = juce::jlimit(-1.0f, 1.0f, x);
+                ++cc;
             }
-            m_crossfadeCounter.store(cc + 1, std::memory_order_relaxed);
+            m_crossfadeCounter.store(cc, std::memory_order_relaxed);
         }
     }
     else if (next && m_crossfadeCounter.load(std::memory_order_relaxed) >= crossfadeSamps)
@@ -447,7 +468,7 @@ void UnifiedPedalProcessor::processAudioBlock(float** buffer, int numChannels, i
                     if (compressed > 1.0f) compressed = 1.0f;
                     x = (x >= 0.0f) ? compressed : -compressed;
                 }
-                buffer[ch][smp] = juce::jlimit(-1.0f, 1.0f, x);
+                buffer[ch][smp] = std::isfinite(x) ? juce::jlimit(-1.0f, 1.0f, x) : 0.0f;
             }
     }
     else
@@ -466,7 +487,7 @@ void UnifiedPedalProcessor::processAudioBlock(float** buffer, int numChannels, i
                     if (compressed > 1.0f) compressed = 1.0f;
                     x = (x >= 0.0f) ? compressed : -compressed;
                 }
-                buffer[ch][smp] = juce::jlimit(-1.0f, 1.0f, x);
+                buffer[ch][smp] = std::isfinite(x) ? juce::jlimit(-1.0f, 1.0f, x) : 0.0f;
             }
     }
 

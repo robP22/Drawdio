@@ -182,6 +182,8 @@ bool DrawdioProcessor::consumeCompiledResultIfAvailable()
     if (!payloadPtr)
         return false;
 
+    m_lastConfigSync.parameters = payloadPtr->parameters;
+    m_lastConfigSync.routingSlotOrder = payloadPtr->routingSlotOrder;
     m_dspProcessor.loadPedalConfiguration(payloadPtr);
     m_configRevision.fetch_add(1, std::memory_order_acq_rel);
     triggerUINotification();
@@ -239,6 +241,37 @@ void DrawdioProcessor::setStateInformation(const void* data, int sizeInBytes)
     // Deferred reset — audio thread picks up the flag
     m_dspProcessor.scheduleReset();
     syncCompilerConfig();
+}
+
+juce::MemoryBlock DrawdioProcessor::createPresetState()
+{
+    auto snap = m_dspProcessor.getSnapshot();
+    auto state = StateSerializer::createState(m_gridData, m_pedalSlots, m_manualRouting, snap.values);
+    std::vector<uint8_t> blob;
+    StateSerializer::serialize(state, blob);
+
+    juce::MemoryBlock result(blob.data(), blob.size());
+    return result;
+}
+
+bool DrawdioProcessor::applyPresetState(const void* data, int sizeInBytes)
+{
+    StateSerializer::SerializedState state;
+    if (!StateSerializer::deserialize(static_cast<const uint8_t*>(data),
+                                     static_cast<size_t>(sizeInBytes), state))
+        return false;
+
+    m_gridData = state.gridData;
+    m_pedalSlots = state.pedalSlots;
+    m_manualRouting = state.manualRouting;
+
+    for (int s = 0; s < PedalSlotCount; ++s)
+        for (int k = 0; k < 4; ++k)
+            m_dspProcessor.updateParameter(s, k, state.knobValues[static_cast<size_t>(s * 4 + k)]);
+
+    m_dspProcessor.scheduleReset();
+    syncCompilerConfig();
+    return true;
 }
 
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()

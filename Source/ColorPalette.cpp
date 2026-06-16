@@ -7,13 +7,15 @@
 namespace PaletteLayout
 {
     constexpr float Blob0CenterX = 0.135f;
-    constexpr float BlobSpacingRatio = 0.1419f;
-    constexpr float BlobSizeRatio = 0.37f;
-    constexpr float BlobCenterY = 0.48f;
+    constexpr float BlobSpacingRatio = 0.057f;
+    constexpr float BlobSizeRatio = 0.242f;
+    constexpr float BlobCenterY0 = 0.36f;
+    constexpr float BlobCenterY1 = 0.64f;
 
     constexpr float ButtonAreaCenterX = 0.867f;
     constexpr float ButtonAreaWidthRatio = 0.125f;
     constexpr float UndoButtonCenterY = 0.385f;
+    constexpr float FillButtonCenterY = 0.50f;
     constexpr float ClearButtonCenterY = 0.615f;
 }
 
@@ -21,17 +23,26 @@ ColorPalette::ColorPalette(const ResourceManager& resources, const IThemeProvide
     : m_resources(resources),
       m_theme(theme),
       m_blobs {{
-          { 3, {} },   // Red
-          { 2, {} },   // Green
-          { 1, {} },   // Blue
-          { 4, {} },   // White
-          { 0, {} }    // Black
+          { 0, {} },   // Black   (weight -1.0)
+          { 7, {} },   // Brown   (weight -0.8)
+          { 8, {} },   // Purple  (weight -0.6)
+          { 1, {} },   // Blue    (weight -0.4)
+          { 2, {} },   // Green   (weight -0.2)
+          { 9, {} },   // Grey    (weight  0.0)
+          { 10, {} },  // Pink    (weight +0.2)
+          { 6, {} },   // Yellow  (weight +0.4)
+          { 3, {} },   // Red     (weight +0.6)
+          { 4, {} }    // White   (weight +1.0)
       }}
 {
     addAndMakeVisible(m_undoButton);
     addAndMakeVisible(m_clearButton);
+    addAndMakeVisible(m_fillButton);
     RenderUtils::styleAccentButton(m_undoButton, juce::Colour(0xFF4A90D9));
     RenderUtils::styleAccentButton(m_clearButton, juce::Colour(0xFFE74C3C));
+    RenderUtils::styleAccentButton(m_fillButton, juce::Colour(0xFF2ECC40));
+
+    m_fillButton.setClickingTogglesState(true);
 
     // Attach click listeners to buttons
     m_undoButton.onClick = [this]()
@@ -44,6 +55,12 @@ ColorPalette::ColorPalette(const ResourceManager& resources, const IThemeProvide
     {
         if (m_onClear)
             m_onClear();
+    };
+
+    m_fillButton.onClick = [this]()
+    {
+        if (m_onFill)
+            m_onFill(m_fillButton.getToggleState());
     };
 }
 
@@ -189,7 +206,8 @@ void ColorPalette::resized()
     {
         const float centerX = paletteW * (PaletteLayout::Blob0CenterX +
                       static_cast<float>(i) * PaletteLayout::BlobSpacingRatio);
-        const float centerY = paletteH * PaletteLayout::BlobCenterY;
+        const float centerY = paletteH * ((i % 2 == 0) ? PaletteLayout::BlobCenterY0
+                                                       : PaletteLayout::BlobCenterY1);
         m_blobs[static_cast<size_t>(i)].bounds = juce::Rectangle<float>(
             centerX - halfBlob, centerY - halfBlob, blobSize, blobSize);
     }
@@ -201,9 +219,13 @@ void ColorPalette::resized()
     const float undoY = paletteH * PaletteLayout::UndoButtonCenterY - buttonH * 0.5f;
     const float clearY = paletteH * PaletteLayout::ClearButtonCenterY - buttonH * 0.5f;
 
+    const float fillY = paletteH * PaletteLayout::FillButtonCenterY - buttonH * 0.5f;
+
     m_undoButton.setBounds(static_cast<int>(buttonX), static_cast<int>(undoY),
                           static_cast<int>(buttonW), static_cast<int>(buttonH));
     m_clearButton.setBounds(static_cast<int>(buttonX), static_cast<int>(clearY),
+                          static_cast<int>(buttonW), static_cast<int>(buttonH));
+    m_fillButton.setBounds(static_cast<int>(buttonX), static_cast<int>(fillY),
                           static_cast<int>(buttonW), static_cast<int>(buttonH));
 }
 
