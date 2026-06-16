@@ -67,6 +67,15 @@ public:
     bool consumeUINotification();
     void triggerUINotification();
 
+    struct ConfigSyncData {
+        std::vector<ParameterDescriptor> parameters;
+        std::vector<uint8_t> routingSlotOrder;
+    };
+    const ConfigSyncData& getLastConfigSync() const { return m_lastConfigSync; }
+
+    juce::MemoryBlock createPresetState();
+    bool applyPresetState(const void* data, int sizeInBytes);
+
 private:
     void syncCompilerConfig();
     void publishMeterLevels(float inputPeak, float outputPeak);
@@ -84,6 +93,7 @@ private:
     std::atomic<float> m_outputMeterLevel { 0.0f };
     std::atomic<uint32_t> m_configRevision { 0 };
     std::atomic<bool> m_uiNeedsUpdate { false };
+    ConfigSyncData m_lastConfigSync;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(DrawdioProcessor)
 };

@@ -14,6 +14,11 @@ PixelCanvasComponent::PixelColor pixelFromRaw(uint8_t raw)
         case 3: return PixelCanvasComponent::PixelColor::Red;
         case 4: return PixelCanvasComponent::PixelColor::White;
         case 5: return PixelCanvasComponent::PixelColor::Black;
+        case 6: return PixelCanvasComponent::PixelColor::Yellow;
+        case 7: return PixelCanvasComponent::PixelColor::Brown;
+        case 8: return PixelCanvasComponent::PixelColor::Purple;
+        case 9: return PixelCanvasComponent::PixelColor::Grey;
+        case 10: return PixelCanvasComponent::PixelColor::Pink;
         case 0: return PixelCanvasComponent::PixelColor::Transparent;
         default: return PixelCanvasComponent::PixelColor::Transparent;
     }
@@ -202,6 +207,14 @@ void PixelCanvasComponent::applyPixelValue(int index, PixelColor color)
 
 void PixelCanvasComponent::mouseDown(const juce::MouseEvent& event)
 {
+    if (m_fillMode)
+    {
+        auto pos = gridCoordsFromUI(event.x, event.y);
+        if (pos.x >= 0 && pos.x < GridSize && pos.y >= 0 && pos.y < GridSize)
+            floodFill(pos.x, pos.y);
+        return;
+    }
+
     m_drawing = true;
     beginStroke();
 
@@ -238,7 +251,10 @@ void PixelCanvasComponent::mouseUp(const juce::MouseEvent&)
 
 void PixelCanvasComponent::mouseEnter(const juce::MouseEvent&)
 {
-    setMouseCursor(juce::MouseCursor::CrosshairCursor);
+    if (m_fillMode)
+        setMouseCursor(juce::MouseCursor::CrosshairCursor);
+    else
+        setMouseCursor(juce::MouseCursor::CrosshairCursor);
 }
 
 void PixelCanvasComponent::mouseExit(const juce::MouseEvent&)
@@ -364,7 +380,7 @@ void PixelCanvasComponent::rebuildOverlay()
         g.setColour(m_theme.canvasPixelColour(static_cast<uint8_t>(pixels[i])));
         g.fillRect(static_cast<float>(x) * cellW,
                    static_cast<float>(y) * cellH,
-                   cellW, cellH);
+                   cellW + 1.0f, cellH + 1.0f);
     }
 
     m_overlayDirty = false;
@@ -389,13 +405,13 @@ void PixelCanvasComponent::updateOverlayPixel(int index)
     g.setColour(juce::Colours::transparentBlack);
     g.fillRect(static_cast<float>(x) * cellW,
                static_cast<float>(y) * cellH,
-               cellW, cellH);
+               cellW + 1.0f, cellH + 1.0f);
     if (pixels[static_cast<size_t>(index)] != PixelColor::Transparent)
     {
         g.setColour(m_theme.canvasPixelColour(static_cast<uint8_t>(pixels[static_cast<size_t>(index)])));
         g.fillRect(static_cast<float>(x) * cellW,
                    static_cast<float>(y) * cellH,
-                   cellW, cellH);
+                   cellW + 1.0f, cellH + 1.0f);
     }
 }
 
@@ -403,4 +419,79 @@ void PixelCanvasComponent::notifySnapshot()
 {
     if (m_onCanvasSnapshot)
         m_onCanvasSnapshot(m_gridCache);
+}
+
+void PixelCanvasComponent::setFillMode(bool active)
+{
+    m_fillMode = active;
+    setMouseCursor(active ? juce::MouseCursor::CrosshairCursor
+                          : juce::MouseCursor::NormalCursor);
+    repaint();
+}
+
+void PixelCanvasComponent::floodFill(int startX, int startY)
+{
+    size_t startIdx = static_cast<size_t>(startY * GridSize + startX);
+    PixelColor fillColor = m_currentColor;
+    PixelColor targetColor = pixels[startIdx];
+
+    if (targetColor == fillColor || fillColor == PixelColor::Transparent)
+        return;
+
+    m_fillQueue.clear();
+    m_fillQueue.reserve(TotalCells);
+    m_fillQueue.push_back(startX + startY * GridSize);
+
+    m_fillVisited.assign(TotalCells, 0);
+    m_fillVisited[startIdx] = 1;
+
+    std::vector<PixelChange> fillChanges;
+    fillChanges.reserve(TotalCells);
+
+    static constexpr int dx[4] = {-1, 1, 0, 0};
+    static constexpr int dy[4] = {0, 0, -1, 1};
+
+    size_t head = 0;
+    while (head < m_fillQueue.size())
+    {
+        int idx = m_fillQueue[head++];
+        fillChanges.push_back({static_cast<uint16_t>(idx), targetColor, fillColor});
+
+        int x = idx % GridSize;
+        int y = idx / GridSize;
+
+        for (int d = 0; d < 4; ++d)
+        {
+            int nx = x + dx[d];
+            int ny = y + dy[d];
+            if (nx < 0 || nx >= GridSize || ny < 0 || ny >= GridSize)
+                continue;
+            int ni = ny * GridSize + nx;
+            size_t ni_s = static_cast<size_t>(ni);
+            if (m_fillVisited[ni_s] == 0 && pixels[ni_s] == targetColor)
+            {
+                m_fillVisited[ni_s] = 1;
+                m_fillQueue.push_back(ni);
+            }
+        }
+    }
+
+    if (fillChanges.empty())
+        return;
+
+    for (const auto& ch : fillChanges)
+    {
+        size_t i = static_cast<size_t>(ch.index);
+        pixels[i] = fillColor;
+        m_gridCache[i] = (fillColor == PixelColor::Black) ? 5 : static_cast<uint8_t>(fillColor);
+        ++m_changedCellCount;
+    }
+
+    m_undoStack.push_back(std::move(fillChanges));
+    if (m_undoStack.size() > static_cast<size_t>(MaxUndoLevels))
+        m_undoStack.erase(m_undoStack.begin());
+
+    rebuildOverlay();
+    repaint();
+    notifySnapshot();
 }

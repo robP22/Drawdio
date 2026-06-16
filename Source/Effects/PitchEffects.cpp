@@ -8,13 +8,15 @@ void FrequencyShifterEffect::prepare(double sampleRate, int numChannels)
 {
     DspEffect::prepare(sampleRate, numChannels);
     m_phase = 0.0f;
-    m_allpassZ.assign(static_cast<size_t>(numChannels), 0.0f);
+    m_allpassZ1.assign(static_cast<size_t>(numChannels), 0.0f);
+    m_allpassZ2.assign(static_cast<size_t>(numChannels), 0.0f);
 }
 
 void FrequencyShifterEffect::reset()
 {
     m_phase = 0.0f;
-    std::fill(m_allpassZ.begin(), m_allpassZ.end(), 0.0f);
+    std::fill(m_allpassZ1.begin(), m_allpassZ1.end(), 0.0f);
+    std::fill(m_allpassZ2.begin(), m_allpassZ2.end(), 0.0f);
 }
 
 void FrequencyShifterEffect::processSample(float** b, int c, int s, float effectParam)
@@ -29,18 +31,27 @@ void FrequencyShifterEffect::processSample(float** b, int c, int s, float effect
     float cosPhi = std::cos(m_phase * 2.0f * 3.14159265f);
     float sinPhi = std::sin(m_phase * 2.0f * 3.14159265f);
 
-    float w = static_cast<float>(3.14159265f * (300.0f + shiftHz * 0.3f) / m_sampleRate);
-    float tanHalf = std::tan(w);
-    float a = (tanHalf - 1.0f) / (tanHalf + 1.0f);
+    float w1 = static_cast<float>(3.14159265f * (300.0f + shiftHz * 0.3f) / m_sampleRate);
+    float tanHalf1 = std::tan(w1);
+    float a1 = (tanHalf1 - 1.0f) / (tanHalf1 + 1.0f);
 
-    int chCount = std::min(c, static_cast<int>(m_allpassZ.size()));
+    float w2 = static_cast<float>(3.14159265f * (1200.0f + shiftHz * 0.3f) / m_sampleRate);
+    float tanHalf2 = std::tan(w2);
+    float a2 = (tanHalf2 - 1.0f) / (tanHalf2 + 1.0f);
+
+    int chCount = std::min(c, static_cast<int>(m_allpassZ1.size()));
     for (int ch = 0; ch < chCount; ++ch)
     {
         float x = b[ch][s];
-        float& z = m_allpassZ[static_cast<size_t>(ch)];
-        float q = a * x + z;
-        z = x - a * q;
+        float& z1 = m_allpassZ1[static_cast<size_t>(ch)];
+        float q1 = a1 * x + z1;
+        z1 = x - a1 * q1;
 
+        float& z2 = m_allpassZ2[static_cast<size_t>(ch)];
+        float q2 = a2 * x + z2;
+        z2 = x - a2 * q2;
+
+        float q = (q1 + q2) * 0.5f;
         float shifted = x * cosPhi + q * sinPhi;
         b[ch][s] = shifted;
     }
@@ -85,6 +96,7 @@ void GlitchStutterEffect::processSample(float** b, int c, int s, float effectPar
     juce::ScopedNoDenormals noDenorm;
     float sliceLenSec = 0.05f + effectParam * 0.45f;
     int maxRepeats = 1 + static_cast<int>((1.0f - effectParam) * 4.0f);
+    static constexpr int kXfadeLen = 32;
 
     int chCount = std::min(c, static_cast<int>(m_states.size()));
     for (int ch = 0; ch < chCount; ++ch)
@@ -117,11 +129,27 @@ void GlitchStutterEffect::processSample(float** b, int c, int s, float effectPar
         }
         else if (gs.mode == GlitchState::PLAYING)
         {
-            size_t pos = (gs.sliceStart + static_cast<size_t>(gs.playCounter)) % bufSize;
-            b[ch][s] = gs.buf[pos];
+            int sliceEnd = static_cast<int>(gs.sliceLen);
+            int xfadeStart = sliceEnd - kXfadeLen;
+            if (xfadeStart < 0) xfadeStart = 0;
+
+            if (gs.playCounter >= xfadeStart && gs.playCounter < sliceEnd)
+            {
+                int offset = gs.playCounter - xfadeStart;
+                float fadeIn = static_cast<float>(offset) / static_cast<float>(kXfadeLen);
+                float fadeOut = 1.0f - fadeIn;
+                size_t curPos = (gs.sliceStart + static_cast<size_t>(gs.playCounter)) % bufSize;
+                size_t wrapPos = (gs.sliceStart + static_cast<size_t>(offset)) % bufSize;
+                b[ch][s] = gs.buf[curPos] * fadeOut + gs.buf[wrapPos] * fadeIn;
+            }
+            else
+            {
+                size_t pos = (gs.sliceStart + static_cast<size_t>(gs.playCounter)) % bufSize;
+                b[ch][s] = gs.buf[pos];
+            }
             gs.playCounter++;
 
-            if (gs.playCounter >= static_cast<int>(gs.sliceLen))
+            if (gs.playCounter >= sliceEnd)
             {
                 gs.playCounter = 0;
                 gs.repeatCount++;

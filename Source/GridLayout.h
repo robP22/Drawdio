@@ -52,7 +52,7 @@ constexpr float LedSizeRatio = 0.06f;
 
 constexpr float BlobMaxSizeRatio = 0.40f;
 constexpr float ButtonWidthRatio = 0.22f;
-constexpr float ButtonHeightRatio = 0.22f;
+constexpr float ButtonHeightRatio = 0.11f;
 
 constexpr float CellOverdrawRatio = 1.02f;
 }

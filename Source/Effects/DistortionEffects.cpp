@@ -9,6 +9,7 @@ void WaveshaperEffect::processSample(float** b, int c, int s, float effectParam)
     juce::ScopedNoDenormals noDenorm;
     float drive = effectParam;
     float clip = 0.5f + drive * 0.5f;
+    if (drive < 0.01f) return;
     if (drive < 0.001f) drive = 0.001f;
 
     for (int ch = 0; ch < c; ++ch)
@@ -23,6 +24,7 @@ void WaveshaperEffect::processBlock(float** b, int c, int n, float effectParam)
     juce::ScopedNoDenormals noDenorm;
     float drive = effectParam;
     float clip = 0.5f + drive * 0.5f;
+    if (drive < 0.01f) return;
     if (drive < 0.001f) drive = 0.001f;
 
     for (int ch = 0; ch < c; ++ch)

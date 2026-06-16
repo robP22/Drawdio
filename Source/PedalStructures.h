@@ -20,13 +20,17 @@ inline float colorWeight(uint8_t pixelVal)
 {
     switch (pixelVal)
     {
-        case 0: return -2.0f;
-        case 1: return -1.0f;
-        case 2: return -0.33f;
-        case 3: return  1.0f;
-        case 4: return  2.0f;
-        case 5: return -2.0f;
-        default: return -2.0f;
+        case 5:  return -1.0f;   // Black
+        case 7:  return -0.8f;   // Brown
+        case 8:  return -0.6f;   // Purple
+        case 1:  return -0.4f;   // Blue
+        case 2:  return -0.2f;   // Green
+        case 9:  return  0.0f;   // Grey
+        case 10: return  0.2f;   // Pink
+        case 6:  return  0.4f;   // Yellow
+        case 3:  return  0.6f;   // Red
+        case 4:  return  1.0f;   // White
+        default: return  0.0f;
     }
 }
 
@@ -36,20 +40,20 @@ enum class DspModuleType : uint8_t
     WAVESHAPER_DISTORTION,
     MICROPITCH_CHORUS,
     BIQUAD_FILTER,
-    DYNAMIC_RING_BUFFER,
+    MULTI_MODE_FILTER,
     PITCH_SHIFTER_GRANULAR,
     ENVELOPE_VCA_COMPRESSOR,
     GLITCH_STUTTER,
     DIFFUSED_DELAY_NETWORK,
-    SPECTRAL_FREEZE,
-    FREQUENCY_SHIFTER,
+    TIME_RAMP,
+    SHIMMER_GRANULAR,
     MATHEMATICAL_WAVEFOLDER,
-    SAMPLE_RATE_DEGRADER,
+    PHASER_FLANGER,
     FORMANT_VOCAL_SHIFTER,
     TAPE_STOP_REVERSE_ECHO,
     SIMPLE_DELAY,
     PLATE_REVERB,
-    COMB_RESONATOR,
+    SIDECHAIN_DUCKER,
     GRANULAR_DELAY
 };
 
@@ -168,6 +172,7 @@ struct ReverbNetworkState
 {
     std::vector<float> combBuf[4];
     size_t combPtr[4];
+    float combDampState[4];
     std::vector<float> apBuf[2];
     size_t apPtr[2];
     float decorrL;
@@ -192,6 +197,8 @@ inline void prepareReverbNetwork(ReverbNetworkState& state, double sampleRate,
         state.apBuf[i].assign(len, 0.0f);
         state.apPtr[i] = 0;
     }
+    for (int i = 0; i < 4; ++i)
+        state.combDampState[i] = 0.0f;
     state.decorrL = 0.0f;
     state.decorrR = 0.0f;
 }
@@ -209,6 +216,8 @@ inline void resetReverbNetwork(ReverbNetworkState& state)
         std::fill(state.apBuf[i].begin(), state.apBuf[i].end(), 0.0f);
         state.apPtr[i] = 0;
     }
+    for (int i = 0; i < 4; ++i)
+        state.combDampState[i] = 0.0f;
     state.decorrL = 0.0f;
     state.decorrR = 0.0f;
 }
@@ -225,6 +234,7 @@ inline void processReverbNetworkSample(float dryL, float dryR,
     juce::ScopedNoDenormals noDenorm;
     float feedback = static_cast<float>(config.feedbackBase + decayNormalised * config.feedbackRange);
     float monoIn = (dryL + dryR) * 0.5f;
+    float hfDamp = decayNormalised * decayNormalised * 0.5f;
 
     float combOut = 0.0f;
     for (int i = 0; i < 4; ++i)
@@ -234,6 +244,7 @@ inline void processReverbNetworkSample(float dryL, float dryR,
 
         float& bufVal = state.combBuf[i][state.combPtr[i]];
         float tap = bufVal;
+        tap = state.combDampState[i] = state.combDampState[i] + hfDamp * (tap - state.combDampState[i]);
         bufVal = monoIn + tap * feedback * config.combGains[i];
         combOut += tap;
         state.combPtr[i] = (state.combPtr[i] + 1) % bufLen;
@@ -269,8 +280,10 @@ struct GranularProcessorState
     size_t writePtr;
     float readPtr;
     float grainPhase2;
+    float grain2Pos;
     int grainLen;
     size_t grainBase;
+    std::vector<float> window;
 };
 
 // Prepare a granular delay line.
@@ -283,6 +296,7 @@ inline void prepareGranularProcessor(GranularProcessorState& state,
     state.writePtr = 0;
     state.readPtr = 0.0f;
     state.grainPhase2 = 0.0f;
+    state.grain2Pos = 0.0f;
     state.grainLen = 0;
     state.grainBase = 0;
 }
@@ -294,6 +308,7 @@ inline void resetGranularProcessor(GranularProcessorState& state)
     state.writePtr = 0;
     state.readPtr = 0.0f;
     state.grainPhase2 = 0.0f;
+    state.grain2Pos = 0.0f;
     state.grainLen = 0;
     state.grainBase = 0;
 }
@@ -309,10 +324,16 @@ inline float processGranularSample(float input, GranularProcessorState& state,
 
     if (state.grainLen == 0 || state.readPtr >= static_cast<float>(state.grainLen))
     {
-        state.grainLen = static_cast<int>(sampleRate * grainDurationSec);
+        state.grainLen = std::max(1, static_cast<int>(sampleRate * grainDurationSec));
         state.readPtr = 0.0f;
         state.grainPhase2 = static_cast<float>(state.grainLen) * 0.5f;
         state.grainBase = (state.writePtr + bufSize - static_cast<size_t>(state.grainLen)) % bufSize;
+        state.window.resize(static_cast<size_t>(state.grainLen));
+        for (size_t wi = 0; wi < state.window.size(); ++wi)
+        {
+            float phase = static_cast<float>(wi) / static_cast<float>(state.grainLen);
+            state.window[wi] = 0.5f * (1.0f - std::cos(2.0f * 3.14159265f * phase));
+        }
     }
 
     state.delayBuf[state.writePtr] = input;
@@ -323,7 +344,7 @@ inline float processGranularSample(float input, GranularProcessorState& state,
     float pos1 = static_cast<float>(state.grainBase) + state.readPtr;
     if (pos1 >= bufSizeF) pos1 -= bufSizeF;
 
-    float pos2 = static_cast<float>(state.grainBase) + state.grainPhase2;
+    float pos2 = state.grain2Pos;
     if (pos2 >= bufSizeF) pos2 -= bufSizeF;
 
     size_t idx1 = static_cast<size_t>(pos1);
@@ -336,18 +357,24 @@ inline float processGranularSample(float input, GranularProcessorState& state,
     size_t next2 = (idx2 + 1) % bufSize;
     float s2 = state.delayBuf[idx2] * (1.0f - frac2) + state.delayBuf[next2] * frac2;
 
-    float w1 = 0.5f * (1.0f - std::cos(2.0f * 3.14159265f * (state.readPtr / grainLenF)));
-    float w2 = 0.5f * (1.0f - std::cos(2.0f * 3.14159265f * (state.grainPhase2 / grainLenF)));
+    size_t wi1 = std::min(static_cast<size_t>(state.readPtr),
+                          static_cast<size_t>(state.grainLen) - 1);
+    size_t wi2 = std::min(static_cast<size_t>(state.grainPhase2),
+                          static_cast<size_t>(state.grainLen) - 1);
+    float w1 = state.window[wi1];
+    float w2 = state.window[wi2];
 
     float out = s1 * w1 + s2 * w2;
 
     state.readPtr += playbackSpeed;
-    if (state.readPtr >= grainLenF)
-        state.readPtr -= grainLenF;
 
     state.grainPhase2 += playbackSpeed;
     if (state.grainPhase2 >= grainLenF)
         state.grainPhase2 -= grainLenF;
+
+    state.grain2Pos += playbackSpeed;
+    if (state.grain2Pos >= bufSizeF)
+        state.grain2Pos -= bufSizeF;
 
     state.writePtr = (state.writePtr + 1) % bufSize;
 

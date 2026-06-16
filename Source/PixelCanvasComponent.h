@@ -26,6 +26,11 @@ public:
         Red = 3,
         Green = 2,
         Blue = 1,
+        Yellow = 6,
+        Brown = 7,
+        Purple = 8,
+        Grey = 9,
+        Pink = 10,
 
         BLACK = Black,
         WHITE = White,
@@ -66,12 +71,16 @@ public:
     void setCurrentColor(PixelColor color) { m_currentColor = color; }
     PixelColor getCurrentColor() const { return m_currentColor; }
 
+    void setFillMode(bool active);
+    bool isFillMode() const { return m_fillMode; }
+
     int getChangedCellCount() const { return m_changedCellCount; }
 
     void setOnCanvasSnapshot(CanvasSnapshotCallback cb) { m_onCanvasSnapshot = std::move(cb); }
     void setOnPenDown(CanvasPenCallback cb) { m_onPenDown = std::move(cb); }
     void setOnPenUp(CanvasPenCallback cb) { m_onPenUp = std::move(cb); }
     void setOnUndo(CanvasPenCallback cb) { m_onUndo = std::move(cb); }
+    void setOnFillModeChanged(std::function<void(bool)> cb) { m_onFillModeChanged = std::move(cb); }
 
 private:
     juce::Point<int> gridCoordsFromUI(int uiX, int uiY) const;
@@ -87,6 +96,7 @@ private:
     void rebuildOverlay();
     void updateOverlayPixel(int index);
     void notifySnapshot();
+    void floodFill(int startX, int startY);
 
     const ResourceManager& m_resources;
     const IThemeProvider& m_theme;
@@ -97,14 +107,18 @@ private:
     CanvasPenCallback m_onPenDown;
     CanvasPenCallback m_onPenUp;
     CanvasPenCallback m_onUndo;
+    std::function<void(bool)> m_onFillModeChanged;
 
     bool m_drawing = false;
     bool m_activeStrokeOpen = false;
+    bool m_fillMode = false;
     juce::Point<int> m_lastDrawPos;
     PixelColor m_currentColor = PixelColor::Red;
 
     std::vector<PixelChange> m_activeStroke;
     std::vector<std::vector<PixelChange>> m_undoStack;
+    std::vector<int> m_fillQueue;
+    std::vector<std::uint8_t> m_fillVisited;
     std::unordered_map<int, int> m_activeChangeLookup;
 
     juce::Image m_pixelOverlay;

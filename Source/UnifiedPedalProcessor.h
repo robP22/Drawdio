@@ -26,6 +26,7 @@ public:
     void tryApplyDeferredConfig();
     bool hasPendingReleases() const;
     void scheduleReset();
+    bool isParamOverridden(int physicalSlot, int knobIdx) const;
 
     struct ParameterSnapshot
     {

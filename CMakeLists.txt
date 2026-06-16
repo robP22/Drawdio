@@ -66,6 +66,9 @@ target_sources(Drawdio PRIVATE
     Source/HeadlessDspTest.cpp
     Source/StateSerializer.cpp
     Source/EffectConfigRegistry.cpp
+    Source/Effects/TimeRampEffect.cpp
+    Source/Effects/ShimmerGranularEffect.cpp
+    Source/Effects/PhaserFlangerEffect.cpp
     Source/Effects/GranularBaseEffect.cpp
     Source/Effects/DistortionEffects.cpp
     Source/Effects/FilterEffects.cpp

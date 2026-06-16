@@ -32,6 +32,16 @@ CanvasModule::CanvasModule(const ResourceManager& resources, const IThemeProvide
         m_pixelCanvas.clearCanvas();
     });
 
+    m_palette.setOnFill([this](bool active)
+    {
+        m_pixelCanvas.setFillMode(active);
+    });
+
+    m_pixelCanvas.setOnFillModeChanged([this](bool active)
+    {
+        m_palette.setFillButtonState(active);
+    });
+
     m_pixelCanvas.setCurrentColor(PixelCanvasComponent::PixelColor::Red);
 }
 

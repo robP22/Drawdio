@@ -47,6 +47,7 @@ private:
     void checkForUpdates();  // Change-driven update check
     void refreshRoutingFromConfig();  // Sync routing from current config
     void timerCallback() override;  // JUCE Timer callback
+    void showHamburgerMenu();
 
     DrawdioProcessor& audioProcessor;
     ResourceManager m_resourceManager;
@@ -58,4 +59,6 @@ private:
     PedalboardGrid m_pedalboardGrid;
     std::vector<uint8_t> m_lastRoutingOrder;
     uint32_t m_seenConfigRevision = 0;
+    bool m_needsRepaint = false;
+    juce::TextButton m_hamburgerButton { "\u2630" };
 };

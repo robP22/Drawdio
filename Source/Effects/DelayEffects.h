@@ -9,6 +9,7 @@ public:
     void prepare(double sampleRate, int numChannels) override;
     void reset() override;
     void processSample(float** b, int c, int s, float effectParam) override;
+    void setVolumeParam(float vol) override;
 
 private:
     struct MicropitchState {
@@ -19,6 +20,7 @@ private:
         float lfoPhase = 0.0f;
     };
     std::vector<MicropitchState> m_channels;
+    float m_depth = 0.5f;
 };
 
 class SimpleDelayEffect : public DspEffect
@@ -30,6 +32,8 @@ public:
 
 private:
     std::vector<SimpleDelayState> m_delays;
+    std::vector<float> m_fbLpState;
+    float m_fbLpCoeff = 0.0f;
 };
 
 class DynamicRingBufferEffect : public DspEffect
@@ -38,9 +42,11 @@ public:
     void prepare(double sampleRate, int numChannels) override;
     void reset() override;
     void processSample(float** b, int c, int s, float effectParam) override;
+    void setVolumeParam(float vol) override;
 
 private:
     std::vector<RingBufferState> m_buffers;
+    float m_feedback = 0.4f;
 };
 
 class TapeStopEchoEffect : public DspEffect
@@ -56,8 +62,10 @@ private:
         size_t writePtr = 0;
         float readPos = 0.0f;
         float readSpeed = 1.0f;
+        bool wasBraking = false;
     };
     std::vector<TapeStopChannel> m_channels;
+    float m_predelayMs = 100.0f;
 };
 
 #include "Effects/GranularBaseEffect.h"

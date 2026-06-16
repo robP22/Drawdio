@@ -17,7 +17,8 @@ public:
 
 private:
     float m_phase = 0.0f;
-    std::vector<float> m_allpassZ;
+    std::vector<float> m_allpassZ1;
+    std::vector<float> m_allpassZ2;
 };
 
 class GlitchStutterEffect : public DspEffect
