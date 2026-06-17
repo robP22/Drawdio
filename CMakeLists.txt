@@ -66,9 +66,6 @@ target_sources(Drawdio PRIVATE
     Source/HeadlessDspTest.cpp
     Source/StateSerializer.cpp
     Source/EffectConfigRegistry.cpp
-    Source/Effects/TimeRampEffect.cpp
-    Source/Effects/ShimmerGranularEffect.cpp
-    Source/Effects/PhaserFlangerEffect.cpp
     Source/Effects/GranularBaseEffect.cpp
     Source/Effects/DistortionEffects.cpp
     Source/Effects/FilterEffects.cpp
@@ -76,6 +73,12 @@ target_sources(Drawdio PRIVATE
     Source/Effects/ReverbEffects.cpp
     Source/Effects/PitchEffects.cpp
     Source/Effects/MiscEffects.cpp
+    Source/Effects/ReverseBufferEffect.cpp
+    Source/Effects/GrainScrubberEffect.cpp
+    Source/Effects/SpectralFilterEffect.cpp
+    Source/Effects/ConvolutionSpaceEffect.cpp
+    Source/Effects/RandomModulatorEffect.cpp
+    Source/Effects/AutomationGeneratorEffect.cpp
     Source/RenderUtils.cpp
     Source/ResourceManager.cpp
     Source/ThemeManager.cpp
@@ -98,6 +101,7 @@ target_link_libraries(Drawdio PRIVATE
     juce::juce_graphics
     juce::juce_gui_basics
     juce::juce_gui_extra
+    juce::juce_dsp
 )
 
 target_compile_definitions(Drawdio PRIVATE

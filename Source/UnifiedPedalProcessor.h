@@ -20,6 +20,10 @@ public:
     const PedalAssetPayload* getCurrentConfig() const;
 
     void updateParameter(int physicalSlot, int knobIdx, float newValue);
+    void storeParameterValue(int physicalSlot, int knobIdx, float value);
+    void applyParamOffset(int physicalSlot, int knobIdx, float dragStartValue, float newValue);
+    void clearParamOffsets();
+    float getKnobDisplayValue(int slot, int knob, float compiledValue) const;
     void invalidateParamCacheForSlot(int physicalSlot);
 
     void drainReleaseQueue();
@@ -27,6 +31,7 @@ public:
     bool hasPendingReleases() const;
     void scheduleReset();
     bool isParamOverridden(int physicalSlot, int knobIdx) const;
+    uint32_t getParamOverrideMask() const { return m_paramCacheValidMask.load(std::memory_order_acquire); }
 
     struct ParameterSnapshot
     {
@@ -51,6 +56,7 @@ private:
     std::atomic<uint32_t> m_paramRevision{0};
     std::array<std::atomic<float>, 24> m_parameterCache;
     std::atomic<uint32_t> m_paramCacheValidMask{0};
+    std::array<float, 24> m_paramOffsets{};
 
     std::atomic<const PedalAssetPayload*> m_currentConfig{nullptr};
     std::atomic<const PedalAssetPayload*> m_nextConfig{nullptr};

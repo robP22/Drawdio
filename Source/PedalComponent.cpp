@@ -4,6 +4,8 @@
 #include "RenderUtils.h"
 #include "PedalDefinition.h"
 
+#include <cmath>
+
 namespace
 {
 juce::Colour skinColourForSlot(int slot)
@@ -227,7 +229,7 @@ void PedalComponent::mouseDrag(const juce::MouseEvent& event)
     float raw = m_dragStartValue + deltaY / 200.0f;
     float value = std::max(0.0f, std::min(1.0f, raw));
 
-    audioProcessor.getDSPProcessor().updateParameter(m_slotIndex, m_draggingKnob, value);
+    audioProcessor.getDSPProcessor().applyParamOffset(m_slotIndex, m_draggingKnob, m_dragStartValue, value);
     setKnobValue(m_draggingKnob, value);
 }
 
@@ -248,7 +250,7 @@ void PedalComponent::mouseMove(const juce::MouseEvent& event)
 void PedalComponent::showTypePopup()
 {
     juce::PopupMenu menu;
-    for (int t = 0; t <= static_cast<int>(DspModuleType::GRANULAR_DELAY); ++t)
+    for (int t = 0; t <= static_cast<int>(DspModuleType::AUTOMATION_GENERATOR); ++t)
     {
         auto type = static_cast<DspModuleType>(t);
         menu.addItem(t + 1, PedalDefinitions::getDisplayName(type), true, type == m_currentType);
@@ -346,16 +348,20 @@ void PedalComponent::drawKnob(juce::Graphics& g, int knobIdx, float value)
     constexpr float kMaxAngleDegrees = 150.0f;
     const float angle = juce::degreesToRadians((value - 0.5f) * kMaxAngleDegrees * 2.0f);
 
-    const int destSize = static_cast<int>(bounds.getWidth());
-    g.saveState();
-    g.addTransform(juce::AffineTransform::rotation(
-        angle, bounds.getCentreX(), bounds.getCentreY()));
-    g.drawImage(knobImage,
-                static_cast<int>(bounds.getX()),
-                static_cast<int>(bounds.getY()),
-                destSize, destSize,
-                0, 0, knobImage.getWidth(), knobImage.getHeight());
-    g.restoreState();
+    const float c = std::cos(angle);
+    const float s = std::sin(angle);
+    const float sx = bounds.getWidth()  / static_cast<float>(knobImage.getWidth());
+    const float sy = bounds.getHeight() / static_cast<float>(knobImage.getHeight());
+    const float cx = bounds.getCentreX();
+    const float cy = bounds.getCentreY();
+    const float hw = bounds.getWidth()  * 0.5f;
+    const float hh = bounds.getHeight() * 0.5f;
+
+    juce::AffineTransform t(
+        sx * c,  -sy * s,  cx - hw * c + hh * s,
+        sx * s,   sy * c,  cy - hw * s - hh * c);
+
+    g.drawImageTransformed(knobImage, t, false);
 }
 
 juce::Point<float> PedalComponent::getInputJackPos() const

@@ -33,6 +33,27 @@ private:
     const IThemeProvider& m_theme;
 };
 
+class HamburgerButton : public juce::Button
+{
+public:
+    HamburgerButton() : juce::Button("Hamburger") {}
+
+    void paintButton(juce::Graphics& g, bool over, bool) override
+    {
+        auto b = getLocalBounds().toFloat().reduced(9.0f);
+        const float lh = b.getHeight() * 0.13f;
+        const float y[3] = { b.getY(), b.getCentreY() - lh * 0.5f, b.getBottom() - lh };
+
+        g.setColour(juce::Colours::black.withAlpha(0.45f));
+        for (int i = 0; i < 3; ++i)
+            g.fillRoundedRectangle(b.getX() + 1.5f, y[i] + 1.5f, b.getWidth(), lh, 2.0f);
+
+        g.setColour(over ? juce::Colours::white : juce::Colours::white.withAlpha(0.85f));
+        for (int i = 0; i < 3; ++i)
+            g.fillRoundedRectangle(b.getX(), y[i], b.getWidth(), lh, 2.0f);
+    }
+};
+
 class DrawdioProcessorEditor : public juce::AudioProcessorEditor, private juce::Timer
 {
 public:
@@ -60,5 +81,5 @@ private:
     std::vector<uint8_t> m_lastRoutingOrder;
     uint32_t m_seenConfigRevision = 0;
     bool m_needsRepaint = false;
-    juce::TextButton m_hamburgerButton { "\u2630" };
+    HamburgerButton m_hamburgerButton;
 };

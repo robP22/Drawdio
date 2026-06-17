@@ -9,15 +9,18 @@ size_t StateSerializer::calculateSize(const SerializedState& state)
     // Routing: PedalSlotCount bytes
     // Flag: 1 byte
     // Knob values: PedalSlotCount * 4 * sizeof(float) bytes
+    // Override mask: sizeof(uint32_t) bytes (v4+)
     return 4 + TotalCells + PedalSlotCount + PedalSlotCount + 1
-         + static_cast<int>(PedalSlotCount * 4 * sizeof(float));
+         + static_cast<int>(PedalSlotCount * 4 * sizeof(float))
+         + static_cast<int>(sizeof(uint32_t));
 }
 
 StateSerializer::SerializedState StateSerializer::createState(
     const std::array<uint8_t, TotalCells>& gridData,
     const std::array<DspModuleType, PedalSlotCount>& pedalSlots,
     const std::vector<uint8_t>& manualRouting,
-    const std::array<float, PedalSlotCount * 4>& knobValues)
+    const std::array<float, PedalSlotCount * 4>& knobValues,
+    uint32_t overrideMask)
 {
     SerializedState state;
     state.gridData = gridData;
@@ -25,6 +28,7 @@ StateSerializer::SerializedState StateSerializer::createState(
         state.pedalSlots[i] = pedalSlots[i];
     state.manualRouting = manualRouting;
     state.knobValues = knobValues;
+    state.overrideMask = overrideMask;
     return state;
 }
 
@@ -57,14 +61,18 @@ void StateSerializer::serialize(const SerializedState& state, std::vector<uint8_
             outBlob[routingOffset + i] = 0xFF;  // No routing
     }
 
-    // Flag (reserved for future use)
+    // Flag — now version field for mask support
     const int flagOffset = routingOffset + PedalSlotCount;
-    outBlob[flagOffset] = 0;
+    outBlob[flagOffset] = Version;
 
     // Knob values (24 floats = 96 bytes)
     const int knobOffset = flagOffset + 1;
     std::memcpy(outBlob.data() + knobOffset, state.knobValues.data(),
                 PedalSlotCount * 4 * sizeof(float));
+
+    // Override mask (4 bytes, v4+)
+    const int maskOffset = knobOffset + static_cast<int>(PedalSlotCount * 4 * sizeof(float));
+    std::memcpy(outBlob.data() + maskOffset, &state.overrideMask, sizeof(uint32_t));
 }
 
 bool StateSerializer::isValidHeader(const uint8_t* data, size_t sizeInBytes)
@@ -97,7 +105,7 @@ bool StateSerializer::deserialize(const uint8_t* data, size_t sizeInBytes, Seria
 
     // Pedal slots
     const int layoutOffset = 4 + TotalCells;
-    constexpr auto maxPedalType = static_cast<uint8_t>(DspModuleType::GRANULAR_DELAY);
+    constexpr auto maxPedalType = static_cast<uint8_t>(DspModuleType::AUTOMATION_GENERATOR);
     for (int i = 0; i < PedalSlotCount; ++i)
     {
         uint8_t raw = data[layoutOffset + i];
@@ -132,6 +140,18 @@ bool StateSerializer::deserialize(const uint8_t* data, size_t sizeInBytes, Seria
     {
         // v2 save — leave knobValues at zero-initialized defaults
         outState.knobValues.fill(0.5f);
+    }
+
+    // Override mask (v4+ only, backward compatible with v2/v3)
+    const size_t maskOffset = knobOffset + PedalSlotCount * 4 * sizeof(float);
+    if (sizeInBytes >= maskOffset + sizeof(uint32_t))
+    {
+        std::memcpy(&outState.overrideMask, data + maskOffset, sizeof(uint32_t));
+    }
+    else
+    {
+        // v2/v3 save — default to clear (compiler fills in, UI shows canvas-derived values)
+        outState.overrideMask = 0x00000000;
     }
 
     return true;

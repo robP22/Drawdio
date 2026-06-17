@@ -12,13 +12,14 @@ public:
     }
 
     virtual void reset() = 0;
-    virtual void processSample(float** buffer, int numChannels, int sampleNum, float effectParam) = 0;
-    virtual void setVolumeParam(float) {}
+    virtual void processSample(float** buffer, int numChannels, int sampleNum, float driveParam) = 0;
 
-    virtual void processBlock(float** buffer, int numChannels, int numSamples, float effectParam)
+    virtual int mixKnobIndex() const { return -1; }
+
+    virtual void processBlock(float** buffer, int numChannels, int numSamples, const float* params)
     {
         for (int s = 0; s < numSamples; ++s)
-            processSample(buffer, numChannels, s, effectParam);
+            processSample(buffer, numChannels, s, params[3]);
     }
 
 protected:

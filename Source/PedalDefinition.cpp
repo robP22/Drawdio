@@ -5,15 +5,16 @@ namespace
 constexpr auto defaultKnobLayout()
 {
     return std::array<NormalizedControlBounds, 4> {{
-        { 0.31f, 0.35f, 0.34f, 0.22f },
-        { 0.69f, 0.35f, 0.34f, 0.22f },
-        { 0.31f, 0.56f, 0.34f, 0.22f },
-        { 0.69f, 0.56f, 0.34f, 0.22f }
+        { 0.31f, 0.345f, 0.34f, 0.22f },
+        { 0.69f, 0.345f, 0.34f, 0.22f },
+        { 0.31f, 0.565f, 0.34f, 0.22f },
+        { 0.69f, 0.565f, 0.34f, 0.22f }
     }};
 }
 
 PedalDefinition makeDefinition(DspModuleType type, const char* displayName,
-                                const char* param2Label, const char* effectLabel)
+                                const char* l0, const char* l1,
+                                const char* l2, const char* l3)
 {
     return {
         type,
@@ -21,38 +22,42 @@ PedalDefinition makeDefinition(DspModuleType type, const char* displayName,
         {},
         defaultKnobLayout(),
         {{
-            { ParamToken::Wet, "Wet", 0.0f, 1.0f, 0.5f },
-            { ParamToken::Dry, "Dry", 0.0f, 1.0f, 0.5f },
-            { ParamToken::Volume, param2Label, 0.0f, 1.0f, 0.5f },
-            { ParamToken::Effect, effectLabel, 0.0f, 1.0f, 0.5f }
+            { ParamToken::Knob0, l0, 0.0f, 1.0f, 0.5f },
+            { ParamToken::Knob1, l1, 0.0f, 1.0f, 0.5f },
+            { ParamToken::Knob2, l2, 0.0f, 1.0f, 0.5f },
+            { ParamToken::Knob3, l3, 0.0f, 1.0f, 0.5f }
         }}
     };
 }
 
-const std::array<PedalDefinition, static_cast<size_t>(DspModuleType::GRANULAR_DELAY) + 1>& definitions()
+const std::array<PedalDefinition, 24>& definitions()
 {
-    static const std::array<PedalDefinition, static_cast<size_t>(DspModuleType::GRANULAR_DELAY) + 1> defs {{
-        makeDefinition(DspModuleType::BYPASS, "Bypass", "Vol", "Param"),
-        makeDefinition(DspModuleType::WAVESHAPER_DISTORTION, "Waveshaper Dist.", "Tone", "Drive"),
-        makeDefinition(DspModuleType::MICROPITCH_CHORUS, "MicroPitch Chorus", "Depth", "Detune"),
-        makeDefinition(DspModuleType::BIQUAD_FILTER, "Biquad Filter", "Res", "Cutoff"),
-        makeDefinition(DspModuleType::MULTI_MODE_FILTER, "Multi-mode Filter", "Mode/Res", "Cutoff"),
-        makeDefinition(DspModuleType::PITCH_SHIFTER_GRANULAR, "Pitch Shifter", "Spread", "Rate"),
-        makeDefinition(DspModuleType::ENVELOPE_VCA_COMPRESSOR, "VCA Compressor", "Attack", "Thresh"),
-        makeDefinition(DspModuleType::GLITCH_STUTTER, "Glitch Stutter", "Mix", "Intensity"),
-        makeDefinition(DspModuleType::DIFFUSED_DELAY_NETWORK, "Diff. Delay Net", "Diff", "Decay"),
-        makeDefinition(DspModuleType::TIME_RAMP, "Time Ramp", "Vol", "Speed"),
-        makeDefinition(DspModuleType::SHIMMER_GRANULAR, "Shimmer Granular", "Shimmer", "Density"),
-        makeDefinition(DspModuleType::MATHEMATICAL_WAVEFOLDER, "Wavefolder", "Sym", "Fold"),
-        makeDefinition(DspModuleType::PHASER_FLANGER, "Phaser/Flanger", "Rate", "Depth"),
-        makeDefinition(DspModuleType::FORMANT_VOCAL_SHIFTER, "Formant Shifter", "Q", "Formant"),
-        makeDefinition(DspModuleType::TAPE_STOP_REVERSE_ECHO, "Tape Stop Echo", "Decay", "Brake"),
-        makeDefinition(DspModuleType::SIMPLE_DELAY, "Simple Delay", "Feed", "Time"),
-        makeDefinition(DspModuleType::PLATE_REVERB, "Plate Reverb", "Size", "Decay"),
-        makeDefinition(DspModuleType::SIDECHAIN_DUCKER, "Sidechain Pump", "Amount", "Rate"),
-        makeDefinition(DspModuleType::GRANULAR_DELAY, "Gran. Delay", "Spread", "Rate")
+    static const std::array<PedalDefinition, 24> defs {{
+makeDefinition(DspModuleType::BYPASS, "Bypass",             "Mix",    "",       "",       ""),
+        makeDefinition(DspModuleType::WAVESHAPER_DISTORTION, "Waveshaper Dist.",   "Tone",   "Sym",   "Drive",  "Level"),
+        makeDefinition(DspModuleType::MICROPITCH_CHORUS,     "MicroPitch Chorus",  "Mix",    "Depth", "Detune", "Rate"),
+        makeDefinition(DspModuleType::MULTI_MODE_FILTER,     "Multi-mode Filter",  "Mode",   "Res",   "Cutoff", "Level"),
+        makeDefinition(DspModuleType::PITCH_SHIFTER_GRANULAR,"Pitch Shifter",      "Spread", "Grain", "Rate",   "Level"),
+        makeDefinition(DspModuleType::ENVELOPE_VCA_COMPRESSOR,"VCA Compressor",    "Attack", "Release","Thresh", "Level"),
+        makeDefinition(DspModuleType::GLITCH_STUTTER,        "Glitch Stutter",     "Intens", "Gate",  "Rate",   "Level"),
+        makeDefinition(DspModuleType::DIFFUSED_DELAY_NETWORK,"Diff. Delay Net",    "Mix",    "Diff",  "Size",   "Decay"),
+        makeDefinition(DspModuleType::MATHEMATICAL_WAVEFOLDER,"Wavefolder",        "Sym",    "Fold",  "Drive",  "Level"),
+        makeDefinition(DspModuleType::FORMANT_VOCAL_SHIFTER, "Formant Shifter",    "Q",      "Shift", "Formant","Level"),
+        makeDefinition(DspModuleType::TAPE_STOP_REVERSE_ECHO,"Tape Stop Echo",     "Mix",    "Brake", "Speed",  "Decay"),
+        makeDefinition(DspModuleType::SIMPLE_DELAY,          "Simple Delay",       "Mix",    "Time",  "Feed",   "Damp"),
+        makeDefinition(DspModuleType::PLATE_REVERB,          "Plate Reverb",       "Mix",    "Size",  "Decay",  "Damp"),
+        makeDefinition(DspModuleType::SIDECHAIN_DUCKER,      "Sidechain Pump",     "Rate",   "Shape", "Amount", "Level"),
+        makeDefinition(DspModuleType::GRANULAR_DELAY,        "Granular Delay",     "Mix",    "Spread","Size",   "Rate"),
+        makeDefinition(DspModuleType::COMB_RESONATOR,        "Comb Resonator",     "Freq",   "Feed",  "Decay",  "Level"),
+        makeDefinition(DspModuleType::SPECTRAL_FREEZE,       "Spectral Freeze",    "Mix",    "Freeze","Drift",  "Window"),
+        makeDefinition(DspModuleType::FREQ_SHIFTER,          "Frequency Shift",    "Shift",  "Spread","Depth",  "Level"),
+        makeDefinition(DspModuleType::REVERSE_BUFFER,        "Reverse Buffer",     "Mix",    "Length","Dir",    "Density"),
+        makeDefinition(DspModuleType::GRAIN_SCRUBBER,        "Grain Scrubber",     "Pos",    "Density","Size",  "Level"),
+        makeDefinition(DspModuleType::SPECTRAL_FILTER,       "Spectral Filter",    "Width",  "Center","Q",      "Level"),
+        makeDefinition(DspModuleType::CONVOLUTION_SPACE,     "Convolution Space",  "Mix",    "Space", "Size",   "Damp"),
+        makeDefinition(DspModuleType::RANDOM_MODULATOR,      "Random Modulator",   "Depth",  "Smooth","Rate",   "Shape"),
+        makeDefinition(DspModuleType::AUTOMATION_GENERATOR,  "Auto. Generator",    "Depth",  "Curve", "Rate",   "Offset"),
     }};
-
     return defs;
 }
 }

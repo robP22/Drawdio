@@ -6,6 +6,7 @@ class GranularPitchEffect : public GranularBaseEffect
 {
 public:
     GranularPitchEffect() : GranularBaseEffect(0.11f, 1.0) {}
+    int mixKnobIndex() const override { return -1; }
 };
 
 class FrequencyShifterEffect : public DspEffect
@@ -14,6 +15,8 @@ public:
     void prepare(double sampleRate, int numChannels) override;
     void reset() override;
     void processSample(float** b, int c, int s, float effectParam) override;
+    void processBlock(float** b, int c, int n, const float* params) override;
+    int mixKnobIndex() const override { return -1; }
 
 private:
     float m_phase = 0.0f;
@@ -27,6 +30,8 @@ public:
     void prepare(double sampleRate, int numChannels) override;
     void reset() override;
     void processSample(float** b, int c, int s, float effectParam) override;
+    void processBlock(float** b, int c, int n, const float* params) override;
+    int mixKnobIndex() const override { return -1; }
 
 private:
     struct GlitchState {

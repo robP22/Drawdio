@@ -37,6 +37,11 @@ CanvasModule::CanvasModule(const ResourceManager& resources, const IThemeProvide
         m_pixelCanvas.setFillMode(active);
     });
 
+    m_palette.setOnBrushSize([this](float radius)
+    {
+        m_pixelCanvas.setBrushRadius(radius);
+    });
+
     m_pixelCanvas.setOnFillModeChanged([this](bool active)
     {
         m_palette.setFillButtonState(active);
@@ -60,7 +65,19 @@ void CanvasModule::resized()
     const int squareSize = canvasArea.getHeight();
     const auto pixelCanvasBounds = canvasArea.withSizeKeepingCentre(squareSize, squareSize);
     m_pixelCanvas.setBounds(pixelCanvasBounds);
+    m_pixelCanvas.setCanvasTopOffset(m_canvasTopOffset);
+
     m_palette.setBounds(paletteArea);
+    m_palette.setImageBottomShift(static_cast<float>(m_paletteShift));
+    m_palette.setContentCenterOffset(static_cast<float>(m_paletteCenterOffset));
+
+    const float canvasScale = PixelCanvasComponent::CanvasScaleRatio;
+    const float canvasW = pixelCanvasBounds.getWidth() * canvasScale;
+    const float canvasCX = pixelCanvasBounds.getX()
+        + (pixelCanvasBounds.getWidth() - canvasW) * 0.5f
+        + pixelCanvasBounds.getWidth() * GridLayout::CanvasCenterXShiftRatio
+        + canvasW * 0.5f;
+    m_palette.setImageCenterX(canvasCX - paletteArea.getX());
 }
 
 PixelCanvasComponent& CanvasModule::getPixelCanvas()
@@ -76,5 +93,13 @@ const PixelCanvasComponent& CanvasModule::getPixelCanvas() const
 void CanvasModule::setOnClear(std::function<void()> cb)
 {
     m_onClear = std::move(cb);
+}
+
+void CanvasModule::setVerticalOffsets(int canvasTopPx, int paletteShiftPx, int paletteCenterOffset)
+{
+    m_canvasTopOffset = canvasTopPx;
+    m_paletteShift = paletteShiftPx;
+    m_paletteCenterOffset = paletteCenterOffset;
+    resized();
 }
 

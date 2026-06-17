@@ -8,7 +8,7 @@ class StateSerializer
 {
 public:
     static constexpr uint8_t MagicBytes[3] = { 0x44, 0x52, 0x44 }; // 'DRD'
-    static constexpr uint8_t Version = 0x03;
+    static constexpr uint8_t Version = 0x04;
 
     // Serializable state structure
     struct SerializedState
@@ -17,6 +17,7 @@ public:
         std::array<DspModuleType, PedalSlotCount> pedalSlots;
         std::vector<uint8_t> manualRouting;
         std::array<float, PedalSlotCount * 4> knobValues{}; // 24 knob floats, zero-initialized
+        uint32_t overrideMask = 0xFFFFFFFF; // bit n = (slot*4+knob) → 1 = manually overridden
     };
 
     // Serialize processor state to memory block
@@ -30,7 +31,8 @@ public:
         const std::array<uint8_t, TotalCells>& gridData,
         const std::array<DspModuleType, PedalSlotCount>& pedalSlots,
         const std::vector<uint8_t>& manualRouting,
-        const std::array<float, PedalSlotCount * 4>& knobValues);
+        const std::array<float, PedalSlotCount * 4>& knobValues,
+        uint32_t overrideMask);
 
     // Validation helpers
     static bool isValidHeader(const uint8_t* data, size_t sizeInBytes);

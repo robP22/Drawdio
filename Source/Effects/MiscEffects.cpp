@@ -8,8 +8,11 @@ void VcaCompressorEffect::prepare(double sampleRate, int numChannels)
 {
     DspEffect::prepare(sampleRate, numChannels);
     m_envelopeFollower = 0.0f;
-    m_attackMs = 2.0f;
-    setVolumeParam(m_attackMs * 0.2f);
+    float defaultAttackMs = 2.0f;
+    float attackSec = defaultAttackMs * 0.001f;
+    double sr = m_sampleRate == 0.0 ? 44100.0 : m_sampleRate;
+    m_attackCoeff = static_cast<float>(std::exp(-1.0 / (sr * std::fmax(attackSec, 0.0001))));
+    m_releaseCoeff = static_cast<float>(std::exp(-1.0 / (sr * 0.1)));
 }
 
 void VcaCompressorEffect::reset()
@@ -50,53 +53,18 @@ void VcaCompressorEffect::processSample(float** b, int c, int s, float effectPar
         b[ch][s] = b[ch][s] * gain;
 }
 
-void VcaCompressorEffect::setVolumeParam(float vol)
+void VcaCompressorEffect::processBlock(float** b, int c, int n, const float* params)
 {
-    m_attackMs = 0.5f + vol * 49.5f;
-    float attackSec = m_attackMs * 0.001f;
+    juce::ScopedNoDenormals noDenorm;
+    float vol = params[1];
+    float attackMs = 0.5f + vol * 49.5f;
+    float attackSec = attackMs * 0.001f;
     double sr = m_sampleRate == 0.0 ? 44100.0 : m_sampleRate;
     m_attackCoeff = static_cast<float>(std::exp(-1.0 / (sr * std::fmax(attackSec, 0.0001))));
     m_releaseCoeff = static_cast<float>(std::exp(-1.0 / (sr * 0.1)));
-}
 
-void SampleRateDegraderEffect::prepare(double sampleRate, int numChannels)
-{
-    DspEffect::prepare(sampleRate, numChannels);
-    m_sampleHold = 0;
-    m_heldValues.assign(static_cast<size_t>(numChannels), 0.0f);
-}
-
-void SampleRateDegraderEffect::reset()
-{
-    m_sampleHold = 0;
-    std::fill(m_heldValues.begin(), m_heldValues.end(), 0.0f);
-}
-
-void SampleRateDegraderEffect::processSample(float** b, int c, int s, float effectParam)
-{
-    juce::ScopedNoDenormals noDenorm;
-    float bits = effectParam;
-
-    int bitDepth = 1 + static_cast<int>(bits * 15.0f);
-    if (bitDepth < 1) bitDepth = 1;
-    if (bitDepth > 24) bitDepth = 24;
-    int holdLen = 1 + static_cast<int>((1.0f - bits) * 31.0f);
-    if (holdLen < 1) holdLen = 1;
-
-    int chCount = std::min(c, static_cast<int>(m_heldValues.size()));
-    if (--m_sampleHold <= 0)
-    {
-        m_sampleHold = holdLen;
-        for (int ch = 0; ch < chCount; ++ch)
-        {
-            float x = b[ch][s];
-            float maxVal = static_cast<float>((1 << bitDepth) - 1);
-            m_heldValues[static_cast<size_t>(ch)] = std::round(x * maxVal) / maxVal;
-        }
-    }
-
-    for (int ch = 0; ch < chCount; ++ch)
-        b[ch][s] = m_heldValues[static_cast<size_t>(ch)];
+    for (int s = 0; s < n; ++s)
+        processSample(b, c, s, params[3]);
 }
 
 void SidechainDuckerEffect::prepare(double sampleRate, int numChannels)
@@ -150,7 +118,10 @@ void SidechainDuckerEffect::processSample(float** b, int c, int s, float effectP
     }
 }
 
-void SidechainDuckerEffect::setVolumeParam(float vol)
+void SidechainDuckerEffect::processBlock(float** b, int c, int n, const float* params)
 {
-    m_duckAmount = vol;
+    juce::ScopedNoDenormals noDenorm;
+    m_duckAmount = params[1];
+    for (int s = 0; s < n; ++s)
+        processSample(b, c, s, params[3]);
 }

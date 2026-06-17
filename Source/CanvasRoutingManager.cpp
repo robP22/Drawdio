@@ -6,10 +6,10 @@
 
 CanvasRoutingManager::CanvasRoutingManager()
     : m_colorParameterMappings {
-          { ColorLayer::Blue, ParamToken::Wet },
-          { ColorLayer::Green, ParamToken::Dry },
-          { ColorLayer::Red, ParamToken::Volume },
-          { ColorLayer::White, ParamToken::Effect }
+          { ColorLayer::Blue, ParamToken::Knob0 },
+          { ColorLayer::Green, ParamToken::Knob1 },
+          { ColorLayer::Red, ParamToken::Knob2 },
+          { ColorLayer::White, ParamToken::Knob3 }
       }
 {
 }

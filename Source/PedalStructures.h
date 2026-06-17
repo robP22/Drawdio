@@ -13,8 +13,7 @@ constexpr int PedalSlotCount = 6;
 // Memory safety limits for DSP delay buffers
 constexpr size_t MaxReverbDelayMs = 5000;   // 5 second max reverb delay
 constexpr double MaxGranularDurationSec = 10.0;  // 10 second max granular buffer
-constexpr size_t MaxSimpleDelaySec = 10;    // 10 second max simple delay
-constexpr size_t MaxRingBufferSec = 10;      // 10 second max ring buffer
+constexpr size_t MaxSimpleDelaySec = 2;     // 2 second max simple delay
 
 inline float colorWeight(uint8_t pixelVal)
 {
@@ -39,30 +38,35 @@ enum class DspModuleType : uint8_t
     BYPASS = 0,
     WAVESHAPER_DISTORTION,
     MICROPITCH_CHORUS,
-    BIQUAD_FILTER,
     MULTI_MODE_FILTER,
     PITCH_SHIFTER_GRANULAR,
     ENVELOPE_VCA_COMPRESSOR,
     GLITCH_STUTTER,
     DIFFUSED_DELAY_NETWORK,
-    TIME_RAMP,
-    SHIMMER_GRANULAR,
     MATHEMATICAL_WAVEFOLDER,
-    PHASER_FLANGER,
     FORMANT_VOCAL_SHIFTER,
     TAPE_STOP_REVERSE_ECHO,
     SIMPLE_DELAY,
     PLATE_REVERB,
     SIDECHAIN_DUCKER,
-    GRANULAR_DELAY
+    GRANULAR_DELAY,
+    COMB_RESONATOR,
+    SPECTRAL_FREEZE,
+    FREQ_SHIFTER,
+    REVERSE_BUFFER,
+    GRAIN_SCRUBBER,
+    SPECTRAL_FILTER,
+    CONVOLUTION_SPACE,
+    RANDOM_MODULATOR,
+    AUTOMATION_GENERATOR
 };
 
 // Parameter token identifiers used across the system.
 namespace ParamToken {
-    constexpr uint16_t Wet    = 0;
-    constexpr uint16_t Dry    = 1;
-    constexpr uint16_t Volume = 2;
-    constexpr uint16_t Effect = 3;
+    constexpr uint16_t Knob0 = 0;
+    constexpr uint16_t Knob1 = 1;
+    constexpr uint16_t Knob2 = 2;
+    constexpr uint16_t Knob3 = 3;
 }
 
 struct ParameterDescriptor
@@ -245,7 +249,7 @@ inline void processReverbNetworkSample(float dryL, float dryR,
         float& bufVal = state.combBuf[i][state.combPtr[i]];
         float tap = bufVal;
         tap = state.combDampState[i] = state.combDampState[i] + hfDamp * (tap - state.combDampState[i]);
-        bufVal = monoIn + tap * feedback * config.combGains[i];
+        bufVal = monoIn + std::tanh(tap * feedback * config.combGains[i]) * 0.7f;
         combOut += tap;
         state.combPtr[i] = (state.combPtr[i] + 1) % bufLen;
     }
@@ -293,6 +297,7 @@ inline void prepareGranularProcessor(GranularProcessorState& state,
     double safeDuration = std::min(durationSec, MaxGranularDurationSec);
     size_t size = static_cast<size_t>(sampleRate * safeDuration);
     state.delayBuf.assign(size, 0.0f);
+    state.window.assign(size, 0.0f);
     state.writePtr = 0;
     state.readPtr = 0.0f;
     state.grainPhase2 = 0.0f;
@@ -317,7 +322,7 @@ inline void resetGranularProcessor(GranularProcessorState& state)
 // sampleRate used for grain-length calculation when state.grainLen == 0.
 inline float processGranularSample(float input, GranularProcessorState& state,
                                     float playbackSpeed, double sampleRate,
-                                    float grainDurationSec)
+                                    float grainDurationSec, float grainPosition = 0.0f)
 {
     size_t bufSize = state.delayBuf.size();
     if (bufSize == 0) return 0.0f;
@@ -327,9 +332,10 @@ inline float processGranularSample(float input, GranularProcessorState& state,
         state.grainLen = std::max(1, static_cast<int>(sampleRate * grainDurationSec));
         state.readPtr = 0.0f;
         state.grainPhase2 = static_cast<float>(state.grainLen) * 0.5f;
-        state.grainBase = (state.writePtr + bufSize - static_cast<size_t>(state.grainLen)) % bufSize;
-        state.window.resize(static_cast<size_t>(state.grainLen));
-        for (size_t wi = 0; wi < state.window.size(); ++wi)
+        state.grainBase = (state.writePtr + bufSize - static_cast<size_t>(state.grainLen)
+                           - static_cast<size_t>(grainPosition * bufSize)) % bufSize;
+        size_t wLen = std::min(static_cast<size_t>(state.grainLen), state.window.size());
+        for (size_t wi = 0; wi < wLen; ++wi)
         {
             float phase = static_cast<float>(wi) / static_cast<float>(state.grainLen);
             state.window[wi] = 0.5f * (1.0f - std::cos(2.0f * 3.14159265f * phase));
@@ -401,28 +407,4 @@ inline void resetSimpleDelay(SimpleDelayState& state)
 {
     std::fill(state.buf.begin(), state.buf.end(), 0.0f);
     state.writePtr = 0;
-}
-
-// Ring buffer with read-head state.
-struct RingBufferState
-{
-    std::vector<float> buf;
-    size_t writePtr;
-    float readHead;
-};
-
-inline void prepareRingBuffer(RingBufferState& state, double sampleRate, double durationSec)
-{
-    double safeDuration = std::min(durationSec, static_cast<double>(MaxRingBufferSec));
-    size_t size = static_cast<size_t>(sampleRate * safeDuration);
-    state.buf.assign(size, 0.0f);
-    state.writePtr = 0;
-    state.readHead = 0.0f;
-}
-
-inline void resetRingBuffer(RingBufferState& state)
-{
-    std::fill(state.buf.begin(), state.buf.end(), 0.0f);
-    state.writePtr = 0;
-    state.readHead = 0.0f;
 }
