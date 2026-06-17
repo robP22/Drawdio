@@ -10,7 +10,6 @@ void WaveshaperEffect::processSample(float** b, int c, int s, float effectParam)
     float drive = effectParam;
     float clip = 0.5f + drive * 0.5f;
     if (drive < 0.01f) return;
-    if (drive < 0.001f) drive = 0.001f;
 
     for (int ch = 0; ch < c; ++ch)
     {
@@ -19,13 +18,12 @@ void WaveshaperEffect::processSample(float** b, int c, int s, float effectParam)
     }
 }
 
-void WaveshaperEffect::processBlock(float** b, int c, int n, float effectParam)
+void WaveshaperEffect::processBlock(float** b, int c, int n, const float* params)
 {
     juce::ScopedNoDenormals noDenorm;
-    float drive = effectParam;
+    float drive = params[3];
     float clip = 0.5f + drive * 0.5f;
     if (drive < 0.01f) return;
-    if (drive < 0.001f) drive = 0.001f;
 
     for (int ch = 0; ch < c; ++ch)
         for (int s = 0; s < n; ++s)
@@ -46,10 +44,10 @@ void WavefolderEffect::processSample(float** b, int c, int s, float effectParam)
     }
 }
 
-void WavefolderEffect::processBlock(float** b, int c, int n, float effectParam)
+void WavefolderEffect::processBlock(float** b, int c, int n, const float* params)
 {
     juce::ScopedNoDenormals noDenorm;
-    float d = 1.0f + effectParam * 4.0f;
+    float d = 1.0f + params[3] * 4.0f;
     float norm = 1.0f + d * 0.1f;
 
     for (int ch = 0; ch < c; ++ch)
@@ -91,8 +89,37 @@ void CombResonatorEffect::processSample(float** b, int c, int s, float effectPar
         float in = b[ch][s];
         size_t readPtr = (d.writePtr + bufSize - delaySamples) % bufSize;
         float delayed = d.buf[readPtr];
-        d.buf[d.writePtr] = in + delayed * feedback;
+        d.buf[d.writePtr] = in + std::tanh(delayed * feedback);
         b[ch][s] = delayed;
         d.writePtr = (d.writePtr + 1) % bufSize;
+    }
+}
+
+void CombResonatorEffect::processBlock(float** b, int c, int n, const float* params)
+{
+    juce::ScopedNoDenormals noDenorm;
+    float freq = 20.0f * std::pow(66.666f, params[3]);
+    float feedback = 0.85f;
+
+    int chCount = std::min(c, static_cast<int>(m_delays.size()));
+    for (int ch = 0; ch < chCount; ++ch)
+    {
+        auto& d = m_delays[static_cast<size_t>(ch)];
+        size_t bufSize = d.buf.size();
+        if (bufSize == 0) continue;
+
+        size_t delaySamples = static_cast<size_t>(m_sampleRate / freq + 0.5f);
+        if (delaySamples < 1) delaySamples = 1;
+        if (delaySamples >= bufSize) delaySamples = bufSize - 1;
+
+        for (int s = 0; s < n; ++s)
+        {
+            float in = b[ch][s];
+            size_t readPtr = (d.writePtr + bufSize - delaySamples) % bufSize;
+            float delayed = d.buf[readPtr];
+            d.buf[d.writePtr] = in + std::tanh(delayed * feedback);
+            b[ch][s] = delayed;
+            d.writePtr = (d.writePtr + 1) % bufSize;
+        }
     }
 }

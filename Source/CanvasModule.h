@@ -16,6 +16,7 @@ public:
     const PixelCanvasComponent& getPixelCanvas() const;
 
     void setOnClear(std::function<void()> cb);
+    void setVerticalOffsets(int canvasTopPx, int paletteShiftPx, int paletteCenterOffset);
 
 private:
     const ResourceManager& m_resources;
@@ -24,4 +25,7 @@ private:
     ColorPalette m_palette;
 
     std::function<void()> m_onClear;
+    int m_canvasTopOffset = 0;
+    int m_paletteShift = 0;
+    int m_paletteCenterOffset = 0;
 };

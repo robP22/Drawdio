@@ -18,8 +18,8 @@ constexpr float GridTopPaddingRatio = 0.0365f;
 
 constexpr float PedalShrinkRatio = 0.95f;
 constexpr float ColumnGapRatio = 0.005f;
-constexpr float RowGapRatio = 0.06f;
-constexpr float VerticalGroupOffsetRatio = 0.0375f;
+constexpr float RowGapRatio = 0.0475f;
+constexpr float VerticalGroupOffsetRatio = 0.025f;
 
 constexpr float PedalWidthMinRatio = 0.18f;
 constexpr float PedalWidthMaxRatio = 0.28f;
@@ -34,8 +34,8 @@ constexpr float CanvasCenterXShiftRatio = 0.017f;
 constexpr float CanvasCenterYShiftRatio = 0.051f;
 
 constexpr float KnobSizeRatio = 0.16f;
-constexpr float KnobSpreadRatio = 0.45f;
-constexpr float KnobCenterYShiftRatio = -0.07f;
+constexpr float KnobSpreadRatio = 0.35f;
+constexpr float KnobCenterYShiftRatio = -0.02f;
 constexpr float JackInsetXRatio = 0.21f;
 constexpr float JackInsetYRatio = 0.05f;
 constexpr float KnobLabelOffsetYRatio = 0.10f;
@@ -51,8 +51,7 @@ constexpr float LedCenterYRatio = 0.185f;
 constexpr float LedSizeRatio = 0.06f;
 
 constexpr float BlobMaxSizeRatio = 0.40f;
-constexpr float ButtonWidthRatio = 0.22f;
-constexpr float ButtonHeightRatio = 0.11f;
+constexpr float ButtonSquareSizeRatio = 0.256f;
 
 constexpr float CellOverdrawRatio = 1.02f;
 }

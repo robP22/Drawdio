@@ -214,7 +214,8 @@ void DrawdioProcessor::publishMeterLevels(float inputPeak, float outputPeak)
 void DrawdioProcessor::getStateInformation(juce::MemoryBlock& destData)
 {
     auto snap = m_dspProcessor.getSnapshot();
-    auto state = StateSerializer::createState(m_gridData, m_pedalSlots, m_manualRouting, snap.values);
+    auto mask = m_dspProcessor.getParamOverrideMask();
+    auto state = StateSerializer::createState(m_gridData, m_pedalSlots, m_manualRouting, snap.values, mask);
     std::vector<uint8_t> blob;
     StateSerializer::serialize(state, blob);
 
@@ -233,10 +234,17 @@ void DrawdioProcessor::setStateInformation(const void* data, int sizeInBytes)
     m_pedalSlots = state.pedalSlots;
     m_manualRouting = state.manualRouting;
 
-    // Push restored knob values into the DSP parameter cache
+    // Push restored knob values into the DSP parameter cache,
+    // but only mark knobs as "overridden" if they were when saved.
     for (int s = 0; s < PedalSlotCount; ++s)
         for (int k = 0; k < 4; ++k)
-            m_dspProcessor.updateParameter(s, k, state.knobValues[static_cast<size_t>(s * 4 + k)]);
+        {
+            size_t idx = static_cast<size_t>(s * 4 + k);
+            if (state.overrideMask & (1u << idx))
+                m_dspProcessor.updateParameter(s, k, state.knobValues[idx]);
+            else
+                m_dspProcessor.storeParameterValue(s, k, state.knobValues[idx]);
+        }
 
     // Deferred reset — audio thread picks up the flag
     m_dspProcessor.scheduleReset();
@@ -246,7 +254,8 @@ void DrawdioProcessor::setStateInformation(const void* data, int sizeInBytes)
 juce::MemoryBlock DrawdioProcessor::createPresetState()
 {
     auto snap = m_dspProcessor.getSnapshot();
-    auto state = StateSerializer::createState(m_gridData, m_pedalSlots, m_manualRouting, snap.values);
+    auto mask = m_dspProcessor.getParamOverrideMask();
+    auto state = StateSerializer::createState(m_gridData, m_pedalSlots, m_manualRouting, snap.values, mask);
     std::vector<uint8_t> blob;
     StateSerializer::serialize(state, blob);
 
@@ -267,7 +276,13 @@ bool DrawdioProcessor::applyPresetState(const void* data, int sizeInBytes)
 
     for (int s = 0; s < PedalSlotCount; ++s)
         for (int k = 0; k < 4; ++k)
-            m_dspProcessor.updateParameter(s, k, state.knobValues[static_cast<size_t>(s * 4 + k)]);
+        {
+            size_t idx = static_cast<size_t>(s * 4 + k);
+            if (state.overrideMask & (1u << idx))
+                m_dspProcessor.updateParameter(s, k, state.knobValues[idx]);
+            else
+                m_dspProcessor.storeParameterValue(s, k, state.knobValues[idx]);
+        }
 
     m_dspProcessor.scheduleReset();
     syncCompilerConfig();

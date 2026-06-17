@@ -74,6 +74,9 @@ public:
     void setFillMode(bool active);
     bool isFillMode() const { return m_fillMode; }
 
+    void setBrushRadius(float radius) { m_brushRadius = radius; rebuildBrushTip(); }
+    void setCanvasTopOffset(int px) { m_canvasTopOffset = px; repaint(); }
+
     int getChangedCellCount() const { return m_changedCellCount; }
 
     void setOnCanvasSnapshot(CanvasSnapshotCallback cb) { m_onCanvasSnapshot = std::move(cb); }
@@ -88,9 +91,11 @@ private:
 
     void beginStroke();
     void commitStroke(bool shouldNotify);
-    void rasterizeLine(juce::Point<int> from, juce::Point<int> to);
+    void rasterizeBrushStroke(juce::Point<int> from, juce::Point<int> to);
     void setPixel(int gridX, int gridY, PixelColor color);
     void applyPixelValue(int index, PixelColor color);
+    void stampBrushTip(float gridX, float gridY);
+    void rebuildBrushTip();
 
     void rebuildGridCache();
     void rebuildOverlay();
@@ -114,6 +119,9 @@ private:
     bool m_fillMode = false;
     juce::Point<int> m_lastDrawPos;
     PixelColor m_currentColor = PixelColor::Red;
+    float m_brushRadius = 0.75f;
+    bool m_brushPainting = false;
+    int m_canvasTopOffset = 0;
 
     std::vector<PixelChange> m_activeStroke;
     std::vector<std::vector<PixelChange>> m_undoStack;
@@ -122,6 +130,7 @@ private:
     std::unordered_map<int, int> m_activeChangeLookup;
 
     juce::Image m_pixelOverlay;
+    juce::Image m_brushTipImage;
     bool m_overlayDirty = true;
     int m_changedCellCount = 0;
 

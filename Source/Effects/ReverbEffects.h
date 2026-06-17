@@ -9,6 +9,8 @@ public:
     void prepare(double sampleRate, int numChannels) override;
     void reset() override;
     void processSample(float** b, int c, int s, float effectParam) override;
+    void processBlock(float** b, int c, int n, const float* params) override;
+    int mixKnobIndex() const override { return 0; }
 
 private:
     ReverbNetworkConfig m_config;

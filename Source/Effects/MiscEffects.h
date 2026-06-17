@@ -8,25 +8,13 @@ public:
     void prepare(double sampleRate, int numChannels) override;
     void reset() override;
     void processSample(float** b, int c, int s, float effectParam) override;
-    void setVolumeParam(float vol) override;
+    void processBlock(float** b, int c, int n, const float* params) override;
+    int mixKnobIndex() const override { return -1; }
 
 private:
     float m_envelopeFollower = 0.0f;
-    float m_attackMs = 2.0f;
     float m_attackCoeff = 0.0f;
     float m_releaseCoeff = 0.0f;
-};
-
-class SampleRateDegraderEffect : public DspEffect
-{
-public:
-    void prepare(double sampleRate, int numChannels) override;
-    void reset() override;
-    void processSample(float** b, int c, int s, float effectParam) override;
-
-private:
-    int m_sampleHold = 0;
-    std::vector<float> m_heldValues;
 };
 
 class SidechainDuckerEffect : public DspEffect
@@ -35,7 +23,8 @@ public:
     void prepare(double sampleRate, int numChannels) override;
     void reset() override;
     void processSample(float** b, int c, int s, float effectParam) override;
-    void setVolumeParam(float vol) override;
+    void processBlock(float** b, int c, int n, const float* params) override;
+    int mixKnobIndex() const override { return -1; }
 
 private:
     struct SidechainChannel {

@@ -85,9 +85,42 @@ void MicroPitchChorusEffect::processSample(float** b, int c, int s, float effect
     }
 }
 
-void MicroPitchChorusEffect::setVolumeParam(float vol)
+void SimpleDelayEffect::processBlock(float** b, int c, int n, const float* params)
 {
-    m_depth = vol;
+    juce::ScopedNoDenormals noDenorm;
+    float delaySec = 0.1f + params[3] * 0.9f;
+    float feedback = 0.3f + params[3] * 0.6f;
+
+    int chCount = std::min(c, static_cast<int>(m_delays.size()));
+    for (int ch = 0; ch < chCount; ++ch)
+    {
+        auto& d = m_delays[static_cast<size_t>(ch)];
+        size_t bufSize = d.buf.size();
+        if (bufSize == 0) continue;
+
+        size_t delaySamples = static_cast<size_t>(m_sampleRate * delaySec);
+        if (delaySamples >= bufSize) delaySamples = bufSize - 1;
+        float& fbLp = m_fbLpState[static_cast<size_t>(ch)];
+
+        for (int s = 0; s < n; ++s)
+        {
+            float in = b[ch][s];
+            size_t readPtr = (d.writePtr + bufSize - delaySamples) % bufSize;
+            float delayed = d.buf[readPtr];
+            fbLp = fbLp + m_fbLpCoeff * (delayed - fbLp);
+            d.buf[d.writePtr] = in + std::tanh(fbLp * feedback);
+            b[ch][s] = delayed;
+            d.writePtr = (d.writePtr + 1) % bufSize;
+        }
+    }
+}
+
+void MicroPitchChorusEffect::processBlock(float** b, int c, int n, const float* params)
+{
+    juce::ScopedNoDenormals noDenorm;
+    m_depth = params[1];
+    for (int s = 0; s < n; ++s)
+        processSample(b, c, s, params[3]);
 }
 
 void SimpleDelayEffect::prepare(double sampleRate, int numChannels)
@@ -128,60 +161,10 @@ void SimpleDelayEffect::processSample(float** b, int c, int s, float effectParam
         float delayed = d.buf[readPtr];
         float& fbLp = m_fbLpState[static_cast<size_t>(ch)];
         fbLp = fbLp + m_fbLpCoeff * (delayed - fbLp);
-        d.buf[d.writePtr] = in + fbLp * feedback;
+        d.buf[d.writePtr] = in + std::tanh(fbLp * feedback);
         b[ch][s] = delayed;
         d.writePtr = (d.writePtr + 1) % bufSize;
     }
-}
-
-void DynamicRingBufferEffect::prepare(double sampleRate, int numChannels)
-{
-    DspEffect::prepare(sampleRate, numChannels);
-    m_buffers.resize(static_cast<size_t>(numChannels));
-    for (auto& b : m_buffers)
-        prepareRingBuffer(b, sampleRate, 4.0);
-}
-
-void DynamicRingBufferEffect::reset()
-{
-    for (auto& b : m_buffers)
-        resetRingBuffer(b);
-}
-
-void DynamicRingBufferEffect::processSample(float** b, int c, int s, float effectParam)
-{
-    juce::ScopedNoDenormals noDenorm;
-    float size = effectParam;
-    float readSpeed = 0.25f + effectParam * 0.75f;
-
-    int chCount = std::min(c, static_cast<int>(m_buffers.size()));
-    for (int ch = 0; ch < chCount; ++ch)
-    {
-        auto& buf = m_buffers[static_cast<size_t>(ch)];
-        size_t bufSize = buf.buf.size();
-        if (bufSize == 0) continue;
-
-        size_t loopLen = static_cast<size_t>((0.15f + size * 0.85f) * bufSize);
-        if (loopLen == 0) loopLen = 1;
-
-        size_t baseRead = (buf.writePtr + bufSize - loopLen) % bufSize;
-        float safeHead = std::fmax(0.0f, buf.readHead);
-        size_t readIdx = (baseRead + static_cast<size_t>(safeHead) % loopLen) % bufSize;
-
-        float delayed = buf.buf[readIdx];
-        buf.buf[buf.writePtr] = b[ch][s] + m_feedback * delayed;
-
-        b[ch][s] = delayed;
-
-        buf.readHead = std::fmod(buf.readHead + readSpeed, static_cast<float>(loopLen));
-
-        buf.writePtr = (buf.writePtr + 1) % bufSize;
-    }
-}
-
-void DynamicRingBufferEffect::setVolumeParam(float vol)
-{
-    m_feedback = 0.0f + vol * 0.9f;
 }
 
 void TapeStopEchoEffect::prepare(double sampleRate, int numChannels)
@@ -257,4 +240,10 @@ void TapeStopEchoEffect::processSample(float** b, int c, int s, float effectPara
 
         chState.writePtr = (chState.writePtr + 1) % bufSize;
     }
+}
+
+void TapeStopEchoEffect::processBlock(float** b, int c, int n, const float* params)
+{
+    for (int s = 0; s < n; ++s)
+        processSample(b, c, s, params[3]);
 }

@@ -5,9 +5,29 @@
 #include <cmath>
 
 // Layout constants namespace for consistent spacing across all components
-namespace Layout
+namespace
 {
-    constexpr float PedalboardWidthRatio = 0.55f;
+constexpr float Layout_PedalboardWidthRatio = 0.55f;
+
+float topOpaqueRatio(const juce::Image& img)
+{
+    if (!img.isValid()) return 0.0f;
+    for (int y = 0; y < img.getHeight(); ++y)
+        for (int x = 0; x < img.getWidth(); ++x)
+            if (img.getPixelAt(x, y).getAlpha() == 255)
+                return static_cast<float>(y) / static_cast<float>(img.getHeight());
+    return 0.0f;
+}
+
+float bottomOpaqueRatio(const juce::Image& img)
+{
+    if (!img.isValid()) return 0.0f;
+    for (int y = img.getHeight() - 1; y >= 0; --y)
+        for (int x = 0; x < img.getWidth(); ++x)
+            if (img.getPixelAt(x, y).getAlpha() == 255)
+                return static_cast<float>(img.getHeight() - 1 - y) / static_cast<float>(img.getHeight());
+    return 0.0f;
+}
 }
 
 // Background component implementations - flat textures without decorative frames
@@ -90,15 +110,13 @@ DrawdioProcessorEditor::DrawdioProcessorEditor(DrawdioProcessor& p)
     m_canvasModule.setOnClear([this]()
     {
         audioProcessor.getDSPProcessor().scheduleReset();
+        audioProcessor.getDSPProcessor().clearParamOffsets();
     });
 
     m_hamburgerButton.onClick = [this]()
     {
         showHamburgerMenu();
     };
-    m_hamburgerButton.setColour(juce::TextButton::buttonColourId, juce::Colours::transparentBlack);
-    m_hamburgerButton.setColour(juce::TextButton::buttonOnColourId, juce::Colours::transparentBlack);
-    m_hamburgerButton.setColour(juce::TextButton::textColourOffId, juce::Colours::white.withAlpha(0.7f));
 
     setSize(1400, 800);
     startTimerHz(20);
@@ -124,7 +142,7 @@ void DrawdioProcessorEditor::resized()
     const auto fullWindow = getLocalBounds();
     m_woodGrainBackground.setBounds(fullWindow);
 
-    const int pedalW  = juce::roundToInt(fullWindow.getWidth() * Layout::PedalboardWidthRatio);
+    const int pedalW  = juce::roundToInt(fullWindow.getWidth() * Layout_PedalboardWidthRatio);
     const int canvasW = fullWindow.getWidth() - pedalW;
 
     const auto pedalboardArea = fullWindow.withTrimmedLeft(canvasW);
@@ -134,11 +152,24 @@ void DrawdioProcessorEditor::resized()
     m_canvasModule.setBounds(canvasArea);
     m_pedalboardGrid.setBounds(pedalboardArea);
 
-    const int hamburgerSize = 28;
+    const int hamburgerSize = 36;
     const int hamburgerMargin = 8;
     m_hamburgerButton.setBounds(fullWindow.getWidth() - hamburgerSize - hamburgerMargin,
                                 hamburgerMargin,
                                 hamburgerSize, hamburgerSize);
+
+    const auto& pedalImg = m_resourceManager.getImage(ResourceManager::ImageId::PedalboardSprite);
+    const auto& paletteImg = m_resourceManager.getImage(ResourceManager::ImageId::ColorPaletteBody);
+    int pedalH = pedalboardArea.getHeight();
+    float pedalTopR = topOpaqueRatio(pedalImg);
+    float pedalBotR = bottomOpaqueRatio(pedalImg);
+    float paletteTopR = topOpaqueRatio(paletteImg);
+    float paletteBotR = bottomOpaqueRatio(paletteImg);
+    int paletteH = juce::roundToInt(canvasArea.getHeight() * GridLayout::PaletteHeightRatio);
+    int canvasTopPx = juce::roundToInt(pedalH * pedalTopR);
+    int paletteShiftPx = juce::roundToInt(pedalH * pedalBotR) - juce::roundToInt(paletteH * paletteBotR);
+    int paletteCenterPx = juce::roundToInt(0.5f * paletteH * (paletteTopR - paletteBotR));
+    m_canvasModule.setVerticalOffsets(canvasTopPx, paletteShiftPx, paletteCenterPx);
 }
 
 void DrawdioProcessorEditor::triggerRecompile()
@@ -192,10 +223,19 @@ void DrawdioProcessorEditor::checkForUpdates()
                 if (chainPos >= 0 && chainPos < static_cast<int>(syncData.routingSlotOrder.size()))
                 {
                     const int slotIdx = syncData.routingSlotOrder[static_cast<size_t>(chainPos)];
-                    if (audioProcessor.getDSPProcessor().isParamOverridden(slotIdx, static_cast<int>(param.parameterToken)))
-                        continue;
-                    if (auto* pedal = m_pedalboardGrid.getPedal(slotIdx))
-                        pedal->setKnobValue(static_cast<int>(param.parameterToken), param.currentValue);
+                    const int token = static_cast<int>(param.parameterToken);
+                    if (audioProcessor.getDSPProcessor().isParamOverridden(slotIdx, token))
+                    {
+                        float display = audioProcessor.getDSPProcessor().getKnobDisplayValue(
+                            slotIdx, token, param.currentValue);
+                        if (auto* pedal = m_pedalboardGrid.getPedal(slotIdx))
+                            pedal->setKnobValue(token, display);
+                        audioProcessor.getDSPProcessor().storeParameterValue(slotIdx, token, display);
+                    }
+                    else if (auto* pedal = m_pedalboardGrid.getPedal(slotIdx))
+                    {
+                        pedal->setKnobValue(token, param.currentValue);
+                    }
                 }
             }
         }
@@ -279,7 +319,7 @@ void DrawdioProcessorEditor::showHamburgerMenu()
             "Load Preset",
             juce::File::getSpecialLocation(juce::File::userDocumentsDirectory),
             "*.drawdio");
-        chooser->launchAsync(1, [this, chooser](const juce::FileChooser& fc)
+        chooser->launchAsync(juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles, [this, chooser](const juce::FileChooser& fc)
         {
             auto result = fc.getResult();
             if (result == juce::File{})
@@ -294,6 +334,12 @@ void DrawdioProcessorEditor::showHamburgerMenu()
                     m_canvasModule.getPixelCanvas().setGridData(
                         audioProcessor.getGridData());
                     triggerRecompile();
+
+                    auto knobVals = audioProcessor.getKnobValues();
+                    for (int s = 0; s < PedalSlotCount; ++s)
+                        if (auto* pedal = m_pedalboardGrid.getPedal(s))
+                            for (int k = 0; k < 4; ++k)
+                                pedal->setKnobValue(k, knobVals[static_cast<size_t>(s * 4 + k)]);
                 }
             }
         });

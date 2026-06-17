@@ -53,7 +53,7 @@ void FrequencyShifterEffect::processSample(float** b, int c, int s, float effect
 
         float q = (q1 + q2) * 0.5f;
         float shifted = x * cosPhi + q * sinPhi;
-        b[ch][s] = shifted;
+        b[ch][s] = shifted * 0.707f;
     }
 }
 
@@ -63,7 +63,7 @@ void GlitchStutterEffect::prepare(double sampleRate, int numChannels)
     m_states.resize(static_cast<size_t>(numChannels));
     for (auto& s : m_states)
     {
-        s.buf.assign(static_cast<size_t>(sampleRate * 2.0), 0.0f);
+        s.buf.assign(static_cast<size_t>(sampleRate * 1.0), 0.0f);
         s.writePtr = 0;
         s.sliceCounter = 0;
         s.playCounter = 0;
@@ -173,4 +173,45 @@ void GlitchStutterEffect::processSample(float** b, int c, int s, float effectPar
 
         gs.writePtr = (gs.writePtr + 1) % bufSize;
     }
+}
+
+void FrequencyShifterEffect::processBlock(float** b, int c, int n, const float* params)
+{
+    juce::ScopedNoDenormals noDenorm;
+    float shift = params[3];
+    float shiftHz = shift * shift * 2000.0f;
+    float sr = static_cast<float>(m_sampleRate);
+    float w1 = 3.14159265f * (300.0f + shiftHz * 0.3f) / sr;
+    float tanHalf1 = std::tan(w1);
+    float a1 = (tanHalf1 - 1.0f) / (tanHalf1 + 1.0f);
+    float w2 = 3.14159265f * (1200.0f + shiftHz * 0.3f) / sr;
+    float tanHalf2 = std::tan(w2);
+    float a2 = (tanHalf2 - 1.0f) / (tanHalf2 + 1.0f);
+
+    for (int s = 0; s < n; ++s)
+    {
+        m_phase += shiftHz / sr;
+        if (m_phase >= 1.0f) m_phase -= 1.0f;
+        float cosPhi = std::cos(m_phase * 6.2831853f);
+        float sinPhi = std::sin(m_phase * 6.2831853f);
+
+        int chCount = std::min(c, static_cast<int>(m_allpassZ1.size()));
+        for (int ch = 0; ch < chCount; ++ch)
+        {
+            float x = b[ch][s];
+            float& z1 = m_allpassZ1[static_cast<size_t>(ch)];
+            float q1 = a1 * x + z1;
+            z1 = x - a1 * q1;
+            float& z2 = m_allpassZ2[static_cast<size_t>(ch)];
+            float q2 = a2 * x + z2;
+            z2 = x - a2 * q2;
+            b[ch][s] = (x * cosPhi + (q1 + q2) * 0.5f * sinPhi) * 0.707f;
+        }
+    }
+}
+
+void GlitchStutterEffect::processBlock(float** b, int c, int n, const float* params)
+{
+    for (int s = 0; s < n; ++s)
+        processSample(b, c, s, params[3]);
 }

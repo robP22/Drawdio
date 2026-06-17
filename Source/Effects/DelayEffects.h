@@ -9,7 +9,8 @@ public:
     void prepare(double sampleRate, int numChannels) override;
     void reset() override;
     void processSample(float** b, int c, int s, float effectParam) override;
-    void setVolumeParam(float vol) override;
+    void processBlock(float** b, int c, int n, const float* params) override;
+    int mixKnobIndex() const override { return 0; }
 
 private:
     struct MicropitchState {
@@ -29,24 +30,13 @@ public:
     void prepare(double sampleRate, int numChannels) override;
     void reset() override;
     void processSample(float** b, int c, int s, float effectParam) override;
+    void processBlock(float** b, int c, int n, const float* params) override;
+    int mixKnobIndex() const override { return 0; }
 
 private:
     std::vector<SimpleDelayState> m_delays;
     std::vector<float> m_fbLpState;
     float m_fbLpCoeff = 0.0f;
-};
-
-class DynamicRingBufferEffect : public DspEffect
-{
-public:
-    void prepare(double sampleRate, int numChannels) override;
-    void reset() override;
-    void processSample(float** b, int c, int s, float effectParam) override;
-    void setVolumeParam(float vol) override;
-
-private:
-    std::vector<RingBufferState> m_buffers;
-    float m_feedback = 0.4f;
 };
 
 class TapeStopEchoEffect : public DspEffect
@@ -55,6 +45,8 @@ public:
     void prepare(double sampleRate, int numChannels) override;
     void reset() override;
     void processSample(float** b, int c, int s, float effectParam) override;
+    void processBlock(float** b, int c, int n, const float* params) override;
+    int mixKnobIndex() const override { return 0; }
 
 private:
     struct TapeStopChannel {
@@ -74,4 +66,5 @@ class GranularDelayEffect : public GranularBaseEffect
 {
 public:
     GranularDelayEffect() : GranularBaseEffect(0.15f, 2.0) {}
+    int mixKnobIndex() const override { return 0; }
 };

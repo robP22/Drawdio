@@ -30,5 +30,11 @@ void ReverbNetworkEffect::processSample(float** b, int c, int s, float effectPar
     if (c > 1) b[1][s] = wetR;
 }
 
+void ReverbNetworkEffect::processBlock(float** b, int c, int n, const float* params)
+{
+    for (int s = 0; s < n; ++s)
+        processSample(b, c, s, params[3]);
+}
+
 DiffusedReverbEffect::DiffusedReverbEffect() : ReverbNetworkEffect(EffectConfigRegistry::getDiffusedReverbConfig()) {}
 PlateReverbEffect::PlateReverbEffect() : ReverbNetworkEffect(EffectConfigRegistry::getPlateReverbConfig()) {}

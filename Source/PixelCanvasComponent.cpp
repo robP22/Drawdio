@@ -38,6 +38,7 @@ PixelCanvasComponent::PixelCanvasComponent(const ResourceManager& resources, con
 void PixelCanvasComponent::resized()
 {
     m_overlayDirty = true;
+    rebuildBrushTip();
     repaint();
 }
 
@@ -46,7 +47,9 @@ void PixelCanvasComponent::paint(juce::Graphics& g)
     const float canvasW = getWidth() * CanvasScaleRatio;
     const float canvasH = getHeight() * CanvasScaleRatio;
     const int cx = static_cast<int>((getWidth() - canvasW) / 2.0f + getWidth() * GridLayout::CanvasCenterXShiftRatio);
-    const int cy = static_cast<int>((getHeight() - canvasH) / 2.0f + getHeight() * GridLayout::CanvasCenterYShiftRatio);
+    const int cy = (m_canvasTopOffset > 0)
+        ? m_canvasTopOffset
+        : static_cast<int>((getHeight() - canvasH) / 2.0f + getHeight() * GridLayout::CanvasCenterYShiftRatio);
     const int cw = juce::jmax(1, static_cast<int>(canvasW));
     const int ch = juce::jmax(1, static_cast<int>(canvasH));
 
@@ -70,7 +73,9 @@ juce::Point<int> PixelCanvasComponent::gridCoordsFromUI(int uiX, int uiY) const
     const float canvasW = bounds.getWidth() * CanvasScaleRatio;
     const float canvasH = bounds.getHeight() * CanvasScaleRatio;
     const float offsetX = (bounds.getWidth() - canvasW) / 2.0f + bounds.getWidth() * GridLayout::CanvasCenterXShiftRatio;
-    const float offsetY = (bounds.getHeight() - canvasH) / 2.0f + bounds.getHeight() * GridLayout::CanvasCenterYShiftRatio;
+    const float offsetY = (m_canvasTopOffset > 0)
+        ? static_cast<float>(m_canvasTopOffset)
+        : (bounds.getHeight() - canvasH) / 2.0f + bounds.getHeight() * GridLayout::CanvasCenterYShiftRatio;
 
     const int relX = static_cast<int>(static_cast<float>(uiX) - offsetX);
     const int relY = static_cast<int>(static_cast<float>(uiY) - offsetY);
@@ -92,7 +97,9 @@ juce::Rectangle<int> PixelCanvasComponent::cellBoundsForIndex(int index) const
     const float canvasW = getWidth() * CanvasScaleRatio;
     const float canvasH = getHeight() * CanvasScaleRatio;
     const float offsetX = (getWidth() - canvasW) / 2.0f + getWidth() * GridLayout::CanvasCenterXShiftRatio;
-    const float offsetY = (getHeight() - canvasH) / 2.0f + getHeight() * GridLayout::CanvasCenterYShiftRatio;
+    const float offsetY = (m_canvasTopOffset > 0)
+        ? static_cast<float>(m_canvasTopOffset)
+        : (getHeight() - canvasH) / 2.0f + getHeight() * GridLayout::CanvasCenterYShiftRatio;
 
     const float cellW = canvasW / GridSize;
     const float cellH = canvasH / GridSize;
@@ -130,37 +137,107 @@ void PixelCanvasComponent::commitStroke(bool)
     m_activeStrokeOpen = false;
 }
 
-void PixelCanvasComponent::rasterizeLine(juce::Point<int> from, juce::Point<int> to)
+void PixelCanvasComponent::rasterizeBrushStroke(juce::Point<int> from, juce::Point<int> to)
 {
-    int x0 = from.x;
-    int y0 = from.y;
-    const int x1 = to.x;
-    const int y1 = to.y;
-    const int dx = std::abs(x1 - x0);
-    const int sx = x0 < x1 ? 1 : -1;
-    const int dy = -std::abs(y1 - y0);
-    const int sy = y0 < y1 ? 1 : -1;
-    int err = dx + dy;
+    m_brushPainting = true;
 
-    for (;;)
+    float dx = static_cast<float>(to.x - from.x);
+    float dy = static_cast<float>(to.y - from.y);
+    float dist = std::sqrt(dx * dx + dy * dy);
+    if (dist < 0.001f)
     {
-        setPixel(x0, y0, m_currentColor);
-
-        if (x0 == x1 && y0 == y1)
-            break;
-
-        const int e2 = 2 * err;
-        if (e2 >= dy)
-        {
-            err += dy;
-            x0 += sx;
-        }
-        if (e2 <= dx)
-        {
-            err += dx;
-            y0 += sy;
-        }
+        int minX = std::max(0, static_cast<int>(static_cast<float>(from.x) - m_brushRadius));
+        int maxX = std::min(GridSize - 1, static_cast<int>(static_cast<float>(from.x) + m_brushRadius));
+        int minY = std::max(0, static_cast<int>(static_cast<float>(from.y) - m_brushRadius));
+        int maxY = std::min(GridSize - 1, static_cast<int>(static_cast<float>(from.y) + m_brushRadius));
+        for (int gy = minY; gy <= maxY; ++gy)
+            for (int gx = minX; gx <= maxX; ++gx)
+            {
+                float gcx = static_cast<float>(gx) + 0.5f;
+                float gcy = static_cast<float>(gy) + 0.5f;
+                float d2 = (gcx - static_cast<float>(from.x)) * (gcx - static_cast<float>(from.x))
+                         + (gcy - static_cast<float>(from.y)) * (gcy - static_cast<float>(from.y));
+                if (d2 <= m_brushRadius * m_brushRadius + 0.25f)
+                    setPixel(gx, gy, m_currentColor);
+            }
+        stampBrushTip(static_cast<float>(from.x), static_cast<float>(from.y));
+        m_brushPainting = false;
+        return;
     }
+
+    float stepSize = 0.3f;
+    int steps = std::max(1, static_cast<int>(dist / stepSize));
+    float radiusSq = m_brushRadius * m_brushRadius + 0.25f;
+
+    for (int i = 0; i <= steps; ++i)
+    {
+        float t = static_cast<float>(i) / static_cast<float>(steps);
+        float cx = static_cast<float>(from.x) + dx * t;
+        float cy = static_cast<float>(from.y) + dy * t;
+
+        int minX = std::max(0, static_cast<int>(cx - m_brushRadius));
+        int maxX = std::min(GridSize - 1, static_cast<int>(cx + m_brushRadius));
+        int minY = std::max(0, static_cast<int>(cy - m_brushRadius));
+        int maxY = std::min(GridSize - 1, static_cast<int>(cy + m_brushRadius));
+
+        for (int gy = minY; gy <= maxY; ++gy)
+            for (int gx = minX; gx <= maxX; ++gx)
+            {
+                float gcx = static_cast<float>(gx) + 0.5f;
+                float gcy = static_cast<float>(gy) + 0.5f;
+                float d2 = (gcx - cx) * (gcx - cx) + (gcy - cy) * (gcy - cy);
+                if (d2 <= radiusSq)
+                    setPixel(gx, gy, m_currentColor);
+            }
+
+        if (i % 2 == 0)
+            stampBrushTip(cx, cy);
+    }
+    m_brushPainting = false;
+}
+
+void PixelCanvasComponent::stampBrushTip(float gridX, float gridY)
+{
+    if (!m_pixelOverlay.isValid() || !m_brushTipImage.isValid())
+        return;
+
+    const float canvasW = getWidth() * CanvasScaleRatio;
+    const float canvasH = getHeight() * CanvasScaleRatio;
+    const float cellW = canvasW / GridSize;
+    const float cellH = canvasH / GridSize;
+
+    const float uiX = gridX * cellW;
+    const float uiY = gridY * cellH;
+    const float halfW = static_cast<float>(m_brushTipImage.getWidth()) * 0.5f;
+    const float halfH = static_cast<float>(m_brushTipImage.getHeight()) * 0.5f;
+
+    juce::Graphics g(m_pixelOverlay);
+    g.drawImageAt(m_brushTipImage, static_cast<int>(uiX - halfW), static_cast<int>(uiY - halfH));
+}
+
+void PixelCanvasComponent::rebuildBrushTip()
+{
+    const float canvasW = getWidth() * CanvasScaleRatio;
+    const int cw = juce::jmax(1, static_cast<int>(canvasW));
+    if (cw < 2) return;
+
+    const float cellW = canvasW / GridSize;
+    const int tipSize = juce::jmax(4, static_cast<int>(m_brushRadius * 3.0f * cellW));
+    const int half = tipSize / 2;
+
+    m_brushTipImage = juce::Image(juce::Image::ARGB, tipSize, tipSize, true);
+    if (!m_brushTipImage.isValid()) return;
+
+    juce::Graphics g(m_brushTipImage);
+    auto colour = m_theme.canvasPixelColour(static_cast<uint8_t>(m_currentColor));
+
+    juce::ColourGradient grad(
+        colour,
+        static_cast<float>(half), static_cast<float>(half),
+        colour.withAlpha(0.0f),
+        static_cast<float>(half), static_cast<float>(tipSize) * 1.2f, true);
+    g.setGradientFill(grad);
+    g.fillEllipse(0.0f, 0.0f, static_cast<float>(tipSize), static_cast<float>(tipSize));
 }
 
 void PixelCanvasComponent::setPixel(int gridX, int gridY, PixelColor color)
@@ -188,7 +265,8 @@ void PixelCanvasComponent::setPixel(int gridX, int gridY, PixelColor color)
     }
 
     applyPixelValue(index, color);
-    repaint(cellBoundsForIndex(index).expanded(1));
+    if (!m_brushPainting)
+        repaint(cellBoundsForIndex(index).expanded(1));
 }
 
 void PixelCanvasComponent::applyPixelValue(int index, PixelColor color)
@@ -202,7 +280,8 @@ void PixelCanvasComponent::applyPixelValue(int index, PixelColor color)
     pixels[static_cast<size_t>(index)] = color;
     m_gridCache[static_cast<size_t>(index)] = (color == PixelColor::Transparent) ? 0 :
         (color == PixelColor::Black) ? 5 : static_cast<uint8_t>(color);
-    updateOverlayPixel(index);
+    if (!m_brushPainting)
+        updateOverlayPixel(index);
 }
 
 void PixelCanvasComponent::mouseDown(const juce::MouseEvent& event)
@@ -217,6 +296,7 @@ void PixelCanvasComponent::mouseDown(const juce::MouseEvent& event)
 
     m_drawing = true;
     beginStroke();
+    rebuildBrushTip();
 
     if (m_onPenDown)
         m_onPenDown();
@@ -232,8 +312,9 @@ void PixelCanvasComponent::mouseDrag(const juce::MouseEvent& event)
         return;
 
     auto pos = gridCoordsFromUI(event.x, event.y);
-    rasterizeLine(m_lastDrawPos, pos);
+    rasterizeBrushStroke(m_lastDrawPos, pos);
     m_lastDrawPos = pos;
+    repaint();
 }
 
 void PixelCanvasComponent::mouseUp(const juce::MouseEvent&)

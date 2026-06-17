@@ -11,12 +11,6 @@ namespace PaletteLayout
     constexpr float BlobSizeRatio = 0.242f;
     constexpr float BlobCenterY0 = 0.36f;
     constexpr float BlobCenterY1 = 0.64f;
-
-    constexpr float ButtonAreaCenterX = 0.867f;
-    constexpr float ButtonAreaWidthRatio = 0.125f;
-    constexpr float UndoButtonCenterY = 0.385f;
-    constexpr float FillButtonCenterY = 0.50f;
-    constexpr float ClearButtonCenterY = 0.615f;
 }
 
 ColorPalette::ColorPalette(const ResourceManager& resources, const IThemeProvider& theme)
@@ -38,11 +32,14 @@ ColorPalette::ColorPalette(const ResourceManager& resources, const IThemeProvide
     addAndMakeVisible(m_undoButton);
     addAndMakeVisible(m_clearButton);
     addAndMakeVisible(m_fillButton);
+    addAndMakeVisible(m_sizeButton);
     RenderUtils::styleAccentButton(m_undoButton, juce::Colour(0xFF4A90D9));
     RenderUtils::styleAccentButton(m_clearButton, juce::Colour(0xFFE74C3C));
     RenderUtils::styleAccentButton(m_fillButton, juce::Colour(0xFF2ECC40));
+    RenderUtils::styleAccentButton(m_sizeButton, juce::Colour(0xFFF39C12));
 
     m_fillButton.setClickingTogglesState(true);
+    m_sizeButton.setButtonText("Fine");
 
     // Attach click listeners to buttons
     m_undoButton.onClick = [this]()
@@ -62,6 +59,11 @@ ColorPalette::ColorPalette(const ResourceManager& resources, const IThemeProvide
         if (m_onFill)
             m_onFill(m_fillButton.getToggleState());
     };
+
+    m_sizeButton.onClick = [this]()
+    {
+        cycleBrushSize();
+    };
 }
 
 void ColorPalette::paint(juce::Graphics& g)
@@ -70,9 +72,13 @@ void ColorPalette::paint(juce::Graphics& g)
     const auto& texture = m_resources.getTexture(ResourceManager::TextureId::ColorPaletteBody);
 
     if (texture.isValid())
-        g.drawImage(texture, bounds.getX(), bounds.getY(),
+    {
+        const float offsetX = m_imageCenterX - bounds.getWidth() * 0.5f;
+        g.drawImage(texture,
+                   bounds.getX() + offsetX, bounds.getY() - m_imageVerticalShift,
                    bounds.getWidth(), bounds.getHeight(),
                    0, 0, texture.getWidth(), texture.getHeight());
+    }
 
     const auto& wellTex = m_resources.getTexture(ResourceManager::TextureId::ColorWell);
     if (wellTex.isValid())
@@ -207,26 +213,30 @@ void ColorPalette::resized()
         const float centerX = paletteW * (PaletteLayout::Blob0CenterX +
                       static_cast<float>(i) * PaletteLayout::BlobSpacingRatio);
         const float centerY = paletteH * ((i % 2 == 0) ? PaletteLayout::BlobCenterY0
-                                                       : PaletteLayout::BlobCenterY1);
+                                                        : PaletteLayout::BlobCenterY1)
+                              - m_imageVerticalShift
+                              + m_contentCenterOffset;
         m_blobs[static_cast<size_t>(i)].bounds = juce::Rectangle<float>(
             centerX - halfBlob, centerY - halfBlob, blobSize, blobSize);
     }
 
-    const float buttonW = PaletteLayout::ButtonAreaWidthRatio * paletteW;
-    const float buttonH = paletteH * GridLayout::ButtonHeightRatio;
-    const float buttonX = paletteW * PaletteLayout::ButtonAreaCenterX - buttonW * 0.5f;
+    const float buttonSize = paletteH * GridLayout::ButtonSquareSizeRatio;
+    const float gap = 5.0f;
+    const float gridW = 2.0f * buttonSize + gap;
+    const float gridH = 2.0f * buttonSize + gap;
 
-    const float undoY = paletteH * PaletteLayout::UndoButtonCenterY - buttonH * 0.5f;
-    const float clearY = paletteH * PaletteLayout::ClearButtonCenterY - buttonH * 0.5f;
+    const float groupTop = (paletteH - gridH) * 0.5f - m_imageVerticalShift + m_contentCenterOffset;
+    const float groupLeft = paletteW - groupTop - gridW;
 
-    const float fillY = paletteH * PaletteLayout::FillButtonCenterY - buttonH * 0.5f;
+    auto setBtn = [&](juce::TextButton& btn, float x, float y) {
+        btn.setBounds(static_cast<int>(x), static_cast<int>(y),
+                      static_cast<int>(buttonSize), static_cast<int>(buttonSize));
+    };
 
-    m_undoButton.setBounds(static_cast<int>(buttonX), static_cast<int>(undoY),
-                          static_cast<int>(buttonW), static_cast<int>(buttonH));
-    m_clearButton.setBounds(static_cast<int>(buttonX), static_cast<int>(clearY),
-                          static_cast<int>(buttonW), static_cast<int>(buttonH));
-    m_fillButton.setBounds(static_cast<int>(buttonX), static_cast<int>(fillY),
-                          static_cast<int>(buttonW), static_cast<int>(buttonH));
+    setBtn(m_undoButton, groupLeft,               groupTop);
+    setBtn(m_clearButton, groupLeft + buttonSize + gap, groupTop);
+    setBtn(m_fillButton,  groupLeft,               groupTop + buttonSize + gap);
+    setBtn(m_sizeButton,  groupLeft + buttonSize + gap, groupTop + buttonSize + gap);
 }
 
 void ColorPalette::mouseDown(const juce::MouseEvent& event)
@@ -273,4 +283,14 @@ int ColorPalette::hitTestBlob(juce::Point<float> position) const
             return i;
 
     return -1;
+}
+
+void ColorPalette::cycleBrushSize()
+{
+    m_currentBrushIndex = (m_currentBrushIndex + 1) % 3;
+    float radius = m_brushSizes[m_currentBrushIndex];
+    static const char* labels[] = {"Fine", "Med", "Broad"};
+    m_sizeButton.setButtonText(labels[m_currentBrushIndex]);
+    if (m_onBrushSize)
+        m_onBrushSize(radius);
 }
