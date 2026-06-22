@@ -65,7 +65,7 @@ PedalAssetPayload compileCanvas(const std::array<uint8_t, TotalCells>& gridData,
                 }
             }
             if (totalPainted > 0)
-                scores[i] = static_cast<int>((static_cast<double>(xSum) / totalPainted) * (100.0 / 127.0));
+                scores[i] = static_cast<int>((static_cast<double>(xSum) / totalPainted) * (100.0 / static_cast<double>(GridSize - 1)));
         }
 
         // Sort chain by routing score ascending (left-biased pixels processed first)

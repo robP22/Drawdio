@@ -30,9 +30,9 @@ PedalDefinition makeDefinition(DspModuleType type, const char* displayName,
     };
 }
 
-const std::array<PedalDefinition, 24>& definitions()
+const std::array<PedalDefinition, 23>& definitions()
 {
-    static const std::array<PedalDefinition, 24> defs {{
+    static const std::array<PedalDefinition, 23> defs {{
 makeDefinition(DspModuleType::BYPASS, "Bypass",             "Mix",    "",       "",       ""),
         makeDefinition(DspModuleType::WAVESHAPER_DISTORTION, "Waveshaper Dist.",   "Tone",   "Sym",   "Drive",  "Level"),
         makeDefinition(DspModuleType::MICROPITCH_CHORUS,     "MicroPitch Chorus",  "Mix",    "Depth", "Detune", "Rate"),
@@ -56,7 +56,6 @@ makeDefinition(DspModuleType::BYPASS, "Bypass",             "Mix",    "",       
         makeDefinition(DspModuleType::SPECTRAL_FILTER,       "Spectral Filter",    "Width",  "Center","Q",      "Level"),
         makeDefinition(DspModuleType::CONVOLUTION_SPACE,     "Convolution Space",  "Mix",    "Space", "Size",   "Damp"),
         makeDefinition(DspModuleType::RANDOM_MODULATOR,      "Random Modulator",   "Depth",  "Smooth","Rate",   "Shape"),
-        makeDefinition(DspModuleType::AUTOMATION_GENERATOR,  "Auto. Generator",    "Depth",  "Curve", "Rate",   "Offset"),
     }};
     return defs;
 }

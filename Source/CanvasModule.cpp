@@ -42,6 +42,16 @@ CanvasModule::CanvasModule(const ResourceManager& resources, const IThemeProvide
         m_pixelCanvas.setBrushRadius(radius);
     });
 
+    m_palette.setOnPartyMode([this](bool on)
+    {
+        m_pixelCanvas.setPartyModeEnabled(on);
+    });
+
+    m_pixelCanvas.setOnColorChanged([this](PixelCanvasComponent::PixelColor color)
+    {
+        m_palette.setSelectedColor(static_cast<uint8_t>(color));
+    });
+
     m_pixelCanvas.setOnFillModeChanged([this](bool active)
     {
         m_palette.setFillButtonState(active);
@@ -53,9 +63,6 @@ CanvasModule::CanvasModule(const ResourceManager& resources, const IThemeProvide
 void CanvasModule::resized()
 {
     auto full = getLocalBounds();
-    const int outerMargin = juce::roundToInt(full.getWidth() * GridLayout::CanvasOuterMarginRatio);
-    const int vertMargin = juce::roundToInt(full.getHeight() * GridLayout::CanvasVerticalMarginRatio);
-    auto area = full.reduced(outerMargin, vertMargin);
 
     const int paletteH = juce::roundToInt(full.getHeight() * GridLayout::PaletteHeightRatio);
     auto paletteArea = full.removeFromBottom(paletteH);
@@ -71,7 +78,7 @@ void CanvasModule::resized()
     m_palette.setImageBottomShift(static_cast<float>(m_paletteShift));
     m_palette.setContentCenterOffset(static_cast<float>(m_paletteCenterOffset));
 
-    const float canvasScale = PixelCanvasComponent::CanvasScaleRatio;
+    const float canvasScale = GridLayout::CanvasScaleRatio;
     const float canvasW = pixelCanvasBounds.getWidth() * canvasScale;
     const float canvasCX = pixelCanvasBounds.getX()
         + (pixelCanvasBounds.getWidth() - canvasW) * 0.5f

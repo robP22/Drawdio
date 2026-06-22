@@ -5,23 +5,18 @@
 
 namespace
 {
-PixelCanvasComponent::PixelColor pixelFromRaw(uint8_t raw)
+static uint8_t pixelToGridValue(PixelCanvasComponent::PixelColor c)
 {
-    switch (raw)
-    {
-        case 1: return PixelCanvasComponent::PixelColor::Blue;
-        case 2: return PixelCanvasComponent::PixelColor::Green;
-        case 3: return PixelCanvasComponent::PixelColor::Red;
-        case 4: return PixelCanvasComponent::PixelColor::White;
-        case 5: return PixelCanvasComponent::PixelColor::Black;
-        case 6: return PixelCanvasComponent::PixelColor::Yellow;
-        case 7: return PixelCanvasComponent::PixelColor::Brown;
-        case 8: return PixelCanvasComponent::PixelColor::Purple;
-        case 9: return PixelCanvasComponent::PixelColor::Grey;
-        case 10: return PixelCanvasComponent::PixelColor::Pink;
-        case 0: return PixelCanvasComponent::PixelColor::Transparent;
-        default: return PixelCanvasComponent::PixelColor::Transparent;
-    }
+    return (c == PixelCanvasComponent::PixelColor::Transparent) ? 0
+         : (c == PixelCanvasComponent::PixelColor::Black) ? 5
+         : static_cast<uint8_t>(c);
+}
+
+static PixelCanvasComponent::PixelColor gridValueToPixel(uint8_t raw)
+{
+    return (raw == 0) ? PixelCanvasComponent::PixelColor::Transparent
+         : (raw == 5) ? PixelCanvasComponent::PixelColor::Black
+         : static_cast<PixelCanvasComponent::PixelColor>(raw);
 }
 }
 
@@ -31,6 +26,7 @@ PixelCanvasComponent::PixelCanvasComponent(const ResourceManager& resources, con
     pixels.fill(PixelColor::Transparent);
     m_activeStroke.reserve(512);
     m_undoStack.reserve(MaxUndoLevels);
+    m_fillChanges.reserve(TotalCells);
 
     rebuildGridCache();
 }
@@ -38,20 +34,46 @@ PixelCanvasComponent::PixelCanvasComponent(const ResourceManager& resources, con
 void PixelCanvasComponent::resized()
 {
     m_overlayDirty = true;
-    rebuildBrushTip();
     repaint();
+
+    constexpr int gs = 256;
+    m_grainOverlay = juce::Image(juce::Image::ARGB, gs, gs, true);
+    if (m_grainOverlay.isValid())
+    {
+        juce::Graphics grainG(m_grainOverlay);
+        auto& rng = juce::Random::getSystemRandom();
+        for (int y = 0; y < gs; y += 4)
+            for (int x = 0; x < gs; x += 4)
+            {
+                grainG.setColour(juce::Colour(static_cast<uint8_t>(255), static_cast<uint8_t>(255), static_cast<uint8_t>(255), static_cast<uint8_t>(rng.nextInt(5))));
+                grainG.fillRect(static_cast<float>(x), static_cast<float>(y), 4.0f, 4.0f);
+            }
+    }
+}
+
+PixelCanvasComponent::CanvasLayout PixelCanvasComponent::computeCanvasLayout() const
+{
+    CanvasLayout cl;
+    cl.canvasW = getWidth() * GridLayout::CanvasScaleRatio;
+    cl.canvasH = getHeight() * GridLayout::CanvasScaleRatio;
+    cl.cw = juce::jmax(1, static_cast<int>(cl.canvasW));
+    cl.ch = juce::jmax(1, static_cast<int>(cl.canvasH));
+    cl.offsetX = (getWidth() - cl.canvasW) / 2.0f + getWidth() * GridLayout::CanvasCenterXShiftRatio;
+    cl.offsetY = (m_canvasTopOffset > 0)
+        ? static_cast<float>(m_canvasTopOffset)
+        : (getHeight() - cl.canvasH) / 2.0f + getHeight() * GridLayout::CanvasCenterYShiftRatio;
+    cl.cellW = cl.canvasW / GridSize;
+    cl.cellH = cl.canvasH / GridSize;
+    return cl;
 }
 
 void PixelCanvasComponent::paint(juce::Graphics& g)
 {
-    const float canvasW = getWidth() * CanvasScaleRatio;
-    const float canvasH = getHeight() * CanvasScaleRatio;
-    const int cx = static_cast<int>((getWidth() - canvasW) / 2.0f + getWidth() * GridLayout::CanvasCenterXShiftRatio);
-    const int cy = (m_canvasTopOffset > 0)
-        ? m_canvasTopOffset
-        : static_cast<int>((getHeight() - canvasH) / 2.0f + getHeight() * GridLayout::CanvasCenterYShiftRatio);
-    const int cw = juce::jmax(1, static_cast<int>(canvasW));
-    const int ch = juce::jmax(1, static_cast<int>(canvasH));
+    auto cl = computeCanvasLayout();
+    const int cx = static_cast<int>(cl.offsetX);
+    const int cy = static_cast<int>(cl.offsetY);
+    const int cw = cl.cw;
+    const int ch = cl.ch;
 
     const auto& tex = m_resources.getTexture(ResourceManager::TextureId::CanvasTexture);
     if (tex.isValid())
@@ -61,7 +83,15 @@ void PixelCanvasComponent::paint(juce::Graphics& g)
         rebuildOverlay();
 
     if (m_pixelOverlay.isValid())
+    {
+        g.setOpacity(0.88f);
         g.drawImageAt(m_pixelOverlay, cx, cy);
+        g.setOpacity(1.0f);
+    }
+
+    if (m_grainOverlay.isValid())
+        g.drawImage(m_grainOverlay, cx, cy, cw, ch,
+                    0, 0, m_grainOverlay.getWidth(), m_grainOverlay.getHeight());
 }
 
 juce::Point<int> PixelCanvasComponent::gridCoordsFromUI(int uiX, int uiY) const
@@ -70,20 +100,31 @@ juce::Point<int> PixelCanvasComponent::gridCoordsFromUI(int uiX, int uiY) const
     if (bounds.isEmpty())
         return {};
 
-    const float canvasW = bounds.getWidth() * CanvasScaleRatio;
-    const float canvasH = bounds.getHeight() * CanvasScaleRatio;
-    const float offsetX = (bounds.getWidth() - canvasW) / 2.0f + bounds.getWidth() * GridLayout::CanvasCenterXShiftRatio;
-    const float offsetY = (m_canvasTopOffset > 0)
-        ? static_cast<float>(m_canvasTopOffset)
-        : (bounds.getHeight() - canvasH) / 2.0f + bounds.getHeight() * GridLayout::CanvasCenterYShiftRatio;
+    auto cl = computeCanvasLayout();
 
-    const int relX = static_cast<int>(static_cast<float>(uiX) - offsetX);
-    const int relY = static_cast<int>(static_cast<float>(uiY) - offsetY);
+    float nx = (static_cast<float>(uiX) - cl.offsetX) / cl.canvasW;
+    float ny = (static_cast<float>(uiY) - cl.offsetY) / cl.canvasH;
 
-    const int gridX = (relX * GridSize) / juce::jmax(1, static_cast<int>(canvasW));
-    const int gridY = (relY * GridSize) / juce::jmax(1, static_cast<int>(canvasH));
-    return { juce::jlimit(0, GridSize - 1, gridX),
-             juce::jlimit(0, GridSize - 1, gridY) };
+    if (m_partyModeEnabled)
+    {
+        bool outside = (nx < 0.0f || nx > 1.0f || ny < 0.0f || ny > 1.0f);
+        if (outside && !m_bounceActive) { m_bounceActive = true; m_justBounced = true; }
+        else if (!outside && m_bounceActive) { m_bounceActive = false; }
+
+        auto fold = [](float v) -> float {
+            v = std::fmod(std::abs(v), 2.0f);
+            return (v > 1.0f) ? 2.0f - v : v;
+        };
+
+        nx = fold(nx);
+        ny = fold(ny);
+    }
+
+    int gridX = juce::jlimit(0, GridSize - 1,
+        static_cast<int>(nx * static_cast<float>(GridSize - 1)));
+    int gridY = juce::jlimit(0, GridSize - 1,
+        static_cast<int>(ny * static_cast<float>(GridSize - 1)));
+    return { gridX, gridY };
 }
 
 juce::Rectangle<int> PixelCanvasComponent::cellBoundsForIndex(int index) const
@@ -94,20 +135,12 @@ juce::Rectangle<int> PixelCanvasComponent::cellBoundsForIndex(int index) const
     const int x = index % GridSize;
     const int y = index / GridSize;
 
-    const float canvasW = getWidth() * CanvasScaleRatio;
-    const float canvasH = getHeight() * CanvasScaleRatio;
-    const float offsetX = (getWidth() - canvasW) / 2.0f + getWidth() * GridLayout::CanvasCenterXShiftRatio;
-    const float offsetY = (m_canvasTopOffset > 0)
-        ? static_cast<float>(m_canvasTopOffset)
-        : (getHeight() - canvasH) / 2.0f + getHeight() * GridLayout::CanvasCenterYShiftRatio;
+    auto cl = computeCanvasLayout();
 
-    const float cellW = canvasW / GridSize;
-    const float cellH = canvasH / GridSize;
-
-    return juce::Rectangle<float>(offsetX + static_cast<float>(x) * cellW,
-                                   offsetY + static_cast<float>(y) * cellH,
-                                   cellW * GridLayout::CellOverdrawRatio,
-                                   cellH * GridLayout::CellOverdrawRatio).getSmallestIntegerContainer();
+    return juce::Rectangle<float>(cl.offsetX + static_cast<float>(x) * cl.cellW,
+                                   cl.offsetY + static_cast<float>(y) * cl.cellH,
+                                   cl.cellW * GridLayout::CellOverdrawRatio,
+                                   cl.cellH * GridLayout::CellOverdrawRatio).getSmallestIntegerContainer();
 }
 
 void PixelCanvasComponent::beginStroke()
@@ -117,7 +150,7 @@ void PixelCanvasComponent::beginStroke()
 
     m_activeStrokeOpen = true;
     m_activeStroke.clear();
-    m_activeChangeLookup.clear();
+    m_redoStack.clear();
 }
 
 void PixelCanvasComponent::commitStroke(bool)
@@ -139,8 +172,6 @@ void PixelCanvasComponent::commitStroke(bool)
 
 void PixelCanvasComponent::rasterizeBrushStroke(juce::Point<int> from, juce::Point<int> to)
 {
-    m_brushPainting = true;
-
     float dx = static_cast<float>(to.x - from.x);
     float dy = static_cast<float>(to.y - from.y);
     float dist = std::sqrt(dx * dx + dy * dy);
@@ -160,8 +191,6 @@ void PixelCanvasComponent::rasterizeBrushStroke(juce::Point<int> from, juce::Poi
                 if (d2 <= m_brushRadius * m_brushRadius + 0.25f)
                     setPixel(gx, gy, m_currentColor);
             }
-        stampBrushTip(static_cast<float>(from.x), static_cast<float>(from.y));
-        m_brushPainting = false;
         return;
     }
 
@@ -189,55 +218,7 @@ void PixelCanvasComponent::rasterizeBrushStroke(juce::Point<int> from, juce::Poi
                 if (d2 <= radiusSq)
                     setPixel(gx, gy, m_currentColor);
             }
-
-        if (i % 2 == 0)
-            stampBrushTip(cx, cy);
     }
-    m_brushPainting = false;
-}
-
-void PixelCanvasComponent::stampBrushTip(float gridX, float gridY)
-{
-    if (!m_pixelOverlay.isValid() || !m_brushTipImage.isValid())
-        return;
-
-    const float canvasW = getWidth() * CanvasScaleRatio;
-    const float canvasH = getHeight() * CanvasScaleRatio;
-    const float cellW = canvasW / GridSize;
-    const float cellH = canvasH / GridSize;
-
-    const float uiX = gridX * cellW;
-    const float uiY = gridY * cellH;
-    const float halfW = static_cast<float>(m_brushTipImage.getWidth()) * 0.5f;
-    const float halfH = static_cast<float>(m_brushTipImage.getHeight()) * 0.5f;
-
-    juce::Graphics g(m_pixelOverlay);
-    g.drawImageAt(m_brushTipImage, static_cast<int>(uiX - halfW), static_cast<int>(uiY - halfH));
-}
-
-void PixelCanvasComponent::rebuildBrushTip()
-{
-    const float canvasW = getWidth() * CanvasScaleRatio;
-    const int cw = juce::jmax(1, static_cast<int>(canvasW));
-    if (cw < 2) return;
-
-    const float cellW = canvasW / GridSize;
-    const int tipSize = juce::jmax(4, static_cast<int>(m_brushRadius * 3.0f * cellW));
-    const int half = tipSize / 2;
-
-    m_brushTipImage = juce::Image(juce::Image::ARGB, tipSize, tipSize, true);
-    if (!m_brushTipImage.isValid()) return;
-
-    juce::Graphics g(m_brushTipImage);
-    auto colour = m_theme.canvasPixelColour(static_cast<uint8_t>(m_currentColor));
-
-    juce::ColourGradient grad(
-        colour,
-        static_cast<float>(half), static_cast<float>(half),
-        colour.withAlpha(0.0f),
-        static_cast<float>(half), static_cast<float>(tipSize) * 1.2f, true);
-    g.setGradientFill(grad);
-    g.fillEllipse(0.0f, 0.0f, static_cast<float>(tipSize), static_cast<float>(tipSize));
 }
 
 void PixelCanvasComponent::setPixel(int gridX, int gridY, PixelColor color)
@@ -251,25 +232,13 @@ void PixelCanvasComponent::setPixel(int gridX, int gridY, PixelColor color)
         return;
 
     if (m_activeStrokeOpen)
-    {
-        auto it = m_activeChangeLookup.find(index);
-        if (it == m_activeChangeLookup.end())
-        {
-            m_activeChangeLookup[index] = static_cast<int>(m_activeStroke.size());
-            m_activeStroke.push_back({ static_cast<uint16_t>(index), previous, color });
-        }
-        else
-        {
-            m_activeStroke[static_cast<size_t>(it->second)].current = color;
-        }
-    }
+        m_activeStroke.push_back({ static_cast<uint16_t>(index), previous, color });
 
     applyPixelValue(index, color);
-    if (!m_brushPainting)
-        repaint(cellBoundsForIndex(index).expanded(1));
+    repaint(cellBoundsForIndex(index).expanded(1));
 }
 
-void PixelCanvasComponent::applyPixelValue(int index, PixelColor color)
+void PixelCanvasComponent::applyPixelValue(int index, PixelColor color, bool doOverlay)
 {
     const auto previous = pixels[static_cast<size_t>(index)];
     if (previous == PixelColor::Transparent && color != PixelColor::Transparent)
@@ -278,9 +247,8 @@ void PixelCanvasComponent::applyPixelValue(int index, PixelColor color)
         --m_changedCellCount;
 
     pixels[static_cast<size_t>(index)] = color;
-    m_gridCache[static_cast<size_t>(index)] = (color == PixelColor::Transparent) ? 0 :
-        (color == PixelColor::Black) ? 5 : static_cast<uint8_t>(color);
-    if (!m_brushPainting)
+    m_gridCache[static_cast<size_t>(index)] = pixelToGridValue(color);
+    if (doOverlay)
         updateOverlayPixel(index);
 }
 
@@ -296,14 +264,13 @@ void PixelCanvasComponent::mouseDown(const juce::MouseEvent& event)
 
     m_drawing = true;
     beginStroke();
-    rebuildBrushTip();
 
     if (m_onPenDown)
         m_onPenDown();
 
     auto pos = gridCoordsFromUI(event.x, event.y);
+    rasterizeBrushStroke(pos, pos);
     m_lastDrawPos = pos;
-    setPixel(pos.x, pos.y, m_currentColor);
 }
 
 void PixelCanvasComponent::mouseDrag(const juce::MouseEvent& event)
@@ -312,9 +279,18 @@ void PixelCanvasComponent::mouseDrag(const juce::MouseEvent& event)
         return;
 
     auto pos = gridCoordsFromUI(event.x, event.y);
+
+    if (m_justBounced)
+    {
+        auto newColor = randomPartyColor();
+        m_currentColor = newColor;
+        if (m_onColorChanged)
+            m_onColorChanged(newColor);
+        m_justBounced = false;
+    }
+
     rasterizeBrushStroke(m_lastDrawPos, pos);
     m_lastDrawPos = pos;
-    repaint();
 }
 
 void PixelCanvasComponent::mouseUp(const juce::MouseEvent&)
@@ -341,14 +317,6 @@ void PixelCanvasComponent::mouseEnter(const juce::MouseEvent&)
 void PixelCanvasComponent::mouseExit(const juce::MouseEvent&)
 {
     setMouseCursor(juce::MouseCursor::NormalCursor);
-
-    if (m_activeStrokeOpen)
-    {
-        m_activeStroke.clear();
-        m_activeChangeLookup.clear();
-        m_activeStrokeOpen = false;
-        m_drawing = false;
-    }
 }
 
 void PixelCanvasComponent::clearCanvas()
@@ -387,16 +355,17 @@ bool PixelCanvasComponent::undo()
 
     auto transaction = std::move(m_undoStack.back());
     m_undoStack.pop_back();
+    m_redoStack.push_back(std::move(transaction));
+    auto& t = m_redoStack.back();
 
-    for (auto it = transaction.rbegin(); it != transaction.rend(); ++it)
-        applyPixelValue(static_cast<int>(it->index), it->previous);
+    for (auto it = t.rbegin(); it != t.rend(); ++it)
+        applyPixelValue(static_cast<int>(it->index), it->previous, false);
+    m_overlayDirty = true;
 
-    rebuildOverlay();
-
-    if (transaction.size() > 512)
+    if (t.size() > 512)
         repaint();
     else
-        for (const auto& change : transaction)
+        for (const auto& change : t)
             repaint(cellBoundsForIndex(static_cast<int>(change.index)).expanded(1));
 
     notifySnapshot();
@@ -405,10 +374,99 @@ bool PixelCanvasComponent::undo()
     return true;
 }
 
+bool PixelCanvasComponent::redo()
+{
+    if (m_redoStack.empty())
+        return false;
+
+    auto transaction = std::move(m_redoStack.back());
+    m_redoStack.pop_back();
+    m_undoStack.push_back(std::move(transaction));
+    auto& t = m_undoStack.back();
+
+    for (auto it = t.begin(); it != t.end(); ++it)
+        applyPixelValue(static_cast<int>(it->index), it->current, false);
+    m_overlayDirty = true;
+
+    if (t.size() > 512)
+        repaint();
+    else
+        for (const auto& change : t)
+            repaint(cellBoundsForIndex(static_cast<int>(change.index)).expanded(1));
+
+    notifySnapshot();
+    return true;
+}
+
+std::vector<uint8_t> PixelCanvasComponent::captureUndoData() const
+{
+    if (m_undoStack.empty()) return {};
+
+    std::vector<uint8_t> data;
+    auto writeU32 = [&](uint32_t v) {
+        data.push_back(static_cast<uint8_t>(v));
+        data.push_back(static_cast<uint8_t>(v >> 8));
+        data.push_back(static_cast<uint8_t>(v >> 16));
+        data.push_back(static_cast<uint8_t>(v >> 24));
+    };
+
+    writeU32(static_cast<uint32_t>(m_undoStack.size()));
+    for (auto& transaction : m_undoStack)
+    {
+        writeU32(static_cast<uint32_t>(transaction.size()));
+        for (auto& change : transaction)
+        {
+            data.push_back(static_cast<uint8_t>(change.index));
+            data.push_back(static_cast<uint8_t>(change.index >> 8));
+            data.push_back(static_cast<uint8_t>(change.previous));
+            data.push_back(static_cast<uint8_t>(change.current));
+        }
+    }
+    return data;
+}
+
+void PixelCanvasComponent::applyUndoData(const std::vector<uint8_t>& data)
+{
+    m_undoStack.clear();
+    m_activeStroke.clear();
+    m_activeStrokeOpen = false;
+
+    if (data.empty()) return;
+
+    size_t pos = 0;
+    auto readU32 = [&]() -> uint32_t {
+        if (pos + 4 > data.size()) return 0;
+        uint32_t v = data[pos] | (static_cast<uint32_t>(data[pos + 1]) << 8)
+             | (static_cast<uint32_t>(data[pos + 2]) << 16)
+             | (static_cast<uint32_t>(data[pos + 3]) << 24);
+        pos += 4;
+        return v;
+    };
+
+    uint32_t numTransactions = readU32();
+    for (uint32_t t = 0; t < numTransactions; ++t)
+    {
+        uint32_t numChanges = readU32();
+        std::vector<PixelChange> transaction;
+        transaction.reserve(numChanges);
+
+        for (uint32_t c = 0; c < numChanges; ++c)
+        {
+            if (pos + 4 > data.size()) return;
+            uint16_t index = static_cast<uint16_t>(data[pos] | (data[pos + 1] << 8));
+            pos += 2;
+            auto previous = static_cast<PixelColor>(data[pos++]);
+            auto current  = static_cast<PixelColor>(data[pos++]);
+            transaction.push_back({ index, previous, current });
+        }
+        m_undoStack.push_back(std::move(transaction));
+    }
+}
+
 void PixelCanvasComponent::setGridData(const std::array<uint8_t, TotalCells>& data)
 {
     for (size_t i = 0; i < data.size(); ++i)
-        pixels[i] = pixelFromRaw(data[i]);
+        pixels[i] = gridValueToPixel(data[i]);
 
     rebuildGridCache();
     m_overlayDirty = true;
@@ -423,8 +481,7 @@ void PixelCanvasComponent::rebuildGridCache()
     m_changedCellCount = 0;
     for (size_t i = 0; i < pixels.size(); ++i)
     {
-        m_gridCache[i] = (pixels[i] == PixelColor::Transparent) ? 0 :
-            (pixels[i] == PixelColor::Black) ? 5 : static_cast<uint8_t>(pixels[i]);
+        m_gridCache[i] = pixelToGridValue(pixels[i]);
         if (pixels[i] != PixelColor::Transparent)
             ++m_changedCellCount;
     }
@@ -432,10 +489,9 @@ void PixelCanvasComponent::rebuildGridCache()
 
 void PixelCanvasComponent::rebuildOverlay()
 {
-    const float canvasW = getWidth() * CanvasScaleRatio;
-    const float canvasH = getHeight() * CanvasScaleRatio;
-    const int cw = juce::jmax(1, static_cast<int>(canvasW));
-    const int ch = juce::jmax(1, static_cast<int>(canvasH));
+    auto cl = computeCanvasLayout();
+    const int cw = cl.cw;
+    const int ch = cl.ch;
 
     if (cw < 2 || ch < 2)
     {
@@ -447,21 +503,33 @@ void PixelCanvasComponent::rebuildOverlay()
     if (!m_pixelOverlay.isValid())
         return;
 
-    juce::Graphics g(m_pixelOverlay);
-    const float cellW = canvasW / GridSize;
-    const float cellH = canvasH / GridSize;
+    const float cellW = cl.cellW;
+    const float cellH = cl.cellH;
 
-    for (size_t i = 0; i < pixels.size(); ++i)
     {
-        if (pixels[i] == PixelColor::Transparent)
-            continue;
+        juce::Image::BitmapData bd(m_pixelOverlay, juce::Image::BitmapData::writeOnly);
 
-        const int x = static_cast<int>(i) % GridSize;
-        const int y = static_cast<int>(i) / GridSize;
-        g.setColour(m_theme.canvasPixelColour(static_cast<uint8_t>(pixels[i])));
-        g.fillRect(static_cast<float>(x) * cellW,
-                   static_cast<float>(y) * cellH,
-                   cellW + 1.0f, cellH + 1.0f);
+        for (size_t i = 0; i < pixels.size(); ++i)
+        {
+            if (pixels[i] == PixelColor::Transparent)
+                continue;
+
+            const int x = static_cast<int>(i) % GridSize;
+            const int y = static_cast<int>(i) / GridSize;
+            const int px = static_cast<int>(std::round(static_cast<float>(x) * cellW));
+            const int py = static_cast<int>(std::round(static_cast<float>(y) * cellH));
+            const int pw = std::max(1, static_cast<int>(std::round(static_cast<float>(x + 1) * cellW)) - px);
+            const int ph = std::max(1, static_cast<int>(std::round(static_cast<float>(y + 1) * cellH)) - py);
+
+            auto col = m_theme.canvasPixelColour(static_cast<uint8_t>(pixels[i]));
+
+            for (int sy = 0; sy < ph; ++sy)
+            {
+                auto* row = reinterpret_cast<juce::PixelARGB*>(bd.getPixelPointer(px, py + sy));
+                for (int sx = 0; sx < pw; ++sx)
+                    row[sx].setARGB(col.getAlpha(), col.getRed(), col.getGreen(), col.getBlue());
+            }
+        }
     }
 
     m_overlayDirty = false;
@@ -475,24 +543,30 @@ void PixelCanvasComponent::updateOverlayPixel(int index)
         return;
     }
 
-    const float canvasW = getWidth() * CanvasScaleRatio;
-    const float canvasH = getHeight() * CanvasScaleRatio;
-    const float cellW = canvasW / GridSize;
-    const float cellH = canvasH / GridSize;
+    auto cl = computeCanvasLayout();
+    const float cellW = cl.cellW;
+    const float cellH = cl.cellH;
     const int x = index % GridSize;
     const int y = index / GridSize;
 
-    juce::Graphics g(m_pixelOverlay);
-    g.setColour(juce::Colours::transparentBlack);
-    g.fillRect(static_cast<float>(x) * cellW,
-               static_cast<float>(y) * cellH,
-               cellW + 1.0f, cellH + 1.0f);
-    if (pixels[static_cast<size_t>(index)] != PixelColor::Transparent)
+    const int px = static_cast<int>(std::round(static_cast<float>(x) * cellW));
+    const int py = static_cast<int>(std::round(static_cast<float>(y) * cellH));
+    const int pw = std::max(1, static_cast<int>(std::round(static_cast<float>(x + 1) * cellW)) - px);
+    const int ph = std::max(1, static_cast<int>(std::round(static_cast<float>(y + 1) * cellH)) - py);
+
+    auto col = (pixels[static_cast<size_t>(index)] != PixelColor::Transparent)
+        ? m_theme.canvasPixelColour(static_cast<uint8_t>(pixels[static_cast<size_t>(index)]))
+        : juce::Colours::transparentBlack;
+
     {
-        g.setColour(m_theme.canvasPixelColour(static_cast<uint8_t>(pixels[static_cast<size_t>(index)])));
-        g.fillRect(static_cast<float>(x) * cellW,
-                   static_cast<float>(y) * cellH,
-                   cellW + 1.0f, cellH + 1.0f);
+        juce::Image::BitmapData bd(m_pixelOverlay, juce::Image::BitmapData::writeOnly);
+
+        for (int sy = 0; sy < ph; ++sy)
+        {
+            auto* row = reinterpret_cast<juce::PixelARGB*>(bd.getPixelPointer(px, py + sy));
+            for (int sx = 0; sx < pw; ++sx)
+                row[sx].setARGB(col.getAlpha(), col.getRed(), col.getGreen(), col.getBlue());
+        }
     }
 }
 
@@ -508,6 +582,23 @@ void PixelCanvasComponent::setFillMode(bool active)
     setMouseCursor(active ? juce::MouseCursor::CrosshairCursor
                           : juce::MouseCursor::NormalCursor);
     repaint();
+}
+
+void PixelCanvasComponent::setPartyModeEnabled(bool on)
+{
+    m_partyModeEnabled = on;
+    m_bounceActive = false;
+    m_justBounced = false;
+}
+
+PixelCanvasComponent::PixelColor PixelCanvasComponent::randomPartyColor()
+{
+    static constexpr PixelColor colors[] = {
+        PixelColor::Black, PixelColor::Brown, PixelColor::Purple,
+        PixelColor::Blue, PixelColor::Green, PixelColor::Grey,
+        PixelColor::Pink, PixelColor::Yellow, PixelColor::Red, PixelColor::White
+    };
+    return colors[juce::Random::getSystemRandom().nextInt(10)];
 }
 
 void PixelCanvasComponent::floodFill(int startX, int startY)
@@ -526,8 +617,7 @@ void PixelCanvasComponent::floodFill(int startX, int startY)
     m_fillVisited.assign(TotalCells, 0);
     m_fillVisited[startIdx] = 1;
 
-    std::vector<PixelChange> fillChanges;
-    fillChanges.reserve(TotalCells);
+    m_fillChanges.clear();
 
     static constexpr int dx[4] = {-1, 1, 0, 0};
     static constexpr int dy[4] = {0, 0, -1, 1};
@@ -536,7 +626,7 @@ void PixelCanvasComponent::floodFill(int startX, int startY)
     while (head < m_fillQueue.size())
     {
         int idx = m_fillQueue[head++];
-        fillChanges.push_back({static_cast<uint16_t>(idx), targetColor, fillColor});
+        m_fillChanges.push_back({static_cast<uint16_t>(idx), targetColor, fillColor});
 
         int x = idx % GridSize;
         int y = idx / GridSize;
@@ -557,22 +647,24 @@ void PixelCanvasComponent::floodFill(int startX, int startY)
         }
     }
 
-    if (fillChanges.empty())
+    if (m_fillChanges.empty())
         return;
 
-    for (const auto& ch : fillChanges)
+    for (const auto& ch : m_fillChanges)
     {
         size_t i = static_cast<size_t>(ch.index);
         pixels[i] = fillColor;
-        m_gridCache[i] = (fillColor == PixelColor::Black) ? 5 : static_cast<uint8_t>(fillColor);
-        ++m_changedCellCount;
+        m_gridCache[i] = pixelToGridValue(fillColor);
     }
 
-    m_undoStack.push_back(std::move(fillChanges));
+    m_undoStack.push_back({});
+    m_undoStack.back().swap(m_fillChanges);
     if (m_undoStack.size() > static_cast<size_t>(MaxUndoLevels))
         m_undoStack.erase(m_undoStack.begin());
 
-    rebuildOverlay();
+    // Schedule overlay rebuild — BFS already updated pixels array
+    m_overlayDirty = true;
+
     repaint();
     notifySnapshot();
 }

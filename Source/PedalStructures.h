@@ -6,7 +6,7 @@
 #include <vector>
 #include <array>
 
-constexpr int GridSize = 128;
+constexpr int GridSize = 256;
 constexpr int TotalCells = GridSize * GridSize;
 constexpr int PedalSlotCount = 6;
 
@@ -19,18 +19,28 @@ inline float colorWeight(uint8_t pixelVal)
 {
     switch (pixelVal)
     {
-        case 5:  return -1.0f;   // Black
-        case 7:  return -0.8f;   // Brown
-        case 8:  return -0.6f;   // Purple
-        case 1:  return -0.4f;   // Blue
-        case 2:  return -0.2f;   // Green
-        case 9:  return  0.0f;   // Grey
-        case 10: return  0.2f;   // Pink
-        case 6:  return  0.4f;   // Yellow
-        case 3:  return  0.6f;   // Red
-        case 4:  return  1.0f;   // White
+        case 5:  return -1.0f;   // Black   (paired with Brown)
+        case 7:  return  0.9f;   // Brown   (paired with Black)
+        case 8:  return -0.55f;  // Purple  (paired with Violet)
+        case 12: return  0.6f;   // Violet  (paired with Purple)
+        case 1:  return -0.8f;   // Blue    (paired with Green)
+        case 2:  return  0.55f;  // Green   (paired with Blue)
+        case 9:  return  0.0f;   // Grey    (neutral)
+        case 10: return -0.6f;   // Pink    (paired with Red)
+        case 6:  return  0.7f;   // Yellow  (paired with Orange)
+        case 11: return -0.9f;   // Orange  (paired with Yellow)
+        case 3:  return  0.8f;   // Red     (paired with Pink)
+        case 4:  return -0.7f;   // White   (bright)
         default: return  0.0f;
     }
+}
+
+inline float interpolateDelayRead(const std::vector<float>& buf, float pos) 
+{
+    size_t idx = static_cast<size_t>(pos) % buf.size();
+    float frac = pos - std::floor(pos);
+    size_t next = (idx + 1) % buf.size();
+    return buf[idx] * (1.0f - frac) + buf[next] * frac;
 }
 
 enum class DspModuleType : uint8_t
@@ -57,8 +67,7 @@ enum class DspModuleType : uint8_t
     GRAIN_SCRUBBER,
     SPECTRAL_FILTER,
     CONVOLUTION_SPACE,
-    RANDOM_MODULATOR,
-    AUTOMATION_GENERATOR
+    RANDOM_MODULATOR
 };
 
 // Parameter token identifiers used across the system.
@@ -130,8 +139,10 @@ inline float calculatePixelAccumulation(const std::array<uint8_t, TotalCells>& g
                       : (startCell + cellsPerParam);
 
     float accumulator = 0.0f;
+    float sumAbs = 0.0f;
     int paintedCount = 0;
     int totalCells = 0;
+    bool colorPresent[13] = {false};
 
     for (int localCell = startCell; localCell < endCell; ++localCell)
     {
@@ -144,16 +155,25 @@ inline float calculatePixelAccumulation(const std::array<uint8_t, TotalCells>& g
         if (val != 0)
         {
             ++paintedCount;
-            accumulator += colorWeight(val);
+            float w = colorWeight(val);
+            accumulator += w;
+            sumAbs += std::abs(w);
+            colorPresent[val] = true;
         }
     }
 
     if (totalCells == 0 || paintedCount == 0)
         return 0.5f;
 
+    int uniqueCount = 0;
+    for (int i = 1; i <= 12; ++i)
+        if (colorPresent[i]) ++uniqueCount;
+
     float coverage = static_cast<float>(paintedCount) / static_cast<float>(totalCells);
     float avgWeight = accumulator / static_cast<float>(paintedCount);
-    float bias = avgWeight * 0.25f + 0.5f;
+    float avgAbs = sumAbs / static_cast<float>(paintedCount);
+    float diversity = static_cast<float>(uniqueCount) / 12.0f;
+    float bias = 0.5f + avgWeight * (0.25f + diversity * 0.5f + avgAbs * 0.25f);
     float result = bias * coverage + 0.5f * (1.0f - coverage);
 
     return (result < 0.0f) ? 0.0f : (result > 1.0f ? 1.0f : result);
@@ -353,15 +373,9 @@ inline float processGranularSample(float input, GranularProcessorState& state,
     float pos2 = state.grain2Pos;
     if (pos2 >= bufSizeF) pos2 -= bufSizeF;
 
-    size_t idx1 = static_cast<size_t>(pos1);
-    float frac1 = pos1 - static_cast<float>(idx1);
-    size_t next1 = (idx1 + 1) % bufSize;
-    float s1 = state.delayBuf[idx1] * (1.0f - frac1) + state.delayBuf[next1] * frac1;
+    float s1 = interpolateDelayRead(state.delayBuf, pos1);
 
-    size_t idx2 = static_cast<size_t>(pos2);
-    float frac2 = pos2 - static_cast<float>(idx2);
-    size_t next2 = (idx2 + 1) % bufSize;
-    float s2 = state.delayBuf[idx2] * (1.0f - frac2) + state.delayBuf[next2] * frac2;
+    float s2 = interpolateDelayRead(state.delayBuf, pos2);
 
     size_t wi1 = std::min(static_cast<size_t>(state.readPtr),
                           static_cast<size_t>(state.grainLen) - 1);

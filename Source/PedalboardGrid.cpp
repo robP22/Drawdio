@@ -103,6 +103,17 @@ void PedalboardGrid::resized()
 
         m_pedalComponents[static_cast<size_t>(slot)]->setBounds(x, y, pedalW, pedalH);
     }
+
+    refreshJacks();
+}
+
+void PedalboardGrid::refreshJacks()
+{
+    for (int i = 0; i < PedalSlotCount; ++i)
+    {
+        m_cachedJacks[i * 2]     = { i, true,  m_pedalComponents[static_cast<size_t>(i)]->getInputJackPos() };
+        m_cachedJacks[i * 2 + 1] = { i, false, m_pedalComponents[static_cast<size_t>(i)]->getOutputJackPos() };
+    }
 }
 
 void PedalboardGrid::updateRouting(const std::vector<uint8_t>& routingOrder)
@@ -130,7 +141,7 @@ void PedalboardGrid::rebuildCableCache()
             if (pedal)
             {
                 const auto jackPos = pedal->getInputJackPos();
-                const juce::Point<float> entryPos(jackPos.x, 0.0f);
+                const juce::Point<float> entryPos(static_cast<float>(getWidth()) * 0.05f, 0.0f);
                 const float vertDist = jackPos.y - entryPos.y;
                 const float lift = vertDist * 0.4f;
                 const float offsetX = 30.0f;
@@ -154,7 +165,7 @@ void PedalboardGrid::rebuildCableCache()
             if (pedal)
             {
                 const auto jackPos = pedal->getOutputJackPos();
-                const juce::Point<float> exitPos(jackPos.x, 0.0f);
+                const juce::Point<float> exitPos(static_cast<float>(getWidth()) * 0.95f, 0.0f);
                 const float vertDist = jackPos.y - exitPos.y;
                 const float lift = vertDist * 0.4f;
                 const float offsetX = 30.0f;
@@ -200,6 +211,7 @@ void PedalboardGrid::syncPedals()
     for (auto& pedal : m_pedalComponents)
         if (pedal)
             pedal->syncFromProcessor();
+    refreshJacks();
 }
 
 void PedalboardGrid::drawRoutingCables(juce::Graphics& g)
@@ -260,8 +272,7 @@ void PedalboardGrid::drawInputCable(juce::Graphics& g)
     if (pedal == nullptr)
         return;
 
-    const auto jackPos = pedal->getInputJackPos();
-    const juce::Point<float> entryPos(jackPos.x, 0.0f);
+    const juce::Point<float> entryPos(static_cast<float>(getWidth()) * 0.05f, 0.0f);
 
     auto shadow = m_cachedInputPath;
     shadow.applyTransform(juce::AffineTransform::translation(3.0f, 7.0f));
@@ -299,8 +310,7 @@ void PedalboardGrid::drawOutputCable(juce::Graphics& g)
     if (pedal == nullptr)
         return;
 
-    const auto jackPos = pedal->getOutputJackPos();
-    const juce::Point<float> exitPos(jackPos.x, 0.0f);
+    const juce::Point<float> exitPos(static_cast<float>(getWidth()) * 0.95f, 0.0f);
 
     auto shadow = m_cachedOutputPath;
     shadow.applyTransform(juce::AffineTransform::translation(3.0f, 7.0f));
@@ -328,10 +338,9 @@ void PedalboardGrid::mouseDown(const juce::MouseEvent& event)
 
     if (jackIdx != -1)
     {
-        auto jacks = getJacks();
         m_isDraggingCable = true;
         m_dragSrcJackIdx = jackIdx;
-        m_dragStartPos = jacks[static_cast<size_t>(jackIdx)].pos;
+        m_dragStartPos = m_cachedJacks[static_cast<size_t>(jackIdx)].pos;
         m_dragCurrentPos = pos;
         repaint();
     }
@@ -356,9 +365,8 @@ void PedalboardGrid::mouseUp(const juce::MouseEvent& event)
 
     if (dstJackIdx != -1 && dstJackIdx != m_dragSrcJackIdx)
     {
-        auto jacks = getJacks();
-        auto src = jacks[static_cast<size_t>(m_dragSrcJackIdx)];
-        auto dst = jacks[static_cast<size_t>(dstJackIdx)];
+        auto& src = m_cachedJacks[static_cast<size_t>(m_dragSrcJackIdx)];
+        auto& dst = m_cachedJacks[static_cast<size_t>(dstJackIdx)];
 
         if (!src.isInput && dst.isInput)
         {
@@ -371,25 +379,10 @@ void PedalboardGrid::mouseUp(const juce::MouseEvent& event)
     repaint();
 }
 
-std::vector<PedalboardGrid::JackInfo> PedalboardGrid::getJacks() const
-{
-    std::vector<JackInfo> jacks;
-    jacks.reserve(PedalSlotCount * 2);
-
-    for (int i = 0; i < PedalSlotCount; ++i)
-    {
-        jacks.push_back({ i, true, m_pedalComponents[static_cast<size_t>(i)]->getInputJackPos() });
-        jacks.push_back({ i, false, m_pedalComponents[static_cast<size_t>(i)]->getOutputJackPos() });
-    }
-
-    return jacks;
-}
-
 int PedalboardGrid::findJackAt(juce::Point<float> pos, float radius) const
 {
-    auto jacks = getJacks();
-    for (int i = 0; i < static_cast<int>(jacks.size()); ++i)
-        if (jacks[static_cast<size_t>(i)].pos.getDistanceFrom(pos) <= radius)
+    for (int i = 0; i < PedalSlotCount * 2; ++i)
+        if (m_cachedJacks[static_cast<size_t>(i)].pos.getDistanceFrom(pos) <= radius)
             return i;
 
     return -1;

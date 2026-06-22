@@ -11,7 +11,6 @@
 #include "Effects/SpectralFilterEffect.h"
 #include "Effects/ConvolutionSpaceEffect.h"
 #include "Effects/RandomModulatorEffect.h"
-#include "Effects/AutomationGeneratorEffect.h"
 #include <algorithm>
 #include <cmath>
 #include <utility>
@@ -46,7 +45,6 @@ std::unique_ptr<DspEffect> createEffectForTypeImpl(DspModuleType type)
         case DspModuleType::SPECTRAL_FILTER:          return std::make_unique<SpectralFilterEffect>();
         case DspModuleType::CONVOLUTION_SPACE:        return std::make_unique<ConvolutionSpaceEffect>();
         case DspModuleType::RANDOM_MODULATOR:         return std::make_unique<RandomModulatorEffect>();
-        case DspModuleType::AUTOMATION_GENERATOR:     return std::make_unique<AutomationGeneratorEffect>();
         default:                                      return nullptr;
     }
 }
@@ -62,6 +60,9 @@ UnifiedPedalProcessor::UnifiedPedalProcessor()
 
     for (auto& param : m_parameterCache)
         param.store(0.5f, std::memory_order_relaxed);
+
+    for (auto& g : m_pedalGains)
+        g.store(1.0f, std::memory_order_relaxed);
 }
 
 UnifiedPedalProcessor::~UnifiedPedalProcessor()
@@ -207,27 +208,6 @@ void UnifiedPedalProcessor::tryApplyDeferredConfig()
     }
 }
 
-float UnifiedPedalProcessor::readParam(uint16_t token, float fallback,
-                                       const PedalAssetPayload& config, uint8_t nodeIndex) const
-{
-    if (static_cast<size_t>(nodeIndex) < config.routingSlotOrder.size())
-    {
-        int physicalSlot = config.routingSlotOrder[static_cast<size_t>(nodeIndex)];
-        size_t cacheIdx = static_cast<size_t>(physicalSlot * 4 + token);
-        if (cacheIdx < 24)
-        {
-            uint32_t validMask = m_paramCacheValidMask.load(std::memory_order_acquire);
-            if ((validMask & (1u << cacheIdx)) != 0)
-                return m_parameterCache[cacheIdx].load(std::memory_order_relaxed);
-        }
-    }
-
-    for (auto& p : config.parameters)
-        if (p.parameterToken == token && p.targetDspNodeRegister == nodeIndex)
-            return p.currentValue;
-    return fallback;
-}
-
 std::vector<ParameterDescriptor> UnifiedPedalProcessor::getCurrentParams() const
 {
     const auto* current = m_currentConfig.load(std::memory_order_acquire);
@@ -285,6 +265,41 @@ void UnifiedPedalProcessor::clearParamOffsets()
 {
     m_paramOffsets.fill(0.0f);
     m_paramCacheValidMask.store(0, std::memory_order_release);
+}
+
+void UnifiedPedalProcessor::snapshotParamState()
+{
+    m_savedParamOffsets = m_paramOffsets;
+    m_savedParamMask = m_paramCacheValidMask.load(std::memory_order_relaxed);
+}
+
+void UnifiedPedalProcessor::restoreParamState()
+{
+    m_paramOffsets = m_savedParamOffsets;
+    m_paramCacheValidMask.store(m_savedParamMask, std::memory_order_release);
+}
+
+void UnifiedPedalProcessor::setKnobLink(int slot, int knob, bool linked, float strength)
+{
+    if (slot >= 0 && slot < PedalSlotCount && knob >= 0 && knob < 4)
+    {
+        m_knobLinks[slot][knob] = linked;
+        m_knobLinkStrengths[slot][knob] = linked ? strength : 0.0f;
+    }
+}
+
+bool UnifiedPedalProcessor::isKnobLinked(int slot, int knob) const
+{
+    if (slot >= 0 && slot < PedalSlotCount && knob >= 0 && knob < 4)
+        return m_knobLinks[slot][knob];
+    return false;
+}
+
+float UnifiedPedalProcessor::getKnobLinkStrength(int slot, int knob) const
+{
+    if (slot >= 0 && slot < PedalSlotCount && knob >= 0 && knob < 4)
+        return m_knobLinkStrengths[slot][knob];
+    return 0.0f;
 }
 
 float UnifiedPedalProcessor::getKnobDisplayValue(int slot, int knob, float compiledValue) const
@@ -353,6 +368,8 @@ void UnifiedPedalProcessor::processChainBlock(float** b, int c, int s, const Ped
             continue;
 
         uint32_t mask = m_paramCacheValidMask.load(std::memory_order_acquire);
+            if (static_cast<size_t>(idx) >= config.routingSlotOrder.size())
+                continue;
             int physSlot = config.routingSlotOrder[static_cast<size_t>(idx)];
             size_t baseIdx = static_cast<size_t>(physSlot) * 4;
             auto readCached = [&](uint16_t token, float fb) -> float {
@@ -372,6 +389,11 @@ void UnifiedPedalProcessor::processChainBlock(float** b, int c, int s, const Ped
                 readCached(ParamToken::Knob3, 0.5f)
             };
 
+            float autoVal = m_currentAutomationValue.load(std::memory_order_relaxed);
+            for (int k = 0; k < 4; ++k)
+                if (m_knobLinks[physSlot][k])
+                    params[k] = std::min(params[k] + autoVal * m_knobLinkStrengths[physSlot][k], 1.0f);
+
             int mi = effectPtr->mixKnobIndex();
             if (mi >= 0 && mi < 4)
             {
@@ -379,7 +401,7 @@ void UnifiedPedalProcessor::processChainBlock(float** b, int c, int s, const Ped
                     for (int smp = 0; smp < s; ++smp)
                         m_dryBuffer[static_cast<size_t>(ch)][static_cast<size_t>(smp)] = b[ch][smp];
 
-                effectPtr->processBlock(b, c, s, params);
+                effectPtr->processBlock(b, chCount, s, params);
 
                 float mix = params[mi];
                 for (int ch = 0; ch < chCount; ++ch)
@@ -392,7 +414,7 @@ void UnifiedPedalProcessor::processChainBlock(float** b, int c, int s, const Ped
             }
             else
             {
-                effectPtr->processBlock(b, c, s, params);
+                effectPtr->processBlock(b, chCount, s, params);
                 for (int ch = 0; ch < chCount; ++ch)
                     for (int smp = 0; smp < s; ++smp)
                     {
@@ -400,6 +422,18 @@ void UnifiedPedalProcessor::processChainBlock(float** b, int c, int s, const Ped
                         b[ch][smp] = std::isfinite(x) ? juce::jlimit(-1.0f, 1.0f, x) : 0.0f;
                     }
             }
+            float peak = 0.0f;
+            for (int ch = 0; ch < chCount; ++ch)
+                for (int smp = 0; smp < s; ++smp)
+                    peak = std::max(peak, std::abs(b[ch][smp]));
+            m_pedalPeaks[physSlot].store(peak, std::memory_order_relaxed);
+
+            float pedalGain = m_pedalGains[physSlot].load(std::memory_order_relaxed);
+            if (pedalGain != 1.0f)
+                for (int ch = 0; ch < chCount; ++ch)
+                    for (int smp = 0; smp < s; ++smp)
+                        b[ch][smp] = std::isfinite(b[ch][smp] * pedalGain)
+                            ? juce::jlimit(-1.0f, 1.0f, b[ch][smp] * pedalGain) : 0.0f;
     }
 }
 
@@ -421,6 +455,15 @@ void UnifiedPedalProcessor::processAudioBlock(float** buffer, int numChannels, i
     if (!current)
         return;
 
+    float inGain = m_inputGain.load(std::memory_order_relaxed);
+    if (inGain != 1.0f)
+    {
+        int gainCh = std::min(numChannels, m_maxChannels.load(std::memory_order_relaxed));
+        for (int ch = 0; ch < gainCh; ++ch)
+            for (int smp = 0; smp < numSamples; ++smp)
+                buffer[ch][smp] *= inGain;
+    }
+
     if (!next)
     {
         bool silent = true;
@@ -437,6 +480,8 @@ void UnifiedPedalProcessor::processAudioBlock(float** buffer, int numChannels, i
         }
         else
         {
+            if (m_silentBlockCount >= 3)
+                reset();
             m_silentBlockCount = 0;
         }
     }
@@ -483,7 +528,7 @@ void UnifiedPedalProcessor::processAudioBlock(float** buffer, int numChannels, i
     {
         processChainBlock(buffer, numChannels, numSamples, *next, m_pendingEffects);
 
-        for (int ch = 0; ch < numChannels; ++ch)
+        for (int ch = 0; ch < copyCh; ++ch)
             for (int smp = 0; smp < numSamples; ++smp)
                 buffer[ch][smp] = softClip(buffer[ch][smp]);
     }
@@ -491,9 +536,18 @@ void UnifiedPedalProcessor::processAudioBlock(float** buffer, int numChannels, i
     {
         processChainBlock(buffer, numChannels, numSamples, *current, m_chainEffects);
 
-        for (int ch = 0; ch < numChannels; ++ch)
+        for (int ch = 0; ch < copyCh; ++ch)
             for (int smp = 0; smp < numSamples; ++smp)
                 buffer[ch][smp] = softClip(buffer[ch][smp]);
+    }
+
+    float outGain = m_outputGain.load(std::memory_order_relaxed);
+    if (outGain != 1.0f)
+    {
+        int gainCh = std::min(numChannels, m_maxChannels.load(std::memory_order_relaxed));
+        for (int ch = 0; ch < gainCh; ++ch)
+            for (int smp = 0; smp < numSamples; ++smp)
+                buffer[ch][smp] = softClip(buffer[ch][smp] * outGain);
     }
 
     if (next && m_crossfadeCounter.load(std::memory_order_relaxed) >= crossfadeSamps)
@@ -530,7 +584,10 @@ void UnifiedPedalProcessor::pushToReleaseQueue(const PedalAssetPayload* ptr)
     int wIdx = m_releaseWriteIndex.load(std::memory_order_relaxed);
     int nextW = (wIdx + 1) % kReleaseQueueCapacity;
     if (nextW == m_releaseReadIndex.load(std::memory_order_acquire))
+    {
+        delete ptr;
         return;
+    }
     m_releaseQueue[static_cast<size_t>(wIdx)] = ptr;
     m_releaseWriteIndex.store(nextW, std::memory_order_release);
 }

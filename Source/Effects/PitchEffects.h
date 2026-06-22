@@ -30,7 +30,6 @@ public:
     void prepare(double sampleRate, int numChannels) override;
     void reset() override;
     void processSample(float** b, int c, int s, float effectParam) override;
-    void processBlock(float** b, int c, int n, const float* params) override;
     int mixKnobIndex() const override { return -1; }
 
 private:
@@ -43,6 +42,8 @@ private:
         size_t sliceStart = 0;
         size_t sliceLen = 0;
         int gateCounter = 0;
+        int gateFadeIn = 0;
+        int gateFadeOut = 0;
         enum Mode { RECORDING, PLAYING, GATED };
         Mode mode = RECORDING;
     };

@@ -23,6 +23,8 @@ public:
     void storeParameterValue(int physicalSlot, int knobIdx, float value);
     void applyParamOffset(int physicalSlot, int knobIdx, float dragStartValue, float newValue);
     void clearParamOffsets();
+    void snapshotParamState();
+    void restoreParamState();
     float getKnobDisplayValue(int slot, int knob, float compiledValue) const;
     void invalidateParamCacheForSlot(int physicalSlot);
 
@@ -32,6 +34,20 @@ public:
     void scheduleReset();
     bool isParamOverridden(int physicalSlot, int knobIdx) const;
     uint32_t getParamOverrideMask() const { return m_paramCacheValidMask.load(std::memory_order_acquire); }
+
+    float getPedalPeak(int slot) const { return m_pedalPeaks[slot].load(std::memory_order_relaxed); }
+    void resetPedalPeaks() { for (auto& p : m_pedalPeaks) p.store(0.0f, std::memory_order_relaxed); }
+    void setPedalGain(int slot, float gain) { m_pedalGains[slot].store(gain, std::memory_order_relaxed); }
+    float getPedalGain(int slot) const { return m_pedalGains[slot].load(std::memory_order_relaxed); }
+    void setInputGain(float g) { m_inputGain.store(g, std::memory_order_relaxed); }
+    void setOutputGain(float g) { m_outputGain.store(g, std::memory_order_relaxed); }
+    float getInputGain() const { return m_inputGain.load(std::memory_order_relaxed); }
+    float getOutputGain() const { return m_outputGain.load(std::memory_order_relaxed); }
+
+    void setKnobLink(int slot, int knob, bool linked, float strength = 1.0f);
+    bool isKnobLinked(int slot, int knob) const;
+    float getKnobLinkStrength(int slot, int knob) const;
+    void setAutomationValue(float val) { m_currentAutomationValue.store(val, std::memory_order_relaxed); }
 
     struct ParameterSnapshot
     {
@@ -43,9 +59,6 @@ public:
 private:
     void processChainBlock(float** b, int c, int s, const PedalAssetPayload& config,
                            std::array<std::unique_ptr<DspEffect>, PedalSlotCount>& effects);
-    float readParam(uint16_t token, float fallback,
-                    const PedalAssetPayload& config, uint8_t nodeIndex) const;
-
     void pushToReleaseQueue(const PedalAssetPayload* ptr);
 
     std::atomic<double> m_sampleRate{44100.0};
@@ -85,4 +98,13 @@ private:
     void prebuildEffects(const PedalAssetPayload* config, bool& deferred);
 
     int m_silentBlockCount = 0;
+    std::array<std::atomic<float>, PedalSlotCount> m_pedalPeaks;
+    std::array<std::atomic<float>, PedalSlotCount> m_pedalGains;
+    std::atomic<float> m_inputGain{1.0f};
+    std::atomic<float> m_outputGain{1.0f};
+    std::atomic<float> m_currentAutomationValue{0.0f};
+    std::array<std::array<bool, 4>, PedalSlotCount> m_knobLinks{};
+    std::array<std::array<float, 4>, PedalSlotCount> m_knobLinkStrengths{};
+    std::array<float, 24> m_savedParamOffsets{};
+    uint32_t m_savedParamMask = 0;
 };

@@ -10,6 +10,7 @@
 #include "CompilerThread.h"
 #include "PedalStructures.h"
 #include "PenDebouncer.h"
+#include "StateSerializer.h"
 #include "UnifiedPedalProcessor.h"
 
 class DrawdioProcessor : public juce::AudioProcessor
@@ -64,6 +65,16 @@ public:
     float getInputMeterLevel() const { return m_inputMeterLevel.load(std::memory_order_relaxed); }
     float getOutputMeterLevel() const { return m_outputMeterLevel.load(std::memory_order_relaxed); }
 
+    void setBarCount(int b) { m_barCount = b; }
+    int getBarCount() const { return m_barCount; }
+
+    void storeUndoData(const std::vector<uint8_t>& data) { m_undoData = data; }
+    const std::vector<uint8_t>& getUndoData() const { return m_undoData; }
+
+    float getPlayHeadBpm() const { return m_playHeadBpm.load(std::memory_order_relaxed); }
+    double getPlayHeadPpq() const { return m_playHeadPpq.load(std::memory_order_relaxed); }
+    bool isPlayHeadPlaying() const { return m_playHeadPlaying.load(std::memory_order_relaxed); }
+
     // Change-driven UI updates - UI polls this flag
     bool consumeUINotification();
     void triggerUINotification();
@@ -80,6 +91,7 @@ public:
 private:
     void syncCompilerConfig();
     void publishMeterLevels(float inputPeak, float outputPeak);
+    void restoreKnobValuesFromState(const StateSerializer::SerializedState& state);
 
     UnifiedPedalProcessor m_dspProcessor;
     CanvasMessageQueue m_messageQueue;
@@ -90,8 +102,15 @@ private:
     std::vector<uint8_t> m_manualRouting;
     std::vector<float*> m_channelBuffer;
 
+    int m_barCount = 1;
+
+    std::vector<uint8_t> m_undoData;
+
     std::atomic<float> m_inputMeterLevel { 0.0f };
     std::atomic<float> m_outputMeterLevel { 0.0f };
+    std::atomic<float> m_playHeadBpm { 120.0f };
+    std::atomic<double> m_playHeadPpq { 0.0 };
+    std::atomic<bool> m_playHeadPlaying { false };
     std::atomic<uint32_t> m_configRevision { 0 };
     std::atomic<bool> m_uiNeedsUpdate { false };
     ConfigSyncData m_lastConfigSync;
