@@ -60,6 +60,18 @@ void DrawdioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     juce::ignoreUnused(midiMessages);
     juce::ScopedNoDenormals noDenormals;
 
+    if (auto* playHead = getPlayHead())
+    {
+        auto pos = playHead->getPosition();
+        if (pos.hasValue())
+        {
+            m_playHeadBpm.store(static_cast<float>(pos->getBpm().orFallback(120.0)),
+                                std::memory_order_relaxed);
+            m_playHeadPpq.store(pos->getPpqPosition().orFallback(0.0), std::memory_order_relaxed);
+            m_playHeadPlaying.store(pos->getIsPlaying(), std::memory_order_relaxed);
+        }
+    }
+
     const auto totalNumInputChannels = getTotalNumInputChannels();
     const auto totalNumOutputChannels = getTotalNumOutputChannels();
 
@@ -216,11 +228,7 @@ void DrawdioProcessor::getStateInformation(juce::MemoryBlock& destData)
     auto snap = m_dspProcessor.getSnapshot();
     auto mask = m_dspProcessor.getParamOverrideMask();
     auto state = StateSerializer::createState(m_gridData, m_pedalSlots, m_manualRouting, snap.values, mask);
-    std::vector<uint8_t> blob;
-    StateSerializer::serialize(state, blob);
-
-    destData.setSize(blob.size());
-    destData.copyFrom(blob.data(), 0, blob.size());
+    StateSerializer::serialize(state, destData);
 }
 
 void DrawdioProcessor::setStateInformation(const void* data, int sizeInBytes)
@@ -233,20 +241,7 @@ void DrawdioProcessor::setStateInformation(const void* data, int sizeInBytes)
     m_gridData = state.gridData;
     m_pedalSlots = state.pedalSlots;
     m_manualRouting = state.manualRouting;
-
-    // Push restored knob values into the DSP parameter cache,
-    // but only mark knobs as "overridden" if they were when saved.
-    for (int s = 0; s < PedalSlotCount; ++s)
-        for (int k = 0; k < 4; ++k)
-        {
-            size_t idx = static_cast<size_t>(s * 4 + k);
-            if (state.overrideMask & (1u << idx))
-                m_dspProcessor.updateParameter(s, k, state.knobValues[idx]);
-            else
-                m_dspProcessor.storeParameterValue(s, k, state.knobValues[idx]);
-        }
-
-    // Deferred reset — audio thread picks up the flag
+    restoreKnobValuesFromState(state);
     m_dspProcessor.scheduleReset();
     syncCompilerConfig();
 }
@@ -256,10 +251,8 @@ juce::MemoryBlock DrawdioProcessor::createPresetState()
     auto snap = m_dspProcessor.getSnapshot();
     auto mask = m_dspProcessor.getParamOverrideMask();
     auto state = StateSerializer::createState(m_gridData, m_pedalSlots, m_manualRouting, snap.values, mask);
-    std::vector<uint8_t> blob;
-    StateSerializer::serialize(state, blob);
-
-    juce::MemoryBlock result(blob.data(), blob.size());
+    juce::MemoryBlock result;
+    StateSerializer::serialize(state, result);
     return result;
 }
 
@@ -273,7 +266,14 @@ bool DrawdioProcessor::applyPresetState(const void* data, int sizeInBytes)
     m_gridData = state.gridData;
     m_pedalSlots = state.pedalSlots;
     m_manualRouting = state.manualRouting;
+    restoreKnobValuesFromState(state);
+    m_dspProcessor.scheduleReset();
+    syncCompilerConfig();
+    return true;
+}
 
+void DrawdioProcessor::restoreKnobValuesFromState(const StateSerializer::SerializedState& state)
+{
     for (int s = 0; s < PedalSlotCount; ++s)
         for (int k = 0; k < 4; ++k)
         {
@@ -283,10 +283,6 @@ bool DrawdioProcessor::applyPresetState(const void* data, int sizeInBytes)
             else
                 m_dspProcessor.storeParameterValue(s, k, state.knobValues[idx]);
         }
-
-    m_dspProcessor.scheduleReset();
-    syncCompilerConfig();
-    return true;
 }
 
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()

@@ -71,10 +71,7 @@ void MicroPitchChorusEffect::processSample(float** b, int c, int s, float effect
             mc.readPos2 += static_cast<float>(bufSize);
 
         auto readTap = [&](float pos) -> float {
-            size_t idx = static_cast<size_t>(pos) % bufSize;
-            float frac = pos - std::floor(pos);
-            size_t next = (idx + 1) % bufSize;
-            return mc.buf[idx] * (1.0f - frac) + mc.buf[next] * frac;
+            return interpolateDelayRead(mc.buf, pos);
         };
 
         float tap1 = readTap(mc.readPos1);
@@ -233,17 +230,8 @@ void TapeStopEchoEffect::processSample(float** b, int c, int s, float effectPara
         if (chState.readPos >= static_cast<float>(bufSize))
             chState.readPos -= static_cast<float>(bufSize);
 
-        size_t idx = static_cast<size_t>(chState.readPos);
-        float frac = chState.readPos - static_cast<float>(idx);
-        size_t next = (idx + 1) % bufSize;
-        b[ch][s] = chState.buf[idx] * (1.0f - frac) + chState.buf[next] * frac;
+        b[ch][s] = interpolateDelayRead(chState.buf, chState.readPos);
 
         chState.writePtr = (chState.writePtr + 1) % bufSize;
     }
-}
-
-void TapeStopEchoEffect::processBlock(float** b, int c, int n, const float* params)
-{
-    for (int s = 0; s < n; ++s)
-        processSample(b, c, s, params[3]);
 }

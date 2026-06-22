@@ -40,6 +40,8 @@ juce::Colour ThemeManager::canvasPixelColour(uint8_t rawColor) const
         case 8: return juce::Colour(0xFF800080);   // Purple
         case 9: return juce::Colour(0xFF808080);   // Grey
         case 10: return juce::Colour(0xFFFF69B4);  // Pink
+        case 11: return juce::Colour(0xFFE67E22);  // Orange
+        case 12: return juce::Colour(0xFF8E44AD);  // Violet
         default: return juce::Colour(0xFF121212);
     }
 }

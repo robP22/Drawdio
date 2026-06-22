@@ -71,6 +71,8 @@ void GlitchStutterEffect::prepare(double sampleRate, int numChannels)
         s.sliceStart = 0;
         s.sliceLen = 0;
         s.gateCounter = 0;
+        s.gateFadeIn = 0;
+        s.gateFadeOut = 0;
         s.mode = GlitchState::RECORDING;
     }
 }
@@ -87,6 +89,8 @@ void GlitchStutterEffect::reset()
         s.sliceStart = 0;
         s.sliceLen = 0;
         s.gateCounter = 0;
+        s.gateFadeIn = 0;
+        s.gateFadeOut = 0;
         s.mode = GlitchState::RECORDING;
     }
 }
@@ -114,8 +118,18 @@ void GlitchStutterEffect::processSample(float** b, int c, int s, float effectPar
 
         if (gs.mode == GlitchState::RECORDING)
         {
+            // Fade-in from silence after GATED ended
+            if (gs.gateFadeIn > 0)
+            {
+                float fade = 1.0f - static_cast<float>(--gs.gateFadeIn) / static_cast<float>(kXfadeLen);
+                b[ch][s] = gs.buf[gs.writePtr] * fade;
+            }
+            else
+            {
+                b[ch][s] = gs.buf[gs.writePtr];
+            }
+
             gs.sliceCounter++;
-            b[ch][s] = gs.buf[gs.writePtr];
 
             if (gs.sliceCounter >= static_cast<int>(sliceSamples))
             {
@@ -151,22 +165,35 @@ void GlitchStutterEffect::processSample(float** b, int c, int s, float effectPar
 
             if (gs.playCounter >= sliceEnd)
             {
-                gs.playCounter = 0;
+                gs.playCounter = kXfadeLen;
                 gs.repeatCount++;
                 if (gs.repeatCount >= maxRepeats)
                 {
                     gs.mode = GlitchState::GATED;
                     gs.gateCounter = 0;
+                    gs.gateFadeOut = kXfadeLen;
                 }
             }
         }
         else
         {
-            b[ch][s] = 0.0f;
-            gs.gateCounter++;
+            // Fade-out to silence when entering GATED
+            if (gs.gateFadeOut > 0)
+            {
+                float fade = static_cast<float>(--gs.gateFadeOut) / static_cast<float>(kXfadeLen);
+                b[ch][s] *= fade;
+                gs.gateCounter = 0;
+            }
+            else
+            {
+                b[ch][s] = 0.0f;
+                gs.gateCounter++;
+            }
+
             if (gs.gateCounter >= static_cast<int>(gateSamples))
             {
                 gs.mode = GlitchState::RECORDING;
+                gs.gateFadeIn = kXfadeLen;
                 gs.sliceCounter = 0;
             }
         }
@@ -208,10 +235,4 @@ void FrequencyShifterEffect::processBlock(float** b, int c, int n, const float* 
             b[ch][s] = (x * cosPhi + (q1 + q2) * 0.5f * sinPhi) * 0.707f;
         }
     }
-}
-
-void GlitchStutterEffect::processBlock(float** b, int c, int n, const float* params)
-{
-    for (int s = 0; s < n; ++s)
-        processSample(b, c, s, params[3]);
 }

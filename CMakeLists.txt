@@ -54,7 +54,7 @@ target_sources(Drawdio PRIVATE
     Source/PluginProcessor.cpp
     Source/PluginEditor.cpp
     Source/ColorPalette.cpp
-    Source/CanvasModule.cpp
+    Source/ArcButton.cpp
     Source/UnifiedPedalProcessor.cpp
     Source/CompilerThread.cpp
     Source/CanvasMessageQueue.cpp
@@ -78,12 +78,17 @@ target_sources(Drawdio PRIVATE
     Source/Effects/SpectralFilterEffect.cpp
     Source/Effects/ConvolutionSpaceEffect.cpp
     Source/Effects/RandomModulatorEffect.cpp
-    Source/Effects/AutomationGeneratorEffect.cpp
     Source/RenderUtils.cpp
     Source/ResourceManager.cpp
     Source/ThemeManager.cpp
     Source/PedalDefinition.cpp
     Source/CanvasRoutingManager.cpp
+    Source/MixerStrip.cpp
+    Source/BottomControlBar.cpp
+    Source/AutomationEnvelope.cpp
+    Source/AutomationCompiler.cpp
+    Source/AutomationPlayer.cpp
+    Source/AutomationDisplay.cpp
 )
 
 target_include_directories(Drawdio PRIVATE Source)

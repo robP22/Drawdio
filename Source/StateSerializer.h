@@ -1,4 +1,5 @@
 #pragma once
+#include <JuceHeader.h>
 #include <array>
 #include <cstdint>
 #include <vector>
@@ -21,7 +22,7 @@ public:
     };
 
     // Serialize processor state to memory block
-    static void serialize(const SerializedState& state, std::vector<uint8_t>& outBlob);
+    static void serialize(const SerializedState& state, juce::MemoryBlock& outBlob);
 
     // Deserialize memory block to state
     static bool deserialize(const uint8_t* data, size_t sizeInBytes, SerializedState& outState);

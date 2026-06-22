@@ -32,47 +32,48 @@ StateSerializer::SerializedState StateSerializer::createState(
     return state;
 }
 
-void StateSerializer::serialize(const SerializedState& state, std::vector<uint8_t>& outBlob)
+void StateSerializer::serialize(const SerializedState& state, juce::MemoryBlock& outBlob)
 {
     const size_t totalSize = calculateSize(state);
-    outBlob.resize(totalSize, 0);
+    outBlob.setSize(totalSize, true);
+    auto* data = static_cast<uint8_t*>(outBlob.getData());
 
     // Header
-    outBlob[0] = MagicBytes[0];
-    outBlob[1] = MagicBytes[1];
-    outBlob[2] = MagicBytes[2];
-    outBlob[3] = Version;
+    data[0] = MagicBytes[0];
+    data[1] = MagicBytes[1];
+    data[2] = MagicBytes[2];
+    data[3] = Version;
 
     // Grid data
-    std::memcpy(outBlob.data() + 4, state.gridData.data(), TotalCells);
+    std::memcpy(data + 4, state.gridData.data(), TotalCells);
 
     // Pedal slots
     const int layoutOffset = 4 + TotalCells;
     for (int i = 0; i < PedalSlotCount; ++i)
-        outBlob[layoutOffset + i] = static_cast<uint8_t>(state.pedalSlots[i]);
+        data[layoutOffset + i] = static_cast<uint8_t>(state.pedalSlots[i]);
 
     // Manual routing
     const int routingOffset = layoutOffset + PedalSlotCount;
     for (int i = 0; i < PedalSlotCount; ++i)
     {
         if (i < static_cast<int>(state.manualRouting.size()))
-            outBlob[routingOffset + i] = state.manualRouting[static_cast<size_t>(i)];
+            data[routingOffset + i] = state.manualRouting[static_cast<size_t>(i)];
         else
-            outBlob[routingOffset + i] = 0xFF;  // No routing
+            data[routingOffset + i] = 0xFF;
     }
 
-    // Flag — now version field for mask support
+    // Flag
     const int flagOffset = routingOffset + PedalSlotCount;
-    outBlob[flagOffset] = Version;
+    data[flagOffset] = Version;
 
     // Knob values (24 floats = 96 bytes)
     const int knobOffset = flagOffset + 1;
-    std::memcpy(outBlob.data() + knobOffset, state.knobValues.data(),
+    std::memcpy(data + knobOffset, state.knobValues.data(),
                 PedalSlotCount * 4 * sizeof(float));
 
-    // Override mask (4 bytes, v4+)
+    // Override mask (4 bytes)
     const int maskOffset = knobOffset + static_cast<int>(PedalSlotCount * 4 * sizeof(float));
-    std::memcpy(outBlob.data() + maskOffset, &state.overrideMask, sizeof(uint32_t));
+    std::memcpy(data + maskOffset, &state.overrideMask, sizeof(uint32_t));
 }
 
 bool StateSerializer::isValidHeader(const uint8_t* data, size_t sizeInBytes)
@@ -100,12 +101,12 @@ bool StateSerializer::deserialize(const uint8_t* data, size_t sizeInBytes, Seria
 
     // Validate and clamp grid values
     for (auto& val : outState.gridData)
-        if (val > 10)
+        if (val > 12)
             val = 0;
 
     // Pedal slots
     const int layoutOffset = 4 + TotalCells;
-    constexpr auto maxPedalType = static_cast<uint8_t>(DspModuleType::AUTOMATION_GENERATOR);
+    constexpr auto maxPedalType = static_cast<uint8_t>(DspModuleType::RANDOM_MODULATOR);
     for (int i = 0; i < PedalSlotCount; ++i)
     {
         uint8_t raw = data[layoutOffset + i];

@@ -50,7 +50,6 @@ private:
         bool isInput;
         juce::Point<float> pos;
     };
-    std::vector<JackInfo> getJacks() const;
     int findJackAt(juce::Point<float> pos, float radius) const;
 
     // Cached cable paths — rebuilt when routing changes
@@ -59,10 +58,12 @@ private:
         juce::Path right;
     };
     void rebuildCableCache();
+    void refreshJacks();
 
     juce::Path m_cachedInputPath;
     juce::Path m_cachedOutputPath;
     std::vector<CachedSplitCable> m_cachedConnectionPaths;
+    std::array<JackInfo, PedalSlotCount * 2> m_cachedJacks;
 
     DrawdioProcessor& audioProcessor;
     const ResourceManager& m_resources;

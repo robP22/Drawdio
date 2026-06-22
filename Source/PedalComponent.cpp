@@ -8,15 +8,6 @@
 
 namespace
 {
-juce::Colour skinColourForSlot(int slot)
-{
-    static constexpr uint32_t colours[] {
-        0xFF3B5A74, 0xFF6E3E49, 0xFF4D6846,
-        0xFF6B603A, 0xFF584E75, 0xFF5E6266
-    };
-    return juce::Colour(colours[static_cast<size_t>(slot % 6)]);
-}
-
 juce::Rectangle<int> japTextureCell(int idx)
 {
     static constexpr int colW[5] = { 307, 307, 307, 307, 308 };
@@ -60,11 +51,11 @@ void PedalComponent::paint(juce::Graphics& g)
     const auto pedalW = bounds.getWidth();
     const auto pedalH = bounds.getHeight();
 
-    const float insetX = pedalW * 0.075f;
-    const float insetY = pedalH * 0.085f;
-    const float maskW  = pedalW * 0.850f;
-    const float maskH  = pedalH * 0.88333f;
-    const float corner = pedalW * 0.08f;
+    const float insetX = pedalW * GridLayout::PedalBodyInsetXRatio;
+    const float insetY = pedalH * GridLayout::PedalBodyInsetYRatio;
+    const float maskW  = pedalW * GridLayout::PedalBodyMaskWRatio;
+    const float maskH  = pedalH * GridLayout::PedalBodyMaskHRatio;
+    const float corner = pedalW * GridLayout::PedalBodyCornerRatio;
 
     const auto& enclosure = m_resources.getTexture(ResourceManager::TextureId::PedalEnclosure);
     if (enclosure.isValid())
@@ -158,11 +149,20 @@ void PedalComponent::paint(juce::Graphics& g)
         drawKnob(g, i, m_knobValues[i]);
     }
 
+    for (int i = 0; i < kKnobCount; ++i)
+    {
+        if (audioProcessor.getDSPProcessor().isKnobLinked(m_slotIndex, i))
+        {
+            g.setColour(juce::Colours::limegreen.withAlpha(0.85f));
+            g.drawEllipse(m_knobBounds[i].expanded(3.0f), 2.0f);
+        }
+    }
+
     if (m_definition == nullptr)
         return;
 
-    const float fontSize = pedalH * 0.04f;
-    const float labelWidth = pedalW * 0.28f;
+    const float fontSize = pedalH * GridLayout::KnobFontSizeRatio;
+    const float labelWidth = pedalW * GridLayout::KnobLabelWidthRatio;
     const float labelHeight = fontSize * 1.3f;
     const float offsetY = pedalH * GridLayout::KnobLabelOffsetYRatio;
 
@@ -211,9 +211,21 @@ void PedalComponent::mouseDown(const juce::MouseEvent& event)
     int knob = hitTestKnob(event.position);
     if (knob >= 0)
     {
+        if (event.mods.isRightButtonDown())
+        {
+            auto& dsp = audioProcessor.getDSPProcessor();
+            bool linked = dsp.isKnobLinked(m_slotIndex, knob);
+            juce::PopupMenu menu;
+            menu.addItem("Link to Automation", !linked, linked,
+                [this, knob, &dsp]() { dsp.setKnobLink(m_slotIndex, knob, true); repaint(); });
+            menu.addItem("Unlink from Automation", linked, !linked,
+                [this, knob, &dsp]() { dsp.setKnobLink(m_slotIndex, knob, false); repaint(); });
+            menu.showMenuAsync(juce::PopupMenu::Options());
+            return;
+        }
         m_draggingKnob = knob;
         m_dragStartValue = m_knobValues[static_cast<size_t>(knob)];
-        m_dragStartY = static_cast<float>(event.getMouseDownY());
+        m_dragStartY = static_cast<float>(event.getPosition().y);
         return;
     }
     if (getLabelArea().contains(event.position))
@@ -250,11 +262,34 @@ void PedalComponent::mouseMove(const juce::MouseEvent& event)
 void PedalComponent::showTypePopup()
 {
     juce::PopupMenu menu;
-    for (int t = 0; t <= static_cast<int>(DspModuleType::AUTOMATION_GENERATOR); ++t)
+
+    struct Cat { const char* name; std::vector<int> types; };
+    Cat cats[] = {
+        {"Compression",  {5}},
+        {"Delay",        {10, 11}},
+        {"Distortion",   {1, 8}},
+        {"Filter",       {3, 9, 20}},
+        {"Glitch",       {6, 16, 18}},
+        {"Modulation",   {2, 13, 17, 22}},
+        {"Pitch",        {4, 14, 19}},
+        {"Resonance",    {15}},
+        {"Reverb",       {7, 12, 21}},
+    };
+
+    for (auto& cat : cats)
     {
-        auto type = static_cast<DspModuleType>(t);
-        menu.addItem(t + 1, PedalDefinitions::getDisplayName(type), true, type == m_currentType);
+        menu.addSectionHeader(cat.name);
+        for (int t : cat.types)
+        {
+            auto type = static_cast<DspModuleType>(t);
+            juce::String label = "    ";
+            label += PedalDefinitions::getDisplayName(type);
+            menu.addItem(t + 1, label, true, type == m_currentType);
+        }
     }
+
+    menu.addSeparator();
+    menu.addItem(1, "    Bypass", true, m_currentType == DspModuleType::BYPASS);
 
     menu.showMenuAsync(juce::PopupMenu::Options(),
         [this](int result)
