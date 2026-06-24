@@ -175,6 +175,13 @@ void DrawdioProcessor::setManualRouting(const std::vector<uint8_t>& routing)
     syncCompilerConfig();
 }
 
+void DrawdioProcessor::setManualMode(bool m)
+{
+    m_manualMode = m;
+    if (!m)
+        syncCompilerConfig();
+}
+
 void DrawdioProcessor::syncCompilerConfig()
 {
     std::vector<DspModuleType> slots(m_pedalSlots.begin(), m_pedalSlots.end());
@@ -227,7 +234,10 @@ void DrawdioProcessor::getStateInformation(juce::MemoryBlock& destData)
 {
     auto snap = m_dspProcessor.getSnapshot();
     auto mask = m_dspProcessor.getParamOverrideMask();
-    auto state = StateSerializer::createState(m_gridData, m_pedalSlots, m_manualRouting, snap.values, mask);
+    auto state = StateSerializer::createState(m_gridData, m_pedalSlots, m_manualRouting, snap.values, mask,
+                                              static_cast<uint8_t>(m_barCount),
+                                              static_cast<uint8_t>(m_sectionStartBar),
+                                              static_cast<uint8_t>(m_manualMode ? 1 : 0));
     StateSerializer::serialize(state, destData);
 }
 
@@ -235,13 +245,16 @@ void DrawdioProcessor::setStateInformation(const void* data, int sizeInBytes)
 {
     StateSerializer::SerializedState state;
     if (!StateSerializer::deserialize(static_cast<const uint8_t*>(data),
-                                     static_cast<size_t>(sizeInBytes), state))
+                                      static_cast<size_t>(sizeInBytes), state))
         return;
 
     m_gridData = state.gridData;
     m_pedalSlots = state.pedalSlots;
     m_manualRouting = state.manualRouting;
     restoreKnobValuesFromState(state);
+    m_barCount = state.barCount;
+    m_sectionStartBar = state.sectionStartBar;
+    m_manualMode = (state.manualMode != 0);
     m_dspProcessor.scheduleReset();
     syncCompilerConfig();
 }
@@ -250,7 +263,10 @@ juce::MemoryBlock DrawdioProcessor::createPresetState()
 {
     auto snap = m_dspProcessor.getSnapshot();
     auto mask = m_dspProcessor.getParamOverrideMask();
-    auto state = StateSerializer::createState(m_gridData, m_pedalSlots, m_manualRouting, snap.values, mask);
+    auto state = StateSerializer::createState(m_gridData, m_pedalSlots, m_manualRouting, snap.values, mask,
+                                              static_cast<uint8_t>(m_barCount),
+                                              static_cast<uint8_t>(m_sectionStartBar),
+                                              static_cast<uint8_t>(m_manualMode ? 1 : 0));
     juce::MemoryBlock result;
     StateSerializer::serialize(state, result);
     return result;

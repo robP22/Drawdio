@@ -23,8 +23,9 @@ void VcaCompressorEffect::reset()
 void VcaCompressorEffect::processSample(float** b, int c, int s, float effectParam)
 {
     juce::ScopedNoDenormals noDenorm;
-    float thresh_dB = -50.0f + effectParam * 45.0f;
+    float thresh_dB = -45.0f + effectParam * 40.0f;
     float compRatio = 4.0f;
+    float kneeWidth = 6.0f;
 
     float inputLevel = 0.0f;
     for (int ch = 0; ch < c; ++ch)
@@ -38,16 +39,18 @@ void VcaCompressorEffect::processSample(float** b, int c, int s, float effectPar
     float env_dB = 20.0f * std::log10(std::fmax(m_envelopeFollower, 1e-8f));
 
     float gain_dB = 0.0f;
-    if (env_dB > thresh_dB)
-    {
-        float over = env_dB - thresh_dB;
+    float over = env_dB - thresh_dB;
+    if (over > kneeWidth)
         gain_dB = -over * (1.0f - 1.0f / compRatio);
+    else if (over > -kneeWidth)
+    {
+        float kneeT = (over + kneeWidth) / (2.0f * kneeWidth);
+        gain_dB = -over * (1.0f - 1.0f / compRatio) * kneeT * kneeT;
     }
 
-    float makeup_dB = thresh_dB * -0.3f;
-    if (makeup_dB < 0.0f) makeup_dB = 0.0f;
+    float makeup_dB = 20.0f * std::log10(std::fmax(m_makeupGain, 0.01f));
     float gain = std::pow(10.0f, (gain_dB + makeup_dB) / 20.0f);
-    gain = std::fmin(1.0f, gain);
+    if (gain > 1.0f) gain = 1.0f;
 
     for (int ch = 0; ch < c; ++ch)
         b[ch][s] = b[ch][s] * gain;
@@ -56,15 +59,16 @@ void VcaCompressorEffect::processSample(float** b, int c, int s, float effectPar
 void VcaCompressorEffect::processBlock(float** b, int c, int n, const float* params)
 {
     juce::ScopedNoDenormals noDenorm;
-    float vol = params[1];
-    float attackMs = 0.5f + vol * 49.5f;
-    float attackSec = attackMs * 0.001f;
+    float attackMs = 0.5f + params[0] * 49.5f;
+    float releaseMs = 10.0f + params[1] * 490.0f;
+    m_makeupGain = 0.5f + params[3] * 1.5f;
+
     double sr = m_sampleRate == 0.0 ? 44100.0 : m_sampleRate;
-    m_attackCoeff = static_cast<float>(std::exp(-1.0 / (sr * std::fmax(attackSec, 0.0001))));
-    m_releaseCoeff = static_cast<float>(std::exp(-1.0 / (sr * 0.1)));
+    m_attackCoeff = static_cast<float>(std::exp(-1.0 / (sr * std::fmax(attackMs * 0.001f, 0.0001))));
+    m_releaseCoeff = static_cast<float>(std::exp(-1.0 / (sr * std::fmax(releaseMs * 0.001f, 0.001))));
 
     for (int s = 0; s < n; ++s)
-        processSample(b, c, s, params[3]);
+        processSample(b, c, s, params[2]);
 }
 
 void SidechainDuckerEffect::prepare(double sampleRate, int numChannels)
@@ -115,13 +119,15 @@ void SidechainDuckerEffect::processSample(float** b, int c, int s, float effectP
         b[ch][s] = b[ch][s] * gain;
 
         ++chState.timer;
+        if (chState.timer >= chState.intervalSamples)
+            chState.timer = 0;
     }
 }
 
 void SidechainDuckerEffect::processBlock(float** b, int c, int n, const float* params)
 {
     juce::ScopedNoDenormals noDenorm;
-    m_duckAmount = params[1];
+    m_duckAmount = params[2];
     for (int s = 0; s < n; ++s)
         processSample(b, c, s, params[3]);
 }

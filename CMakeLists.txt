@@ -63,6 +63,7 @@ target_sources(Drawdio PRIVATE
     Source/CompilerEngine.cpp
     Source/PedalComponent.cpp
     Source/PedalboardGrid.cpp
+    Source/ManualConnectionModel.cpp
     Source/HeadlessDspTest.cpp
     Source/StateSerializer.cpp
     Source/EffectConfigRegistry.cpp

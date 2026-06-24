@@ -103,8 +103,11 @@ private:
     std::atomic<float> m_inputGain{1.0f};
     std::atomic<float> m_outputGain{1.0f};
     std::atomic<float> m_currentAutomationValue{0.0f};
+    float m_smoothedAutoValue = 0.0f;
+    float m_autoSmoothAlpha = 0.0f;
     std::array<std::array<bool, 4>, PedalSlotCount> m_knobLinks{};
     std::array<std::array<float, 4>, PedalSlotCount> m_knobLinkStrengths{};
     std::array<float, 24> m_savedParamOffsets{};
     uint32_t m_savedParamMask = 0;
+    std::array<float, PedalSlotCount> m_prevMix = {0.5f, 0.5f, 0.5f, 0.5f, 0.5f, 0.5f};
 };

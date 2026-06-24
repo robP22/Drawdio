@@ -80,7 +80,7 @@ void PixelCanvasComponent::paint(juce::Graphics& g)
         g.drawImage(tex, cx, cy, cw, ch, 0, 0, tex.getWidth(), tex.getHeight());
 
     if (m_overlayDirty || !m_pixelOverlay.isValid())
-        rebuildOverlay();
+        rebuildOverlay(cl);
 
     if (m_pixelOverlay.isValid())
     {
@@ -107,7 +107,7 @@ juce::Point<int> PixelCanvasComponent::gridCoordsFromUI(int uiX, int uiY) const
 
     if (m_partyModeEnabled)
     {
-        bool outside = (nx < 0.0f || nx > 1.0f || ny < 0.0f || ny > 1.0f);
+        bool outside = (nx < -0.02f || nx > 1.02f || ny < -0.02f || ny > 1.02f);
         if (outside && !m_bounceActive) { m_bounceActive = true; m_justBounced = true; }
         else if (!outside && m_bounceActive) { m_bounceActive = false; }
 
@@ -308,10 +308,7 @@ void PixelCanvasComponent::mouseUp(const juce::MouseEvent&)
 
 void PixelCanvasComponent::mouseEnter(const juce::MouseEvent&)
 {
-    if (m_fillMode)
-        setMouseCursor(juce::MouseCursor::CrosshairCursor);
-    else
-        setMouseCursor(juce::MouseCursor::CrosshairCursor);
+    setMouseCursor(juce::MouseCursor::CrosshairCursor);
 }
 
 void PixelCanvasComponent::mouseExit(const juce::MouseEvent&)
@@ -489,7 +486,11 @@ void PixelCanvasComponent::rebuildGridCache()
 
 void PixelCanvasComponent::rebuildOverlay()
 {
-    auto cl = computeCanvasLayout();
+    rebuildOverlay(computeCanvasLayout());
+}
+
+void PixelCanvasComponent::rebuildOverlay(const CanvasLayout& cl)
+{
     const int cw = cl.cw;
     const int ch = cl.ch;
 

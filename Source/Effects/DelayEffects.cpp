@@ -47,7 +47,9 @@ void MicroPitchChorusEffect::processSample(float** b, int c, int s, float effect
         size_t bufSize = mc.buf.size();
         if (bufSize == 0) continue;
 
-        mc.buf[mc.writePtr] = b[ch][s];
+        float in = b[ch][s];
+        if (!std::isfinite(in)) in = 0.0f;
+        mc.buf[mc.writePtr] = in;
 
         mc.lfoPhase += static_cast<float>(kLfoRate / m_sampleRate);
         if (mc.lfoPhase >= 1.0f) mc.lfoPhase -= 1.0f;
@@ -85,25 +87,34 @@ void MicroPitchChorusEffect::processSample(float** b, int c, int s, float effect
 void SimpleDelayEffect::processBlock(float** b, int c, int n, const float* params)
 {
     juce::ScopedNoDenormals noDenorm;
-    float delaySec = 0.1f + params[3] * 0.9f;
-    float feedback = 0.3f + params[3] * 0.6f;
+    float delaySec = 0.1f + params[1] * 0.9f;
+    float feedback = 0.3f + params[2] * 0.6f;
 
     int chCount = std::min(c, static_cast<int>(m_delays.size()));
     for (int ch = 0; ch < chCount; ++ch)
     {
         auto& d = m_delays[static_cast<size_t>(ch)];
         size_t bufSize = d.buf.size();
+        float bufSizeF = static_cast<float>(bufSize);
         if (bufSize == 0) continue;
 
-        size_t delaySamples = static_cast<size_t>(m_sampleRate * delaySec);
-        if (delaySamples >= bufSize) delaySamples = bufSize - 1;
+        float delaySamplesF = static_cast<float>(m_sampleRate) * delaySec;
+        if (delaySamplesF >= bufSizeF) delaySamplesF = bufSizeF - 1.0f;
+
         float& fbLp = m_fbLpState[static_cast<size_t>(ch)];
+        float& lfoPhase = m_lfoPhase[static_cast<size_t>(ch)];
 
         for (int s = 0; s < n; ++s)
         {
             float in = b[ch][s];
-            size_t readPtr = (d.writePtr + bufSize - delaySamples) % bufSize;
-            float delayed = d.buf[readPtr];
+            if (!std::isfinite(in)) in = 0.0f;
+            lfoPhase += 0.0004f;
+            if (lfoPhase > 6.2831853f) lfoPhase -= 6.2831853f;
+            float modDelay = delaySamplesF + std::sin(lfoPhase) * delaySamplesF * 0.015f;
+            if (modDelay >= bufSizeF) modDelay = bufSizeF - 1.0f;
+            float readPos = static_cast<float>(d.writePtr + bufSize) - modDelay;
+            if (readPos >= bufSizeF) readPos -= bufSizeF;
+            float delayed = interpolateDelayRead(d.buf, readPos);
             fbLp = fbLp + m_fbLpCoeff * (delayed - fbLp);
             d.buf[d.writePtr] = in + std::tanh(fbLp * feedback);
             b[ch][s] = delayed;
@@ -128,6 +139,7 @@ void SimpleDelayEffect::prepare(double sampleRate, int numChannels)
         prepareSimpleDelay(d, sampleRate, 2.0);
     m_fbLpState.assign(static_cast<size_t>(numChannels), 0.0f);
     m_fbLpCoeff = 1.0f - std::exp(-2.0f * 3.14159265f * 5000.0f / static_cast<float>(sampleRate));
+    m_lfoPhase.assign(static_cast<size_t>(numChannels), 0.0f);
 }
 
 void SimpleDelayEffect::reset()
@@ -135,6 +147,7 @@ void SimpleDelayEffect::reset()
     for (auto& d : m_delays)
         resetSimpleDelay(d);
     std::fill(m_fbLpState.begin(), m_fbLpState.end(), 0.0f);
+    std::fill(m_lfoPhase.begin(), m_lfoPhase.end(), 0.0f);
 }
 
 void SimpleDelayEffect::processSample(float** b, int c, int s, float effectParam)
@@ -150,12 +163,14 @@ void SimpleDelayEffect::processSample(float** b, int c, int s, float effectParam
         size_t bufSize = d.buf.size();
         if (bufSize == 0) continue;
 
-        size_t delaySamples = static_cast<size_t>(m_sampleRate * delaySec);
-        if (delaySamples >= bufSize) delaySamples = bufSize - 1;
+        float delaySamplesF = static_cast<float>(m_sampleRate) * delaySec;
+        if (delaySamplesF >= static_cast<float>(bufSize)) delaySamplesF = static_cast<float>(bufSize) - 1.0f;
 
         float in = b[ch][s];
-        size_t readPtr = (d.writePtr + bufSize - delaySamples) % bufSize;
-        float delayed = d.buf[readPtr];
+        if (!std::isfinite(in)) in = 0.0f;
+        float readPos = static_cast<float>(d.writePtr + bufSize) - delaySamplesF;
+        if (readPos >= static_cast<float>(bufSize)) readPos -= static_cast<float>(bufSize);
+        float delayed = interpolateDelayRead(d.buf, readPos);
         float& fbLp = m_fbLpState[static_cast<size_t>(ch)];
         fbLp = fbLp + m_fbLpCoeff * (delayed - fbLp);
         d.buf[d.writePtr] = in + std::tanh(fbLp * feedback);
@@ -204,7 +219,9 @@ void TapeStopEchoEffect::processSample(float** b, int c, int s, float effectPara
         size_t bufSize = chState.buf.size();
         if (bufSize == 0) continue;
 
-        chState.buf[chState.writePtr] = b[ch][s];
+        float in = b[ch][s];
+        if (!std::isfinite(in)) in = 0.0f;
+        chState.buf[chState.writePtr] = std::tanh(in * 1.3f) * 0.77f;
 
         bool isBraking = (braking > 0.01f);
         if (isBraking && !chState.wasBraking)
@@ -230,7 +247,16 @@ void TapeStopEchoEffect::processSample(float** b, int c, int s, float effectPara
         if (chState.readPos >= static_cast<float>(bufSize))
             chState.readPos -= static_cast<float>(bufSize);
 
-        b[ch][s] = interpolateDelayRead(chState.buf, chState.readPos);
+        chState.wowPhase += 0.00075f + static_cast<float>(ch * 0.00003);
+        if (chState.wowPhase > 6.2831853f) chState.wowPhase -= 6.2831853f;
+        float wowOffset = std::sin(chState.wowPhase) * 1.8f;
+        float modReadPos = chState.readPos + wowOffset;
+        if (modReadPos >= static_cast<float>(bufSize))
+            modReadPos -= static_cast<float>(bufSize);
+        else if (modReadPos < 0.0f)
+            modReadPos += static_cast<float>(bufSize);
+
+        b[ch][s] = interpolateDelayRead(chState.buf, modReadPos);
 
         chState.writePtr = (chState.writePtr + 1) % bufSize;
     }

@@ -20,8 +20,11 @@ public:
 
 private:
     float m_phase = 0.0f;
-    std::vector<float> m_allpassZ1;
-    std::vector<float> m_allpassZ2;
+    struct FreqShiftChannel {
+        float z1a = 0, z1b = 0, z1c = 0;
+        float z2a = 0, z2b = 0, z2c = 0;
+    };
+    std::vector<FreqShiftChannel> m_channels;
 };
 
 class GlitchStutterEffect : public DspEffect

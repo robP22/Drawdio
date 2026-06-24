@@ -15,6 +15,7 @@ private:
     float m_envelopeFollower = 0.0f;
     float m_attackCoeff = 0.0f;
     float m_releaseCoeff = 0.0f;
+    float m_makeupGain = 1.0f;
 };
 
 class SidechainDuckerEffect : public DspEffect

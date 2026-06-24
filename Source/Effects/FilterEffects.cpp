@@ -46,7 +46,9 @@ void SpectralFreezeEffect::processSample(float** b, int c, int s, float effectPa
         size_t bufSize = fc.buf.size();
         if (bufSize == 0) continue;
 
-        fc.buf[fc.writePtr] = b[ch][s];
+        float in = b[ch][s];
+        if (!std::isfinite(in)) in = 0.0f;
+        fc.buf[fc.writePtr] = in;
 
         if (!frozen)
         {
@@ -142,17 +144,17 @@ void FormantShifterEffect::processSample(float** b, int c, int s, float effectPa
 void MultiModeFilterEffect::processBlock(float** b, int c, int n, const float* params)
 {
     juce::ScopedNoDenormals noDenorm;
-    float cutoffParam = params[3];
+    float cutoffParam = params[2];
     float fcHz = 20.0f + (20000.0f - 20.0f) * cutoffParam * cutoffParam;
-    float g = std::min<float>(1.99f, 2.0f * std::sin(3.14159265f * fcHz / static_cast<float>(m_sampleRate)));
+    float g = std::tan(3.14159265f * fcHz / static_cast<float>(m_sampleRate));
 
-    float bandPos = params[1] * 3.0f;
+    float bandPos = params[0] * 3.0f;
     int mode = std::min(2, static_cast<int>(bandPos));
     float withinBand = bandPos - static_cast<float>(mode);
     float R = 1.0f - withinBand * 0.9f;
     if (R > 0.98f) R = 0.98f;
-    float Rmin = g * g - 0.95f;
-    if (R < Rmin) R = Rmin;
+
+    float invScale = 1.0f / (1.0f + 2.0f * R * g + g * g);
 
     int maxCh = std::min(c, static_cast<int>(m_states.size()));
     for (int ch = 0; ch < maxCh; ++ch)
@@ -161,13 +163,13 @@ void MultiModeFilterEffect::processBlock(float** b, int c, int n, const float* p
         for (int s = 0; s < n; ++s)
         {
             float x = b[ch][s];
-            float hp = x - R * st.bp - st.lp;
-        st.bp = g * hp + st.bp;
-        st.lp = g * st.bp + st.lp;
-        if (std::abs(st.lp) > 8.0f) st.lp = (st.lp >= 0.0f) ? 8.0f : -8.0f;
-        if (std::abs(st.bp) > 8.0f) st.bp = (st.bp >= 0.0f) ? 8.0f : -8.0f;
+            float hp = (x - (2.0f * R + g) * st.bp - st.lp) * invScale;
+            st.bp = g * hp + st.bp;
+            st.lp = g * st.bp + st.lp;
+            if (std::abs(st.lp) > 8.0f) st.lp = (st.lp >= 0.0f) ? 8.0f : -8.0f;
+            if (std::abs(st.bp) > 8.0f) st.bp = (st.bp >= 0.0f) ? 8.0f : -8.0f;
 
-        float out;
+            float out;
             switch (mode)
             {
                 case 0: out = st.lp; break;
@@ -195,17 +197,16 @@ void MultiModeFilterEffect::processSample(float** b, int c, int s, float effectP
 {
     juce::ScopedNoDenormals noDenorm;
     float fcHz = 20.0f + (20000.0f - 20.0f) * effectParam * effectParam;
-    float g = std::min<float>(1.99f, 2.0f * std::sin(3.14159265f * fcHz / static_cast<float>(m_sampleRate)));
+    float g = std::tan(3.14159265f * fcHz / static_cast<float>(m_sampleRate));
     float R = 1.0f;
-    float Rmin = g * g - 0.95f;
-    if (R < Rmin) R = Rmin;
+    float invScale = 1.0f / (1.0f + 2.0f * R * g + g * g);
 
     int maxCh = std::min(c, static_cast<int>(m_states.size()));
     for (int ch = 0; ch < maxCh; ++ch)
     {
         auto& st = m_states[static_cast<size_t>(ch)];
         float x = b[ch][s];
-        float hp = x - R * st.bp - st.lp;
+        float hp = (x - (2.0f * R + g) * st.bp - st.lp) * invScale;
         st.bp = g * hp + st.bp;
         st.lp = g * st.bp + st.lp;
         if (std::abs(st.lp) > 8.0f) st.lp = (st.lp >= 0.0f) ? 8.0f : -8.0f;
@@ -217,7 +218,7 @@ void MultiModeFilterEffect::processSample(float** b, int c, int s, float effectP
 void FormantShifterEffect::processBlock(float** b, int c, int n, const float* params)
 {
     juce::ScopedNoDenormals noDenorm;
-    float formantFreq = params[3];
+    float formantFreq = params[2];
     float envMod = std::min(1.0f, m_envState / 0.5f);
     float modFreq = formantFreq * (0.3f + envMod * 0.7f);
     float centerHz = 200.0f + modFreq * 1800.0f;

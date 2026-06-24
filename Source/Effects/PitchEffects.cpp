@@ -8,15 +8,13 @@ void FrequencyShifterEffect::prepare(double sampleRate, int numChannels)
 {
     DspEffect::prepare(sampleRate, numChannels);
     m_phase = 0.0f;
-    m_allpassZ1.assign(static_cast<size_t>(numChannels), 0.0f);
-    m_allpassZ2.assign(static_cast<size_t>(numChannels), 0.0f);
+    m_channels.assign(static_cast<size_t>(numChannels), FreqShiftChannel{});
 }
 
 void FrequencyShifterEffect::reset()
 {
     m_phase = 0.0f;
-    std::fill(m_allpassZ1.begin(), m_allpassZ1.end(), 0.0f);
-    std::fill(m_allpassZ2.begin(), m_allpassZ2.end(), 0.0f);
+    m_channels.assign(m_channels.size(), FreqShiftChannel{});
 }
 
 void FrequencyShifterEffect::processSample(float** b, int c, int s, float effectParam)
@@ -24,36 +22,39 @@ void FrequencyShifterEffect::processSample(float** b, int c, int s, float effect
     juce::ScopedNoDenormals noDenorm;
     float shift = effectParam;
     float shiftHz = shift * shift * 2000.0f;
+    float sr = static_cast<float>(m_sampleRate);
 
-    m_phase += static_cast<float>(shiftHz / m_sampleRate);
+    m_phase += shiftHz / sr;
     if (m_phase >= 1.0f) m_phase -= 1.0f;
 
-    float cosPhi = std::cos(m_phase * 2.0f * 3.14159265f);
-    float sinPhi = std::sin(m_phase * 2.0f * 3.14159265f);
+    float cosPhi = std::cos(m_phase * 6.2831853f);
+    float sinPhi = std::sin(m_phase * 6.2831853f);
 
-    float w1 = static_cast<float>(3.14159265f * (300.0f + shiftHz * 0.3f) / m_sampleRate);
-    float tanHalf1 = std::tan(w1);
-    float a1 = (tanHalf1 - 1.0f) / (tanHalf1 + 1.0f);
+    static constexpr float kA1a = 0.47940086f, kA1b = 0.87621849f, kA1c = 0.97659735f;
+    static constexpr float kA2a = 0.16175849f, kA2b = 0.73302892f, kA2c = 0.94534970f;
 
-    float w2 = static_cast<float>(3.14159265f * (1200.0f + shiftHz * 0.3f) / m_sampleRate);
-    float tanHalf2 = std::tan(w2);
-    float a2 = (tanHalf2 - 1.0f) / (tanHalf2 + 1.0f);
-
-    int chCount = std::min(c, static_cast<int>(m_allpassZ1.size()));
+    int chCount = std::min(c, static_cast<int>(m_channels.size()));
     for (int ch = 0; ch < chCount; ++ch)
     {
         float x = b[ch][s];
-        float& z1 = m_allpassZ1[static_cast<size_t>(ch)];
-        float q1 = a1 * x + z1;
-        z1 = x - a1 * q1;
+        auto& chState = m_channels[static_cast<size_t>(ch)];
 
-        float& z2 = m_allpassZ2[static_cast<size_t>(ch)];
-        float q2 = a2 * x + z2;
-        z2 = x - a2 * q2;
+        float q1a = kA1a * x + chState.z1a;
+        chState.z1a = x - kA1a * q1a;
+        float q1b = kA1b * q1a + chState.z1b;
+        chState.z1b = q1a - kA1b * q1b;
+        float q1c = kA1c * q1b + chState.z1c;
+        chState.z1c = q1b - kA1c * q1c;
 
-        float q = (q1 + q2) * 0.5f;
-        float shifted = x * cosPhi + q * sinPhi;
-        b[ch][s] = shifted * 0.707f;
+        float q2a = kA2a * x + chState.z2a;
+        chState.z2a = x - kA2a * q2a;
+        float q2b = kA2b * q2a + chState.z2b;
+        chState.z2b = q2a - kA2b * q2b;
+        float q2c = kA2c * q2b + chState.z2c;
+        chState.z2c = q2b - kA2c * q2c;
+
+        float q = (q1c + q2c) * 0.5f;
+        b[ch][s] = (x * cosPhi + q * sinPhi) * 0.707f;
     }
 }
 
@@ -109,7 +110,9 @@ void GlitchStutterEffect::processSample(float** b, int c, int s, float effectPar
         size_t bufSize = gs.buf.size();
         if (bufSize == 0) continue;
 
-        gs.buf[gs.writePtr] = b[ch][s];
+        float in = b[ch][s];
+        if (!std::isfinite(in)) in = 0.0f;
+        gs.buf[gs.writePtr] = in;
 
         size_t sliceSamples = static_cast<size_t>(m_sampleRate * sliceLenSec + 0.5f);
         if (sliceSamples < 2) sliceSamples = 2;
@@ -205,34 +208,6 @@ void GlitchStutterEffect::processSample(float** b, int c, int s, float effectPar
 void FrequencyShifterEffect::processBlock(float** b, int c, int n, const float* params)
 {
     juce::ScopedNoDenormals noDenorm;
-    float shift = params[3];
-    float shiftHz = shift * shift * 2000.0f;
-    float sr = static_cast<float>(m_sampleRate);
-    float w1 = 3.14159265f * (300.0f + shiftHz * 0.3f) / sr;
-    float tanHalf1 = std::tan(w1);
-    float a1 = (tanHalf1 - 1.0f) / (tanHalf1 + 1.0f);
-    float w2 = 3.14159265f * (1200.0f + shiftHz * 0.3f) / sr;
-    float tanHalf2 = std::tan(w2);
-    float a2 = (tanHalf2 - 1.0f) / (tanHalf2 + 1.0f);
-
     for (int s = 0; s < n; ++s)
-    {
-        m_phase += shiftHz / sr;
-        if (m_phase >= 1.0f) m_phase -= 1.0f;
-        float cosPhi = std::cos(m_phase * 6.2831853f);
-        float sinPhi = std::sin(m_phase * 6.2831853f);
-
-        int chCount = std::min(c, static_cast<int>(m_allpassZ1.size()));
-        for (int ch = 0; ch < chCount; ++ch)
-        {
-            float x = b[ch][s];
-            float& z1 = m_allpassZ1[static_cast<size_t>(ch)];
-            float q1 = a1 * x + z1;
-            z1 = x - a1 * q1;
-            float& z2 = m_allpassZ2[static_cast<size_t>(ch)];
-            float q2 = a2 * x + z2;
-            z2 = x - a2 * q2;
-            b[ch][s] = (x * cosPhi + (q1 + q2) * 0.5f * sinPhi) * 0.707f;
-        }
-    }
+        processSample(b, c, s, params[0]);
 }

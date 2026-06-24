@@ -12,7 +12,8 @@ size_t StateSerializer::calculateSize(const SerializedState& state)
     // Override mask: sizeof(uint32_t) bytes (v4+)
     return 4 + TotalCells + PedalSlotCount + PedalSlotCount + 1
          + static_cast<int>(PedalSlotCount * 4 * sizeof(float))
-         + static_cast<int>(sizeof(uint32_t));
+         + static_cast<int>(sizeof(uint32_t))
+         + 3;
 }
 
 StateSerializer::SerializedState StateSerializer::createState(
@@ -20,7 +21,8 @@ StateSerializer::SerializedState StateSerializer::createState(
     const std::array<DspModuleType, PedalSlotCount>& pedalSlots,
     const std::vector<uint8_t>& manualRouting,
     const std::array<float, PedalSlotCount * 4>& knobValues,
-    uint32_t overrideMask)
+    uint32_t overrideMask,
+    uint8_t barCount, uint8_t sectionStart, uint8_t manualMode)
 {
     SerializedState state;
     state.gridData = gridData;
@@ -29,6 +31,9 @@ StateSerializer::SerializedState StateSerializer::createState(
     state.manualRouting = manualRouting;
     state.knobValues = knobValues;
     state.overrideMask = overrideMask;
+    state.barCount = barCount;
+    state.sectionStartBar = sectionStart;
+    state.manualMode = manualMode;
     return state;
 }
 
@@ -74,6 +79,12 @@ void StateSerializer::serialize(const SerializedState& state, juce::MemoryBlock&
     // Override mask (4 bytes)
     const int maskOffset = knobOffset + static_cast<int>(PedalSlotCount * 4 * sizeof(float));
     std::memcpy(data + maskOffset, &state.overrideMask, sizeof(uint32_t));
+
+    // Flags (3 bytes): barCount, sectionStartBar, manualMode (v5+)
+    const int flagsOffset = maskOffset + static_cast<int>(sizeof(uint32_t));
+    data[flagsOffset] = state.barCount;
+    data[flagsOffset + 1] = state.sectionStartBar;
+    data[flagsOffset + 2] = state.manualMode;
 }
 
 bool StateSerializer::isValidHeader(const uint8_t* data, size_t sizeInBytes)
@@ -153,6 +164,15 @@ bool StateSerializer::deserialize(const uint8_t* data, size_t sizeInBytes, Seria
     {
         // v2/v3 save — default to clear (compiler fills in, UI shows canvas-derived values)
         outState.overrideMask = 0x00000000;
+    }
+
+    // Flags (v5+ only): barCount, sectionStartBar, manualMode
+    const size_t flagsOffset = maskOffset + sizeof(uint32_t);
+    if (sizeInBytes >= flagsOffset + 3)
+    {
+        outState.barCount = data[flagsOffset];
+        outState.sectionStartBar = data[flagsOffset + 1];
+        outState.manualMode = data[flagsOffset + 2];
     }
 
     return true;

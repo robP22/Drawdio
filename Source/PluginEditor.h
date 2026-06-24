@@ -28,9 +28,10 @@ public:
 
     void paint(juce::Graphics& g) override;
     void resized() override;
-    void showHamburgerMenu();
     void savePreset();
     void loadPreset();
+    void enterManualMode();
+    void exitManualMode();
 
 private:
     void triggerRecompile();
@@ -53,6 +54,7 @@ private:
     std::vector<uint8_t> m_lastRoutingOrder;
     uint32_t m_seenConfigRevision = 0;
     bool m_needsRepaint = false;
+    bool m_autoEnvelopeDirty = true;
     BottomControlBar m_bottomBar;
     AutomationCompiler m_automationCompiler;
     AutomationPlayer m_automationPlayer;
