@@ -87,6 +87,11 @@ DrawdioProcessorEditor::DrawdioProcessorEditor(DrawdioProcessor& p)
         m_automationPlayer.setBarCount(bars);
     };
 
+    m_bottomBar.getAutomationDisplay().onSectionChanged = [this](int start) {
+        audioProcessor.setSectionStart(start);
+        m_automationPlayer.setSectionStartBar(start);
+    };
+
     m_palette.setOnColorSelected([this](uint8_t color) {
         m_pixelCanvas.setCurrentColor(static_cast<PixelCanvasComponent::PixelColor>(color));
     });
@@ -128,6 +133,19 @@ DrawdioProcessorEditor::DrawdioProcessorEditor(DrawdioProcessor& p)
         m_bottomBar.getAutomationDisplay().setBarCount(bars);
         m_bottomBar.updateBarsButton(bars);
         m_automationPlayer.setBarCount(bars);
+    }
+
+    // Restore section start from processor
+    {
+        int start = audioProcessor.getSectionStart();
+        m_bottomBar.getAutomationDisplay().setSectionStart(start);
+        m_automationPlayer.setSectionStartBar(start);
+    }
+
+    // Restore manual mode from processor
+    {
+        bool manual = audioProcessor.isManualMode();
+        m_bottomBar.updateManualButton(manual);
     }
 
     m_pixelCanvas.setOnPenDown([this]()
@@ -217,6 +235,7 @@ void DrawdioProcessorEditor::resized()
 
 void DrawdioProcessorEditor::triggerRecompile()
 {
+    m_autoEnvelopeDirty = true;
     const auto& grid = m_pixelCanvas.getGridData();
     audioProcessor.getMessageQueue().pushSnapshot(grid.data());
     audioProcessor.setGridData(grid);
@@ -225,6 +244,8 @@ void DrawdioProcessorEditor::triggerRecompile()
 
 void DrawdioProcessorEditor::refreshRoutingFromConfig()
 {
+    if (audioProcessor.isManualMode())
+        return;
     auto config = audioProcessor.getDSPProcessor().getCurrentConfig();
     if (config)
     {
@@ -250,6 +271,8 @@ void DrawdioProcessorEditor::syncCompiledKnobs(bool& needsRepaint)
     if (audioProcessor.getConfigRevision() != revBefore)
     {
         needsRepaint = true;
+        if (!audioProcessor.isManualMode())
+        {
         auto& syncData = audioProcessor.getLastConfigSync();
         for (auto& param : syncData.parameters)
         {
@@ -273,18 +296,23 @@ void DrawdioProcessorEditor::syncCompiledKnobs(bool& needsRepaint)
                 }
             }
         }
+        }
     }
 }
 
 void DrawdioProcessorEditor::syncAutomation()
 {
-    std::vector<DspModuleType> slots(PedalSlotCount);
-    for (int i = 0; i < PedalSlotCount; ++i)
-        slots[i] = audioProcessor.getPedalSlot(i);
-    auto envelope = m_automationCompiler.compile(
-        m_pixelCanvas.getGridData(), slots);
-    m_automationPlayer.setEnvelope(envelope);
-    m_bottomBar.getAutomationDisplay().setEnvelope(envelope);
+    if (m_autoEnvelopeDirty)
+    {
+        m_autoEnvelopeDirty = false;
+        std::vector<DspModuleType> slots(PedalSlotCount);
+        for (int i = 0; i < PedalSlotCount; ++i)
+            slots[i] = audioProcessor.getPedalSlot(i);
+        auto envelope = m_automationCompiler.compile(
+            m_pixelCanvas.getGridData(), slots);
+        m_automationPlayer.setEnvelope(envelope);
+        m_bottomBar.getAutomationDisplay().setEnvelope(envelope);
+    }
 
     float bpm = audioProcessor.getPlayHeadBpm();
     double ppq = audioProcessor.getPlayHeadPpq();
@@ -311,7 +339,7 @@ void DrawdioProcessorEditor::syncKnobAutomation()
                 continue;
             size_t idx = static_cast<size_t>(slot * 4 + k);
             float strength = audioProcessor.getDSPProcessor().getKnobLinkStrength(slot, k);
-            float display = std::max(0.0f, std::min(1.0f, knobVals[idx] + autoVal * strength));
+            float display = std::max(0.0f, std::min(1.0f, knobVals[idx] * (1.0f - strength) + autoVal * strength));
             pedal->setKnobValue(k, display);
         }
     }
@@ -343,7 +371,25 @@ void DrawdioProcessorEditor::checkForUpdates()
 
     m_pedalboardGrid.syncPedals();
     m_bottomBar.syncPedalNames();
+    m_bottomBar.syncGainKnobs();
     refreshRoutingFromConfig();
+
+    // Restore UI state from processor (covers DAW preset load)
+    audioProcessor.storeUndoData(m_pixelCanvas.captureUndoData());
+    m_pixelCanvas.setGridData(audioProcessor.getGridData());
+    m_pixelCanvas.applyUndoData(audioProcessor.getUndoData());
+    {
+        int bars = audioProcessor.getBarCount();
+        m_bottomBar.getAutomationDisplay().setBarCount(bars);
+        m_bottomBar.updateBarsButton(bars);
+        m_automationPlayer.setBarCount(bars);
+    }
+    {
+        int start = audioProcessor.getSectionStart();
+        m_bottomBar.getAutomationDisplay().setSectionStart(start);
+        m_automationPlayer.setSectionStartBar(start);
+    }
+    m_bottomBar.updateManualButton(audioProcessor.isManualMode());
 
     if (needsRepaint || m_needsRepaint)
     {
@@ -357,11 +403,22 @@ void DrawdioProcessorEditor::timerCallback()
     checkForUpdates();
 }
 
-void DrawdioProcessorEditor::showHamburgerMenu()
+void DrawdioProcessorEditor::enterManualMode()
 {
-    juce::PopupMenu menu;
-    menu.addItem("Settings...", false, false, nullptr);
-    menu.showMenuAsync(juce::PopupMenu::Options(), [](int) {});
+    m_routingManager.clearManualRouting();
+    audioProcessor.setManualRouting({});
+    m_pedalboardGrid.clearEdges();
+    m_pedalboardGrid.clearInputOutputCables();
+    m_pedalboardGrid.rebuildCableCache();
+}
+
+void DrawdioProcessorEditor::exitManualMode()
+{
+    m_routingManager.clearManualRouting();
+    m_pedalboardGrid.clearEdges();
+    m_pedalboardGrid.clearInputOutputCables();
+    m_pedalboardGrid.rebuildCableCache();
+    audioProcessor.setManualRouting({});
 }
 
 void DrawdioProcessorEditor::savePreset()
@@ -370,14 +427,16 @@ void DrawdioProcessorEditor::savePreset()
         "Save Preset",
         juce::File::getSpecialLocation(juce::File::userDocumentsDirectory),
         "*.drawdio");
-    chooser->launchAsync(2, [this, chooser](const juce::FileChooser& fc)
+    SafePointer<DrawdioProcessorEditor> safeThis(this);
+    chooser->launchAsync(2, [safeThis, chooser](const juce::FileChooser& fc)
     {
+        if (safeThis == nullptr) return;
         auto result = fc.getResult();
         if (result == juce::File{}) return;
         juce::File file = result;
         if (file.getFileExtension().isEmpty())
             file = file.withFileExtension(".drawdio");
-        juce::MemoryBlock state = audioProcessor.createPresetState();
+        juce::MemoryBlock state = safeThis->audioProcessor.createPresetState();
         juce::FileOutputStream stream(file);
         if (stream.openedOk())
             stream.write(state.getData(), state.getSize());
@@ -390,21 +449,23 @@ void DrawdioProcessorEditor::loadPreset()
         "Load Preset",
         juce::File::getSpecialLocation(juce::File::userDocumentsDirectory),
         "*.drawdio");
-    chooser->launchAsync(juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles, [this, chooser](const juce::FileChooser& fc)
+    SafePointer<DrawdioProcessorEditor> safeThis(this);
+    chooser->launchAsync(juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles, [safeThis, chooser](const juce::FileChooser& fc)
     {
+        if (safeThis == nullptr) return;
         auto result = fc.getResult();
         if (result == juce::File{}) return;
         juce::MemoryBlock data;
         if (result.loadFileAsData(data))
         {
-            if (audioProcessor.applyPresetState(data.getData(), static_cast<int>(data.getSize())))
+            if (safeThis->audioProcessor.applyPresetState(data.getData(), static_cast<int>(data.getSize())))
             {
-    m_pixelCanvas.setGridData(audioProcessor.getGridData());
-    m_pixelCanvas.applyUndoData(audioProcessor.getUndoData());
-                triggerRecompile();
-                auto knobVals = audioProcessor.getKnobValues();
+    safeThis->m_pixelCanvas.setGridData(safeThis->audioProcessor.getGridData());
+    safeThis->m_pixelCanvas.applyUndoData(safeThis->audioProcessor.getUndoData());
+                safeThis->triggerRecompile();
+                auto knobVals = safeThis->audioProcessor.getKnobValues();
                 for (int s = 0; s < PedalSlotCount; ++s)
-                    if (auto* pedal = m_pedalboardGrid.getPedal(s))
+                    if (auto* pedal = safeThis->m_pedalboardGrid.getPedal(s))
                         for (int k = 0; k < 4; ++k)
                             pedal->setKnobValue(k, knobVals[static_cast<size_t>(s * 4 + k)]);
             }

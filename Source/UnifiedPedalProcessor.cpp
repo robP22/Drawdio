@@ -96,6 +96,9 @@ void UnifiedPedalProcessor::prepareToPlay(double sampleRate, int maxSamplesPerBl
     const size_t maxSamples = static_cast<size_t>(maxSamplesPerBlock);
     const size_t maxCh = static_cast<size_t>(m_maxChannels.load(std::memory_order_relaxed));
 
+    constexpr float kAutoSmoothHz = 12.0f;
+    m_autoSmoothAlpha = 1.0f - std::exp(-2.0f * 3.14159265f * kAutoSmoothHz * static_cast<float>(maxSamplesPerBlock) / static_cast<float>(sampleRate));
+
     m_crossfadeTempBuf.resize(maxCh);
     for (auto& buf : m_crossfadeTempBuf)
         buf.assign(maxSamples, 0.0f);
@@ -251,6 +254,11 @@ void UnifiedPedalProcessor::applyParamOffset(int physicalSlot, int knobIdx, floa
 {
     if (physicalSlot >= 0 && physicalSlot < PedalSlotCount && knobIdx >= 0 && knobIdx < 4)
     {
+        if (m_knobLinks[physicalSlot][knobIdx])
+        {
+            m_knobLinks[physicalSlot][knobIdx] = false;
+            m_knobLinkStrengths[physicalSlot][knobIdx] = 0.0f;
+        }
         const size_t idx = static_cast<size_t>(physicalSlot * 4 + knobIdx);
         m_paramOffsets[idx] += newValue - dragStartValue;
         m_parameterCache[idx].store(newValue, std::memory_order_release);
@@ -359,6 +367,7 @@ UnifiedPedalProcessor::ParameterSnapshot UnifiedPedalProcessor::getSnapshot() co
 void UnifiedPedalProcessor::processChainBlock(float** b, int c, int s, const PedalAssetPayload& config,
                                               std::array<std::unique_ptr<DspEffect>, PedalSlotCount>& effects)
 {
+    juce::ScopedNoDenormals noDenorm;
     int chCount = std::min(c, m_maxChannels.load(std::memory_order_relaxed));
 
     for (int idx = 0; idx < static_cast<int>(config.activeRoutingChain.size()); ++idx)
@@ -389,10 +398,12 @@ void UnifiedPedalProcessor::processChainBlock(float** b, int c, int s, const Ped
                 readCached(ParamToken::Knob3, 0.5f)
             };
 
-            float autoVal = m_currentAutomationValue.load(std::memory_order_relaxed);
+            float rawAuto = m_currentAutomationValue.load(std::memory_order_relaxed);
+            m_smoothedAutoValue += (rawAuto - m_smoothedAutoValue) * m_autoSmoothAlpha;
+            float autoVal = m_smoothedAutoValue;
             for (int k = 0; k < 4; ++k)
                 if (m_knobLinks[physSlot][k])
-                    params[k] = std::min(params[k] + autoVal * m_knobLinkStrengths[physSlot][k], 1.0f);
+                    params[k] = params[k] * (1.0f - m_knobLinkStrengths[physSlot][k]) + autoVal * m_knobLinkStrengths[physSlot][k];
 
             int mi = effectPtr->mixKnobIndex();
             if (mi >= 0 && mi < 4)
@@ -403,10 +414,15 @@ void UnifiedPedalProcessor::processChainBlock(float** b, int c, int s, const Ped
 
                 effectPtr->processBlock(b, chCount, s, params);
 
-                float mix = params[mi];
+                float prevMix = m_prevMix[static_cast<size_t>(physSlot)];
+                float currMix = params[mi];
+                m_prevMix[static_cast<size_t>(physSlot)] = currMix;
+
                 for (int ch = 0; ch < chCount; ++ch)
                     for (int smp = 0; smp < s; ++smp)
                     {
+                        float t = static_cast<float>(smp) / static_cast<float>(s);
+                        float mix = prevMix + (currMix - prevMix) * t;
                         float x = m_dryBuffer[static_cast<size_t>(ch)][static_cast<size_t>(smp)] * (1.0f - mix)
                                 + b[ch][smp] * mix;
                         b[ch][smp] = std::isfinite(x) ? juce::jlimit(-1.0f, 1.0f, x) : 0.0f;
@@ -469,7 +485,7 @@ void UnifiedPedalProcessor::processAudioBlock(float** buffer, int numChannels, i
         bool silent = true;
         int checkCh = std::min(numChannels, m_maxChannels.load(std::memory_order_relaxed));
         for (int c = 0; c < checkCh; ++c)
-            for (int s = 0; s < std::min(4, numSamples); ++s)
+            for (int s = 0; s < std::min(16, numSamples); ++s)
                 if (std::abs(buffer[c][s]) > 1e-6f) { silent = false; break; }
 
         if (silent)

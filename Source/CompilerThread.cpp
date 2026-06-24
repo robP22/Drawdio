@@ -18,7 +18,6 @@ void CompilerThread::start(CanvasMessageQueue& queue, PenDebouncer& debouncer)
 {
     if (m_running.load()) return;
     m_running.store(true);
-    m_slotFull.store(false, std::memory_order_relaxed);
     m_thread = std::thread(&CompilerThread::threadFunc, this, std::ref(queue), std::ref(debouncer));
 }
 
@@ -107,11 +106,10 @@ void CompilerThread::threadFunc(CanvasMessageQueue& queue, PenDebouncer& debounc
             existingParams = m_existingParams;
         }
 
-        if (!m_slotFull.load(std::memory_order_acquire))
-        {
-            m_slot = new PedalAssetPayload(
-                compileCanvas(*gridSnapshot, slots, manualRouting, existingParams));
-            m_slotFull.store(true, std::memory_order_release);
-        }
+        if (auto* stale = getCompiledPayloadPtr())
+            delete stale;
+        m_slot = new PedalAssetPayload(
+            compileCanvas(*gridSnapshot, slots, manualRouting, existingParams));
+        m_slotFull.store(true, std::memory_order_release);
     }
 }

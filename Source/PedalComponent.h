@@ -6,6 +6,7 @@
 #include "PedalStructures.h"
 #include "ResourceManager.h"
 #include "IThemeProvider.h"
+#include "SpriteKnob.h"
 
 class DrawdioProcessor;
 
@@ -35,8 +36,6 @@ private:
     void showTypePopup();
     void updateDefinition();
     void updateKnobBounds();
-    void drawKnob(juce::Graphics& g, int knobIdx, float value);
-    int hitTestKnob(juce::Point<float> pos) const;
     juce::Rectangle<float> getLabelArea() const;
 
     static constexpr int kKnobCount = 4;
@@ -47,10 +46,7 @@ private:
     int m_slotIndex;
     DspModuleType m_currentType;
     const PedalDefinition* m_definition = nullptr;
-    std::array<float, kKnobCount> m_knobValues = { 0.5f, 0.5f, 0.5f, 0.5f };
     std::array<juce::Rectangle<float>, kKnobCount> m_knobBounds;
-
-    int m_draggingKnob = -1;
-    float m_dragStartValue = 0.0f;
-    float m_dragStartY = 0.0f;
+    std::array<std::unique_ptr<SpriteKnob>, kKnobCount> m_knobs;
+    float m_knobDragStartValues[kKnobCount]{};
 };

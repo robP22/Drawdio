@@ -34,9 +34,9 @@ const std::array<PedalDefinition, 23>& definitions()
 {
     static const std::array<PedalDefinition, 23> defs {{
 makeDefinition(DspModuleType::BYPASS, "Bypass",             "Mix",    "",       "",       ""),
-        makeDefinition(DspModuleType::WAVESHAPER_DISTORTION, "Waveshaper Dist.",   "Tone",   "Sym",   "Drive",  "Level"),
-        makeDefinition(DspModuleType::MICROPITCH_CHORUS,     "MicroPitch Chorus",  "Mix",    "Depth", "Detune", "Rate"),
-        makeDefinition(DspModuleType::MULTI_MODE_FILTER,     "Multi-mode Filter",  "Mode",   "Res",   "Cutoff", "Level"),
+        makeDefinition(DspModuleType::WAVESHAPER_DISTORTION, "Waveshaper",   "Tone",   "Sym",   "Drive",  "Level"),
+        makeDefinition(DspModuleType::MICROPITCH_CHORUS,     "MicroPitch",  "Mix",    "Depth", "Detune", "Rate"),
+        makeDefinition(DspModuleType::MULTI_MODE_FILTER,     "Multi Filter",  "Mode",   "Res",   "Cutoff", "Level"),
         makeDefinition(DspModuleType::PITCH_SHIFTER_GRANULAR,"Pitch Shifter",      "Spread", "Grain", "Rate",   "Level"),
         makeDefinition(DspModuleType::ENVELOPE_VCA_COMPRESSOR,"VCA Compressor",    "Attack", "Release","Thresh", "Level"),
         makeDefinition(DspModuleType::GLITCH_STUTTER,        "Glitch Stutter",     "Intens", "Gate",  "Rate",   "Level"),
@@ -54,7 +54,7 @@ makeDefinition(DspModuleType::BYPASS, "Bypass",             "Mix",    "",       
         makeDefinition(DspModuleType::REVERSE_BUFFER,        "Reverse Buffer",     "Mix",    "Length","Dir",    "Density"),
         makeDefinition(DspModuleType::GRAIN_SCRUBBER,        "Grain Scrubber",     "Pos",    "Density","Size",  "Level"),
         makeDefinition(DspModuleType::SPECTRAL_FILTER,       "Spectral Filter",    "Width",  "Center","Q",      "Level"),
-        makeDefinition(DspModuleType::CONVOLUTION_SPACE,     "Convolution Space",  "Mix",    "Space", "Size",   "Damp"),
+        makeDefinition(DspModuleType::CONVOLUTION_SPACE,     "Conv Space",  "Mix",    "Space", "Size",   "Damp"),
         makeDefinition(DspModuleType::RANDOM_MODULATOR,      "Random Modulator",   "Depth",  "Smooth","Rate",   "Shape"),
     }};
     return defs;

@@ -18,6 +18,7 @@ void ReverbNetworkEffect::reset()
 
 void ReverbNetworkEffect::processSample(float** b, int c, int s, float effectParam)
 {
+    juce::ScopedNoDenormals noDenorm;
     float decay = effectParam;
 
     float dryL = (c > 0) ? b[0][s] : 0.0f;

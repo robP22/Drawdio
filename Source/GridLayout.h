@@ -35,7 +35,8 @@ constexpr float CanvasScaleRatio = 0.90f;
 constexpr float KnobSizeRatio = 0.16f;
 constexpr float KnobSpreadRatio = 0.35f;
 constexpr float KnobCenterYShiftRatio = -0.02f;
-constexpr float JackInsetXRatio = 0.21f;
+constexpr float KnobLinkRingRatio = 0.92f;
+constexpr float JackInsetXRatio = 0.26f;
 constexpr float JackInsetYRatio = 0.05f;
 constexpr float KnobLabelOffsetYRatio = 0.10f;
 

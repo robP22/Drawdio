@@ -201,6 +201,9 @@ struct ReverbNetworkState
     size_t apPtr[2];
     float decorrL;
     float decorrR;
+    float combLfoPhase[4];
+    std::vector<float> reflectBuf[2];
+    size_t reflectPtr;
 };
 
 // Allocate reverb delay lines from sample rate.
@@ -223,6 +226,11 @@ inline void prepareReverbNetwork(ReverbNetworkState& state, double sampleRate,
     }
     for (int i = 0; i < 4; ++i)
         state.combDampState[i] = 0.0f;
+    for (int i = 0; i < 4; ++i)
+        state.combLfoPhase[i] = static_cast<float>(i) * 1.5707963f;
+    for (int i = 0; i < 2; ++i)
+        state.reflectBuf[i].assign(3072, 0.0f);
+    state.reflectPtr = 0;
     state.decorrL = 0.0f;
     state.decorrR = 0.0f;
 }
@@ -242,6 +250,9 @@ inline void resetReverbNetwork(ReverbNetworkState& state)
     }
     for (int i = 0; i < 4; ++i)
         state.combDampState[i] = 0.0f;
+    for (int i = 0; i < 2; ++i)
+        std::fill(state.reflectBuf[i].begin(), state.reflectBuf[i].end(), 0.0f);
+    state.reflectPtr = 0;
     state.decorrL = 0.0f;
     state.decorrR = 0.0f;
 }
@@ -257,19 +268,41 @@ inline void processReverbNetworkSample(float dryL, float dryR,
 {
     juce::ScopedNoDenormals noDenorm;
     float feedback = static_cast<float>(config.feedbackBase + decayNormalised * config.feedbackRange);
-    float monoIn = (dryL + dryR) * 0.5f;
     float hfDamp = decayNormalised * decayNormalised * 0.5f;
 
+    static constexpr size_t kTapOffsets[5] = { 882, 1102, 1411, 1852, 2426 };
+    static constexpr float kTapGains[5] = { 0.32f, 0.20f, 0.13f, 0.07f, 0.03f };
+
+    size_t rLen = state.reflectBuf[0].size();
+    state.reflectBuf[0][state.reflectPtr] = dryL;
+    state.reflectBuf[1][state.reflectPtr] = dryR;
+
+    float erL = 0.0f, erR = 0.0f;
+    for (int t = 0; t < 5; ++t)
+    {
+        size_t idx = (state.reflectPtr + rLen - kTapOffsets[t]) % rLen;
+        erL += state.reflectBuf[0][idx] * kTapGains[t];
+        erR += state.reflectBuf[1][idx] * kTapGains[t];
+    }
+    state.reflectPtr = (state.reflectPtr + 1) % rLen;
+
+    float monoIn = (erL + erR) * 0.5f;
+
     float combOut = 0.0f;
+    static constexpr float kModInc[4] = { 0.0000869f, 0.000124f, 0.000161f, 0.000209f };
     for (int i = 0; i < 4; ++i)
     {
         size_t bufLen = state.combBuf[i].size();
         if (bufLen == 0) continue;
 
-        float& bufVal = state.combBuf[i][state.combPtr[i]];
-        float tap = bufVal;
+        state.combLfoPhase[i] += kModInc[i];
+        if (state.combLfoPhase[i] > 2.0f * 3.14159265f)
+            state.combLfoPhase[i] -= 2.0f * 3.14159265f;
+
+        float modPos = static_cast<float>(state.combPtr[i]) + std::sin(state.combLfoPhase[i]) * 1.2f;
+        float tap = interpolateDelayRead(state.combBuf[i], modPos);
         tap = state.combDampState[i] = state.combDampState[i] + hfDamp * (tap - state.combDampState[i]);
-        bufVal = monoIn + std::tanh(tap * feedback * config.combGains[i]) * 0.7f;
+        state.combBuf[i][state.combPtr[i]] = monoIn + std::tanh(tap * feedback * config.combGains[i]) * 0.7f;
         combOut += tap;
         state.combPtr[i] = (state.combPtr[i] + 1) % bufLen;
     }
@@ -308,6 +341,7 @@ struct GranularProcessorState
     int grainLen;
     size_t grainBase;
     std::vector<float> window;
+    uint32_t rngState = 12345;
 };
 
 // Prepare a granular delay line.
@@ -352,8 +386,14 @@ inline float processGranularSample(float input, GranularProcessorState& state,
         state.grainLen = std::max(1, static_cast<int>(sampleRate * grainDurationSec));
         state.readPtr = 0.0f;
         state.grainPhase2 = static_cast<float>(state.grainLen) * 0.5f;
+
+        state.rngState ^= state.rngState << 13;
+        state.rngState ^= state.rngState >> 17;
+        state.rngState ^= state.rngState << 5;
+        float spray = (static_cast<float>(state.rngState & 0x3FFF) / 16383.0f - 1.0f) * 0.10f;
+
         state.grainBase = (state.writePtr + bufSize - static_cast<size_t>(state.grainLen)
-                           - static_cast<size_t>(grainPosition * bufSize)) % bufSize;
+                           - static_cast<size_t>((grainPosition + spray) * static_cast<float>(bufSize))) % bufSize;
         size_t wLen = std::min(static_cast<size_t>(state.grainLen), state.window.size());
         for (size_t wi = 0; wi < wLen; ++wi)
         {
@@ -362,6 +402,7 @@ inline float processGranularSample(float input, GranularProcessorState& state,
         }
     }
 
+    if (!std::isfinite(input)) input = 0.0f;
     state.delayBuf[state.writePtr] = input;
 
     float grainLenF = static_cast<float>(state.grainLen);

@@ -111,6 +111,7 @@ private:
 
     void rebuildGridCache();
     void rebuildOverlay();
+    void rebuildOverlay(const CanvasLayout& cl);
     void updateOverlayPixel(int index);
     void notifySnapshot();
     void floodFill(int startX, int startY);

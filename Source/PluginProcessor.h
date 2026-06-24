@@ -68,6 +68,12 @@ public:
     void setBarCount(int b) { m_barCount = b; }
     int getBarCount() const { return m_barCount; }
 
+    void setSectionStart(int s) { m_sectionStartBar = s; }
+    int getSectionStart() const { return m_sectionStartBar; }
+
+    void setManualMode(bool m);
+    bool isManualMode() const { return m_manualMode; }
+
     void storeUndoData(const std::vector<uint8_t>& data) { m_undoData = data; }
     const std::vector<uint8_t>& getUndoData() const { return m_undoData; }
 
@@ -103,6 +109,8 @@ private:
     std::vector<float*> m_channelBuffer;
 
     int m_barCount = 1;
+    int m_sectionStartBar = 0;
+    bool m_manualMode = false;
 
     std::vector<uint8_t> m_undoData;
 
