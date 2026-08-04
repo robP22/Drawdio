@@ -10,6 +10,8 @@ obj/
 .vscode/
 .idea/
 *.swp
+*.swo
+*.swn
 *.suo
 *.user
 
@@ -17,3 +19,8 @@ obj/
 .DS_Store
 Thumbs.db
 .aider*
+.agents_tmp/
+
+# Node tooling (unused auto-updater stubs)
+node_modules/
+package-lock.json
