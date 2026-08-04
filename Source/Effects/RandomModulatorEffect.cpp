@@ -1,6 +1,6 @@
 #include <JuceHeader.h>
 #include "Effects/RandomModulatorEffect.h"
-#include <algorithm>
+
 #include <cmath>
 
 void RandomModulatorEffect::prepare(double sampleRate, int numChannels)
@@ -28,10 +28,30 @@ void RandomModulatorEffect::reset()
 void RandomModulatorEffect::processSample(float** b, int c, int s, float effectParam)
 {
     juce::ScopedNoDenormals noDenorm;
+    float rate = effectParam;
+    float updateRateHz = 0.1f + rate * 19.9f;
+    int updateInterval = static_cast<int>(m_sampleRate / updateRateHz);
+    if (updateInterval < 1) updateInterval = 1;
+
+    auto xorshift32 = [](uint32_t& state) -> float {
+        state ^= state << 13;
+        state ^= state >> 17;
+        state ^= state << 5;
+        return static_cast<float>(state & 0xFFFFFF) / 16777215.0f * 2.0f - 1.0f;
+    };
+
     int chCount = std::min(c, static_cast<int>(m_channels.size()));
     for (int ch = 0; ch < chCount; ++ch)
     {
         auto& mc = m_channels[static_cast<size_t>(ch)];
+
+        if (mc.counter <= 0)
+        {
+            mc.holdValue = xorshift32(m_rngState) * m_depth;
+            mc.counter = updateInterval + (ch * 7) % updateInterval;
+        }
+        --mc.counter;
+
         float smooth = mc.current + m_smoothFactor * (mc.holdValue - mc.current);
         if (std::abs(smooth - mc.holdValue) < 0.001f)
             smooth = mc.holdValue;
@@ -43,7 +63,7 @@ void RandomModulatorEffect::processSample(float** b, int c, int s, float effectP
 void RandomModulatorEffect::processBlock(float** b, int c, int n, const float* params)
 {
     juce::ScopedNoDenormals noDenorm;
-    float depth = params[0];
+    m_depth = params[0];
     float smooth = params[1];
     float rate = params[2];
 
@@ -67,7 +87,7 @@ void RandomModulatorEffect::processBlock(float** b, int c, int n, const float* p
 
         if (mc.counter <= 0)
         {
-            mc.holdValue = xorshift32(m_rngState) * depth;
+            mc.holdValue = xorshift32(m_rngState) * m_depth;
             mc.counter = updateInterval + (ch * 7) % updateInterval;
         }
         --mc.counter;

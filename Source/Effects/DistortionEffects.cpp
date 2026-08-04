@@ -18,7 +18,7 @@ void WaveshaperEffect::processSample(float** b, int c, int s, float effectParam)
 {
     juce::ScopedNoDenormals noDenorm;
     float drive = effectParam;
-    float clip = 0.5f + drive * 0.5f;
+    float clip = 1.0f - drive * 0.5f;
     if (drive < 0.01f) return;
 
     for (int ch = 0; ch < c; ++ch)
@@ -33,7 +33,7 @@ void WaveshaperEffect::processBlock(float** b, int c, int n, const float* params
     juce::ScopedNoDenormals noDenorm;
     float drive = params[3];
     if (drive < 0.01f) return;
-    float clip = 0.5f + drive * 0.5f;
+    float clip = 1.0f - drive * 0.5f;
     float k = (2.0f / 3.14159265f) * clip;
     float alpha = drive * 5.0f;
 
@@ -144,6 +144,9 @@ void CombResonatorEffect::processSample(float** b, int c, int s, float effectPar
     float freq = 20.0f * std::pow(66.666f, effectParam);
     float feedback = 0.85f;
 
+    size_t delaySamples = static_cast<size_t>(m_sampleRate / freq + 0.5f);
+    if (delaySamples < 1) delaySamples = 1;
+
     int chCount = std::min(c, static_cast<int>(m_delays.size()));
     for (int ch = 0; ch < chCount; ++ch)
     {
@@ -151,13 +154,11 @@ void CombResonatorEffect::processSample(float** b, int c, int s, float effectPar
         size_t bufSize = d.buf.size();
         if (bufSize == 0) continue;
 
-        size_t delaySamples = static_cast<size_t>(m_sampleRate / freq + 0.5f);
-        if (delaySamples < 1) delaySamples = 1;
-        if (delaySamples >= bufSize) delaySamples = bufSize - 1;
+        size_t chDelaySamples = std::min(delaySamples, bufSize - 1);
 
         float in = b[ch][s];
         if (!std::isfinite(in)) in = 0.0f;
-        size_t readPtr = (d.writePtr + bufSize - delaySamples) % bufSize;
+        size_t readPtr = (d.writePtr + bufSize - chDelaySamples) % bufSize;
         float delayed = d.buf[readPtr];
         float& damp = m_dampState[static_cast<size_t>(ch)];
         damp = damp + m_dampCoeff * (delayed - damp);

@@ -3,8 +3,17 @@
 #include <atomic>
 #include <array>
 #include <cstdint>
-#include "PedalStructures.h"
+#include <memory>
+#include "Core/CompiledPedalConfig.h"
+#include "Core/DrawdioConstants.h"
+#include "Core/DspModuleType.h"
+#include "Core/ParameterTypes.h"
 #include "Effects/DspEffect.h"
+#include "State/ParameterCache.h"
+#include "State/PedalState.h"
+#include "State/CrossfadeState.h"
+
+struct ConfigAudioView;
 
 class UnifiedPedalProcessor
 {
@@ -13,101 +22,48 @@ public:
     ~UnifiedPedalProcessor();
 
     void prepareToPlay(double sampleRate, int maxSamplesPerBlock, int numChannels = 2);
-    void reset();
-    void loadPedalConfiguration(const PedalAssetPayload* config);
-    void processAudioBlock(float** buffer, int numChannels, int numSamples);
-    std::vector<ParameterDescriptor> getCurrentParams() const;
-    const PedalAssetPayload* getCurrentConfig() const;
-
-    void updateParameter(int physicalSlot, int knobIdx, float newValue);
-    void storeParameterValue(int physicalSlot, int knobIdx, float value);
-    void applyParamOffset(int physicalSlot, int knobIdx, float dragStartValue, float newValue);
-    void clearParamOffsets();
-    void snapshotParamState();
-    void restoreParamState();
-    float getKnobDisplayValue(int slot, int knob, float compiledValue) const;
-    void invalidateParamCacheForSlot(int physicalSlot);
-
-    void drainReleaseQueue();
-    void tryApplyDeferredConfig();
-    bool hasPendingReleases() const;
+    void reset(std::array<std::unique_ptr<DspEffect>, PedalSlotCount>& effects);
+    void processAudioBlock(float** buffer, int numChannels, int numSamples,
+                           ConfigAudioView& cfg);
+    void setKnobParameter(int physicalSlot, int knobIdx, float dragStartValue, float newValue);
     void scheduleReset();
-    bool isParamOverridden(int physicalSlot, int knobIdx) const;
-    uint32_t getParamOverrideMask() const { return m_paramCacheValidMask.load(std::memory_order_acquire); }
+    void crossfadeReset() { m_crossfade.requestReset(); }
 
-    float getPedalPeak(int slot) const { return m_pedalPeaks[slot].load(std::memory_order_relaxed); }
-    void resetPedalPeaks() { for (auto& p : m_pedalPeaks) p.store(0.0f, std::memory_order_relaxed); }
-    void setPedalGain(int slot, float gain) { m_pedalGains[slot].store(gain, std::memory_order_relaxed); }
-    float getPedalGain(int slot) const { return m_pedalGains[slot].load(std::memory_order_relaxed); }
-    void setInputGain(float g) { m_inputGain.store(g, std::memory_order_relaxed); }
-    void setOutputGain(float g) { m_outputGain.store(g, std::memory_order_relaxed); }
-    float getInputGain() const { return m_inputGain.load(std::memory_order_relaxed); }
-    float getOutputGain() const { return m_outputGain.load(std::memory_order_relaxed); }
+    void updateParameter(int physicalSlot, int knobIdx, float newValue) { m_paramCache.update(physicalSlot, knobIdx, newValue); }
+    void storeParameterValue(int physicalSlot, int knobIdx, float value) { m_paramCache.store(physicalSlot, knobIdx, value); }
+    void clearParamOffsets() { m_paramCache.clearOffsets(); }
+    float getKnobDisplayValue(int slot, int knob, float compiledValue) const { return m_paramCache.getKnobDisplayValue(slot, knob, compiledValue); }
+    void invalidateParamCacheForSlot(int physicalSlot) { m_paramCache.invalidateSlot(physicalSlot); }
+    bool isParamOverridden(int physicalSlot, int knobIdx) const { return m_paramCache.isOverridden(physicalSlot, knobIdx); }
+    uint32_t getParamOverrideMask() const { return m_paramCache.getOverrideMask(); }
+    ParameterCache::Snapshot getSnapshot() const { return m_paramCache.getSnapshot(); }
 
-    void setKnobLink(int slot, int knob, bool linked, float strength = 1.0f);
-    bool isKnobLinked(int slot, int knob) const;
-    float getKnobLinkStrength(int slot, int knob) const;
+    PedalState& pedalState() { return m_pedalState; }
+    const PedalState& pedalState() const { return m_pedalState; }
     void setAutomationValue(float val) { m_currentAutomationValue.store(val, std::memory_order_relaxed); }
 
-    struct ParameterSnapshot
-    {
-        std::array<float, 24> values;
-        uint32_t revision;
-    };
-    ParameterSnapshot getSnapshot() const;
+    double getSampleRate() const { return m_sampleRate.load(std::memory_order_relaxed); }
+    int getMaxChannels() const { return m_maxChannels.load(std::memory_order_relaxed); }
 
 private:
     void processChainBlock(float** b, int c, int s, const PedalAssetPayload& config,
-                           std::array<std::unique_ptr<DspEffect>, PedalSlotCount>& effects);
-    void pushToReleaseQueue(const PedalAssetPayload* ptr);
+                           std::array<std::unique_ptr<DspEffect>, PedalSlotCount>& effects,
+                           std::array<std::array<const float*, 4>, PedalSlotCount>& paramPtrs);
 
     std::atomic<double> m_sampleRate{44100.0};
     std::atomic<int> m_maxSamplesPerBlock{1024};
     std::atomic<int> m_maxChannels{2};
-    std::atomic<int> m_crossfadeSamples{882};
+    ParameterCache m_paramCache;
 
-    std::atomic<uint32_t> m_paramRevision{0};
-    std::array<std::atomic<float>, 24> m_parameterCache;
-    std::atomic<uint32_t> m_paramCacheValidMask{0};
-    std::array<float, 24> m_paramOffsets{};
-
-    std::atomic<const PedalAssetPayload*> m_currentConfig{nullptr};
-    std::atomic<const PedalAssetPayload*> m_nextConfig{nullptr};
-    std::atomic<const PedalAssetPayload*> m_deferredConfig{nullptr};
-    std::atomic<int> m_crossfadeCounter{0};
     std::atomic<bool> m_pendingReset{false};
-    std::atomic<bool> m_pendingCrossfadeReset{false};
-
-    static constexpr int kReleaseQueueCapacity = 16;
-    std::array<const PedalAssetPayload*, kReleaseQueueCapacity> m_releaseQueue{};
-    std::atomic<int> m_releaseWriteIndex{0};
-    std::atomic<int> m_releaseReadIndex{0};
-
-    static constexpr float kCrossfadeMs = 20.0f;
+    CrossfadeState m_crossfade;
 
     std::vector<std::vector<float>> m_dryBuffer;
-    std::vector<std::vector<float>> m_crossfadeTempBuf;
-    std::vector<std::vector<float>> m_crossfadeOldOut;
 
-    static std::unique_ptr<DspEffect> createEffectForType(DspModuleType type);
-
-    std::array<std::unique_ptr<DspEffect>, PedalSlotCount> m_chainEffects;
-    std::array<std::unique_ptr<DspEffect>, PedalSlotCount> m_pendingEffects;
-    std::array<std::atomic<uint8_t>, PedalSlotCount> m_chainEffectTypes{};
-    std::atomic<const PedalAssetPayload*> m_audioReleasePtr{nullptr};
-    void prebuildEffects(const PedalAssetPayload* config, bool& deferred);
-
+    PedalState m_pedalState;
     int m_silentBlockCount = 0;
-    std::array<std::atomic<float>, PedalSlotCount> m_pedalPeaks;
-    std::array<std::atomic<float>, PedalSlotCount> m_pedalGains;
-    std::atomic<float> m_inputGain{1.0f};
-    std::atomic<float> m_outputGain{1.0f};
     std::atomic<float> m_currentAutomationValue{0.0f};
     float m_smoothedAutoValue = 0.0f;
     float m_autoSmoothAlpha = 0.0f;
-    std::array<std::array<bool, 4>, PedalSlotCount> m_knobLinks{};
-    std::array<std::array<float, 4>, PedalSlotCount> m_knobLinkStrengths{};
-    std::array<float, 24> m_savedParamOffsets{};
-    uint32_t m_savedParamMask = 0;
     std::array<float, PedalSlotCount> m_prevMix = {0.5f, 0.5f, 0.5f, 0.5f, 0.5f, 0.5f};
 };

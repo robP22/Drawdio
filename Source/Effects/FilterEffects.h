@@ -1,15 +1,16 @@
 #pragma once
 #include <vector>
-#include "PedalStructures.h"
+#include "Dsp/DelayPrimitives.h"
 #include "Effects/DspEffect.h"
 
-class SpectralFreezeEffect : public DspEffect
+class TimeDomainFreezeEffect : public DspEffect
 {
 public:
+    TimeDomainFreezeEffect() : DspEffect(0) {}
     void prepare(double sampleRate, int numChannels) override;
     void reset() override;
     void processSample(float** b, int c, int s, float effectParam) override;
-    int mixKnobIndex() const override { return 0; }
+    void processBlock(float** b, int c, int n, const float* params) override;
 
 private:
     struct FreezeChannel {
@@ -19,18 +20,21 @@ private:
         float lfoPhase = 0.0f;
         size_t freezeLen = 0;
         bool wasFrozen = false;
+        float xfadePos = 32.0f;
+        float oldReadPos = 0.0f;
+        float entryXfadePos = 32.0f;
+        static constexpr float kXfadeLen = 32.0f;
     };
     std::vector<FreezeChannel> m_channels;
 };
 
-class FormantShifterEffect : public DspEffect
+class DynamicResonantFilter : public DspEffect
 {
 public:
     void prepare(double sampleRate, int numChannels) override;
     void reset() override;
     void processSample(float** b, int c, int s, float effectParam) override;
     void processBlock(float** b, int c, int n, const float* params) override;
-    int mixKnobIndex() const override { return -1; }
 
 private:
     std::vector<float> m_lp1;
@@ -47,7 +51,6 @@ public:
     void reset() override;
     void processSample(float** b, int c, int s, float effectParam) override;
     void processBlock(float** b, int c, int n, const float* params) override;
-    int mixKnobIndex() const override { return -1; }
 
 private:
     struct SVFState { float lp = 0.0f, bp = 0.0f; };

@@ -6,7 +6,6 @@ class GranularPitchEffect : public GranularBaseEffect
 {
 public:
     GranularPitchEffect() : GranularBaseEffect(0.11f, 1.0) {}
-    int mixKnobIndex() const override { return -1; }
 };
 
 class FrequencyShifterEffect : public DspEffect
@@ -16,7 +15,6 @@ public:
     void reset() override;
     void processSample(float** b, int c, int s, float effectParam) override;
     void processBlock(float** b, int c, int n, const float* params) override;
-    int mixKnobIndex() const override { return -1; }
 
 private:
     float m_phase = 0.0f;
@@ -33,10 +31,11 @@ public:
     void prepare(double sampleRate, int numChannels) override;
     void reset() override;
     void processSample(float** b, int c, int s, float effectParam) override;
-    int mixKnobIndex() const override { return -1; }
+    void processBlock(float** b, int c, int n, const float* params) override;
 
 private:
     struct GlitchState {
+        static constexpr int kXfadeLen = 32;
         std::vector<float> buf;
         size_t writePtr = 0;
         int sliceCounter = 0;
@@ -47,6 +46,7 @@ private:
         int gateCounter = 0;
         int gateFadeIn = 0;
         int gateFadeOut = 0;
+        int entryXfadePos = kXfadeLen;
         enum Mode { RECORDING, PLAYING, GATED };
         Mode mode = RECORDING;
     };

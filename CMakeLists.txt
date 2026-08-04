@@ -53,20 +53,42 @@ juce_generate_juce_header(Drawdio)
 target_sources(Drawdio PRIVATE
     Source/PluginProcessor.cpp
     Source/PluginEditor.cpp
-    Source/ColorPalette.cpp
-    Source/ArcButton.cpp
     Source/UnifiedPedalProcessor.cpp
-    Source/CompilerThread.cpp
-    Source/CanvasMessageQueue.cpp
-    Source/PixelCanvasComponent.cpp
-    Source/PenDebouncer.cpp
-    Source/CompilerEngine.cpp
-    Source/PedalComponent.cpp
     Source/PedalboardGrid.cpp
-    Source/ManualConnectionModel.cpp
-    Source/HeadlessDspTest.cpp
-    Source/StateSerializer.cpp
-    Source/EffectConfigRegistry.cpp
+    Source/RenderUtils.cpp
+    Source/Core/CanvasAnalysis.cpp
+    Source/Dsp/ReverbNetwork.cpp
+    Source/Dsp/DspEffectFactory.cpp
+    Source/Compile/CompilerThread.cpp
+    Source/Compile/CanvasMessageQueue.cpp
+    Source/Compile/PenDebouncer.cpp
+    Source/Compile/CompilerEngine.cpp
+    Source/UI/Canvas/PixelCanvasComponent.cpp
+    Source/UI/Canvas/ColorPalette.cpp
+    Source/UI/Canvas/ArcButton.cpp
+    Source/UI/Pedalboard/PedalComponent.cpp
+    Source/UI/Pedalboard/CablePathBuilder.cpp
+    Source/UI/Pedalboard/CableRenderer.cpp
+    Source/UI/Pedalboard/ManualRoutingController.cpp
+    Source/UI/EditorSyncController.cpp
+    Source/UI/PresetFileController.cpp
+    Source/UI/Controls/MixerStrip.cpp
+    Source/UI/Controls/BottomControlBar.cpp
+    Source/UI/Controls/AutomationDisplay.cpp
+    Source/UI/Theme/ThemeManager.cpp
+    Source/Resources/ResourceManager.cpp
+    Source/State/ParameterCache.cpp
+    Source/State/PedalState.cpp
+    Source/State/ReleaseQueue.cpp
+    Source/State/ManualConnectionModel.cpp
+    Source/State/CanvasRoutingManager.cpp
+    Source/State/EffectConfigRegistry.cpp
+    Source/State/PedalDefinition.cpp
+    Source/State/StateSerializer.cpp
+    Source/State/ConfigManager.cpp
+    Source/State/AutomationEnvelope.cpp
+    Source/State/AutomationCompiler.cpp
+    Source/State/AutomationPlayer.cpp
     Source/Effects/GranularBaseEffect.cpp
     Source/Effects/DistortionEffects.cpp
     Source/Effects/FilterEffects.cpp
@@ -79,17 +101,6 @@ target_sources(Drawdio PRIVATE
     Source/Effects/SpectralFilterEffect.cpp
     Source/Effects/ConvolutionSpaceEffect.cpp
     Source/Effects/RandomModulatorEffect.cpp
-    Source/RenderUtils.cpp
-    Source/ResourceManager.cpp
-    Source/ThemeManager.cpp
-    Source/PedalDefinition.cpp
-    Source/CanvasRoutingManager.cpp
-    Source/MixerStrip.cpp
-    Source/BottomControlBar.cpp
-    Source/AutomationEnvelope.cpp
-    Source/AutomationCompiler.cpp
-    Source/AutomationPlayer.cpp
-    Source/AutomationDisplay.cpp
 )
 
 target_include_directories(Drawdio PRIVATE Source)

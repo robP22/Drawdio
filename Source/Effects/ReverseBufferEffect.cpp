@@ -6,106 +6,121 @@
 void ReverseBufferEffect::prepare(double sampleRate, int numChannels)
 {
     DspEffect::prepare(sampleRate, numChannels);
-    m_buffers.resize(static_cast<size_t>(numChannels));
-    for (auto& d : m_buffers)
-        prepareSimpleDelay(d, sampleRate, 1.5);
-
-    m_prevWindowSamps = 0;
-    m_xfadeCounter = kXfadeLen;
+    m_channels.resize(static_cast<size_t>(numChannels));
+    for (auto& ch : m_channels)
+    {
+        ch.buf.assign(static_cast<size_t>(sampleRate * 1.5), 0.0f);
+        ch.writePtr = 0;
+        ch.mode = RevState::RECORDING;
+        ch.sliceStart = 0;
+        ch.sliceLen = 0;
+        ch.playPos = 0;
+        ch.sliceCounter = 0;
+        ch.repeatCount = 0;
+        ch.xfadePos = RevChannel::kXfadeLen;
+    }
 }
 
 void ReverseBufferEffect::reset()
 {
-    for (auto& d : m_buffers)
-        resetSimpleDelay(d);
-    m_prevWindowSamps = 0;
-    m_xfadeCounter = kXfadeLen;
+    for (auto& ch : m_channels)
+    {
+        std::fill(ch.buf.begin(), ch.buf.end(), 0.0f);
+        ch.writePtr = 0;
+        ch.mode = RevState::RECORDING;
+        ch.sliceStart = 0;
+        ch.sliceLen = 0;
+        ch.playPos = 0;
+        ch.sliceCounter = 0;
+        ch.repeatCount = 0;
+        ch.xfadePos = RevChannel::kXfadeLen;
+    }
 }
 
 void ReverseBufferEffect::processSample(float** b, int c, int s, float effectParam)
 {
     juce::ScopedNoDenormals noDenorm;
     float density = effectParam;
-    float windowSec = 0.05f + density * 0.95f;
+    float grainSec = 0.05f + density * 0.95f;
+    int maxRepeats = 1 + static_cast<int>((1.0f - density) * 4.0f);
 
-    int chCount = std::min(c, static_cast<int>(m_buffers.size()));
+    int chCount = std::min(c, static_cast<int>(m_channels.size()));
     for (int ch = 0; ch < chCount; ++ch)
     {
-        auto& d = m_buffers[static_cast<size_t>(ch)];
-        size_t bufSize = d.buf.size();
+        auto& rc = m_channels[static_cast<size_t>(ch)];
+        size_t bufSize = rc.buf.size();
         if (bufSize == 0) continue;
 
         float in = b[ch][s];
         if (!std::isfinite(in)) in = 0.0f;
-        d.buf[d.writePtr] = in;
+        rc.buf[rc.writePtr] = in;
 
-        size_t windowSamps = static_cast<size_t>(m_sampleRate * windowSec);
-        if (windowSamps < 2) windowSamps = 2;
-        if (windowSamps >= bufSize) windowSamps = bufSize - 1;
+        size_t sliceSamples = static_cast<size_t>(m_sampleRate * grainSec + 0.5f);
+        if (sliceSamples < 2) sliceSamples = 2;
+        if (sliceSamples >= bufSize) sliceSamples = bufSize - 1;
 
-        size_t readIdx = (d.writePtr + bufSize - windowSamps) % bufSize;
-        float out = d.buf[readIdx];
+        if (rc.mode == RevState::RECORDING)
+        {
+            int fadeOutStart = static_cast<int>(sliceSamples) - RevChannel::kXfadeLen;
+            if (fadeOutStart < 0) fadeOutStart = 0;
 
-        b[ch][s] = out;
-        d.writePtr = (d.writePtr + 1) % bufSize;
+            if (rc.sliceCounter >= fadeOutStart)
+            {
+                int offset = rc.sliceCounter - fadeOutStart;
+                float fade = 1.0f - static_cast<float>(offset) / static_cast<float>(RevChannel::kXfadeLen);
+                b[ch][s] *= fade;
+            }
+
+            rc.sliceCounter++;
+            if (rc.sliceCounter >= static_cast<int>(sliceSamples))
+            {
+                rc.sliceStart = (rc.writePtr + bufSize - sliceSamples) % bufSize;
+                rc.sliceLen = sliceSamples;
+                rc.playPos = 0;
+                rc.repeatCount = 0;
+                rc.xfadePos = 0;
+                rc.mode = RevState::PLAYING;
+                rc.sliceCounter = 0;
+            }
+        }
+        else
+        {
+            size_t readPos = (rc.sliceStart + rc.sliceLen - 1 - static_cast<size_t>(rc.playPos)) % bufSize;
+
+            if (rc.xfadePos < RevChannel::kXfadeLen)
+            {
+                float a = static_cast<float>(rc.xfadePos) / static_cast<float>(RevChannel::kXfadeLen);
+                float w = 0.5f * (1.0f - std::cos(3.14159265f * a));
+                b[ch][s] = rc.buf[readPos] * w;
+                rc.xfadePos++;
+            }
+            else
+            {
+                b[ch][s] = rc.buf[readPos];
+            }
+
+            rc.playPos++;
+            if (rc.playPos >= static_cast<int>(rc.sliceLen))
+            {
+                rc.playPos = 0;
+                rc.xfadePos = 0;
+                rc.repeatCount++;
+                if (rc.repeatCount >= maxRepeats)
+                {
+                    rc.mode = RevState::RECORDING;
+                    rc.sliceCounter = 0;
+                    rc.xfadePos = RevChannel::kXfadeLen;
+                }
+            }
+        }
+
+        rc.writePtr = (rc.writePtr + 1) % bufSize;
     }
 }
 
 void ReverseBufferEffect::processBlock(float** b, int c, int n, const float* params)
 {
     juce::ScopedNoDenormals noDenorm;
-    float windowSec = 0.05f + params[1] * 0.95f;
-
-    size_t windowSamps = static_cast<size_t>(m_sampleRate * windowSec);
-    if (windowSamps < 2) windowSamps = 2;
-
-    bool windowChanged = (windowSamps != m_prevWindowSamps);
-    size_t oldSamps = m_prevWindowSamps;
-
-    if (windowChanged)
-    {
-        if (m_xfadeCounter >= kXfadeLen)
-            m_xfadeCounter = 0.0f;
-        m_prevWindowSamps = windowSamps;
-    }
-
-    int chCount = std::min(c, static_cast<int>(m_buffers.size()));
-    float xfCounter = m_xfadeCounter;
-
-    for (int ch = 0; ch < chCount; ++ch)
-    {
-        auto& d = m_buffers[static_cast<size_t>(ch)];
-        size_t bufSize = d.buf.size();
-        if (bufSize == 0) continue;
-
-        size_t clampedSamps = windowSamps;
-        if (clampedSamps >= bufSize) clampedSamps = bufSize - 1;
-        size_t oldClampedSamps = oldSamps;
-        if (oldClampedSamps >= bufSize) oldClampedSamps = bufSize - 1;
-
-        for (int s = 0; s < n; ++s)
-        {
-            float fade = std::min(1.0f, xfCounter / kXfadeLen);
-            d.buf[d.writePtr] = b[ch][s];
-
-            if (xfCounter < kXfadeLen)
-            {
-                size_t oldRead = (d.writePtr + bufSize - oldClampedSamps) % bufSize;
-                size_t newRead = (d.writePtr + bufSize - clampedSamps) % bufSize;
-                b[ch][s] = d.buf[oldRead] * (1.0f - fade) + d.buf[newRead] * fade;
-            }
-            else
-            {
-                size_t readIdx = (d.writePtr + bufSize - clampedSamps) % bufSize;
-                b[ch][s] = d.buf[readIdx];
-            }
-
-            d.writePtr = (d.writePtr + 1) % bufSize;
-
-            if (ch == chCount - 1 && xfCounter < kXfadeLen)
-                xfCounter += 1.0f;
-        }
-    }
-
-    m_xfadeCounter = xfCounter;
+    for (int s = 0; s < n; ++s)
+        processSample(b, c, s, params[1]);
 }
