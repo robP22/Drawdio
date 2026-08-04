@@ -9,7 +9,6 @@ public:
     void reset() override;
     void processSample(float** b, int c, int s, float effectParam) override;
     void processBlock(float** b, int c, int n, const float* params) override;
-    int mixKnobIndex() const override { return -1; }
 
 private:
     std::vector<float> m_bqZ1;

@@ -4,23 +4,24 @@
 #include <cstdint>
 #include <memory>
 #include <vector>
-#include "CanvasRoutingManager.h"
-#include "ManualConnectionModel.h"
-#include "PedalComponent.h"
-#include "ResourceManager.h"
-#include "IThemeProvider.h"
+#include "Core/DrawdioConstants.h"
+#include "State/CanvasRoutingManager.h"
+#include "State/ManualConnectionModel.h"
+#include "UI/Pedalboard/PedalComponent.h"
+#include "Core/Contracts/IResourceProvider.h"
+#include "UI/Theme/IThemeProvider.h"
+#include "Core/Contracts/ProcessorInterfaces.h"
+#include "UI/Pedalboard/PedalboardLayout.h"
+#include "UI/Pedalboard/CablePathBuilder.h"
+#include "UI/Pedalboard/CableRenderer.h"
+#include "UI/Pedalboard/JackHitMap.h"
+#include "UI/Pedalboard/ManualRoutingController.h"
 
-class DrawdioProcessor;
-
-/**
-    PedalboardGrid manages the physical pedals and the routing cables between them.
-    It handles both automatic (drawn) routing and manual interaction.
-*/
 class PedalboardGrid : public juce::Component
 {
 public:
-    PedalboardGrid(DrawdioProcessor& processor,
-                   const ResourceManager& resources,
+    PedalboardGrid(IPedalboardModel& model,
+                   const IResourceProvider& resources,
                    const IThemeProvider& theme,
                    CanvasRoutingManager& routingManager);
     ~PedalboardGrid() override = default;
@@ -31,76 +32,51 @@ public:
     void updateRouting(const std::vector<uint8_t>& routingOrder);
     void syncPedals();
 
-    // Access to pedals for external sync
     PedalComponent* getPedal(int index) { return (index >= 0 && index < PedalSlotCount) ? m_pedalComponents[static_cast<size_t>(index)].get() : nullptr; }
 
-    // Interaction for manual routing
     void mouseDown(const juce::MouseEvent& event) override;
     void mouseDrag(const juce::MouseEvent& event) override;
     void mouseUp(const juce::MouseEvent& event) override;
 
-    // Manual mode cable path helpers — called from PluginEditor
     void clearInputOutputCables() { m_cachedInputPath.clear(); m_cachedOutputPath.clear(); }
     void clearEdges() { m_connectionModel.clear(); }
+    void restoreFromRouting(const std::vector<uint8_t>& routing);
     void rebuildCableCache();
     void buildInputCableTo(int pedalSlot);
     void buildOutputCableFrom(int pedalSlot);
 
+    std::array<IComponentBounds*, PedalSlotCount> componentBounds() const
+    {
+        std::array<IComponentBounds*, PedalSlotCount> result;
+        for (int i = 0; i < PedalSlotCount; ++i)
+            result[static_cast<size_t>(i)] = m_pedalComponents[static_cast<size_t>(i)].get();
+        return result;
+    }
+
 private:
-    // Position helpers
     juce::Point<float> dawEntryPos() const { return {static_cast<float>(getWidth()) * 0.05f, 0.0f}; }
     juce::Point<float> dawExitPos() const { return {static_cast<float>(getWidth()) * 0.95f, 0.0f}; }
 
-    // Helpers for jack detection
-    struct JackInfo {
-        int pedalIdx;
-        bool isInput;
-        juce::Point<float> pos;
-    };
-    int findJackAt(juce::Point<float> pos, float radius) const;
-
-    void drawRoutingCables(juce::Graphics& g);
-    void drawActiveDraggingCable(juce::Graphics& g);
-    void drawGrabbedCable(juce::Graphics& g);
-    void drawInputCable(juce::Graphics& g);
-    void drawOutputCable(juce::Graphics& g);
-    void removeGrabbedEdge();
-    void reconnectGrabbedCable(const JackInfo& dst);
-
-    // Cached cable paths — rebuilt when routing changes
-    struct CachedSplitCable {
-        juce::Path left;
-        juce::Path right;
-    };
-    void refreshJacks();
+    void rebuildConnectionCables();
+    void buildSameRowCable(int srcIdx, int dstIdx, const juce::Point<float>& p1, const juce::Point<float>& p2);
+    void buildAdjacentColumnCable(int srcIdx, int dstIdx, const juce::Point<float>& p1, const juce::Point<float>& p2);
+    void buildDistantColumnCable(int srcIdx, int dstIdx, const juce::Point<float>& p1, const juce::Point<float>& p2);
 
     juce::Path m_cachedInputPath;
     juce::Path m_cachedOutputPath;
     std::vector<CachedSplitCable> m_cachedConnectionPaths;
-    std::array<JackInfo, PedalSlotCount * 2 + 2> m_cachedJacks;
 
-    DrawdioProcessor& audioProcessor;
-    const ResourceManager& m_resources;
+    IPedalboardModel& m_model;
+    const IResourceProvider& m_resources;
     const IThemeProvider& m_theme;
     CanvasRoutingManager& m_routingManager;
     std::array<std::unique_ptr<PedalComponent>, PedalSlotCount> m_pedalComponents;
 
-    // Cable connection model
-    // Cable connection model
     ManualConnectionModel m_connectionModel;
-
-    enum class DragMode { None, NewCable, GrabCable };
-    DragMode m_dragMode = DragMode::None;
-    juce::Point<float> m_dragStartPos;
-    juce::Point<float> m_dragCurrentPos;
-    int m_dragSrcJackIdx = -1;
-
-    // Cable grab state — when picking up an existing cable from its jack
-    int m_grabbedEdgeIndex = -1;       // -1=input cable, -2=output cable, >=0=connection edge index
-    bool m_grabbingSrcEnd = false;     // true=grabbing output/source end, false=grabbing input/dest end
-    juce::Point<float> m_anchoredPos;  // position of the non-dragged (still connected) jack
-    int m_grabbedSrcSlot = -1;         // original source pedal slot of the grabbed cable
-    int m_grabbedDstSlot = -1;         // original dest pedal slot of the grabbed cable
+    PedalboardLayout m_layout;
+    CableRenderer m_renderer;
+    JackHitMap m_jackMap;
+    ManualRoutingController m_routingCtrl;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PedalboardGrid)
 };

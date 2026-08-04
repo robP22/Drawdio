@@ -1,8 +1,9 @@
+#include <JuceHeader.h>
 #include "Effects/ReverbEffects.h"
-#include "EffectConfigRegistry.h"
+#include "State/EffectConfigRegistry.h"
 
 ReverbNetworkEffect::ReverbNetworkEffect(const ReverbNetworkConfig& config)
-    : m_config(config)
+    : DspEffect(0), m_config(config)
 {
 }
 
@@ -29,6 +30,13 @@ void ReverbNetworkEffect::processSample(float** b, int c, int s, float effectPar
 
     if (c > 0) b[0][s] = wetL;
     if (c > 1) b[1][s] = wetR;
+}
+
+void ReverbNetworkEffect::processBlock(float** b, int c, int n, const float* params)
+{
+    juce::ScopedNoDenormals noDenorm;
+    for (int s = 0; s < n; ++s)
+        processSample(b, c, s, params[0]);
 }
 
 DiffusedReverbEffect::DiffusedReverbEffect() : ReverbNetworkEffect(EffectConfigRegistry::getDiffusedReverbConfig()) {}

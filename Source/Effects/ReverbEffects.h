@@ -1,5 +1,5 @@
 #pragma once
-#include "PedalStructures.h"
+#include "Dsp/ReverbNetwork.h"
 #include "Effects/DspEffect.h"
 
 class ReverbNetworkEffect : public DspEffect
@@ -9,8 +9,7 @@ public:
     void prepare(double sampleRate, int numChannels) override;
     void reset() override;
     void processSample(float** b, int c, int s, float effectParam) override;
-    int mixKnobIndex() const override { return 0; }
-
+    void processBlock(float** b, int c, int n, const float* params) override;
 private:
     ReverbNetworkConfig m_config;
     ReverbNetworkState m_state;

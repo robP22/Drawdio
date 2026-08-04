@@ -3,6 +3,7 @@
 class DspEffect
 {
 public:
+    DspEffect(int mixKnobIndex = -1) : m_mixKnobIndex(mixKnobIndex) {}
     virtual ~DspEffect() = default;
 
     virtual void prepare(double sampleRate, int numChannels)
@@ -14,7 +15,7 @@ public:
     virtual void reset() = 0;
     virtual void processSample(float** buffer, int numChannels, int sampleNum, float driveParam) = 0;
 
-    virtual int mixKnobIndex() const { return -1; }
+    int mixKnobIndex() const { return m_mixKnobIndex; }
 
     virtual void processBlock(float** buffer, int numChannels, int numSamples, const float* params)
     {
@@ -23,6 +24,7 @@ public:
     }
 
 protected:
+    const int m_mixKnobIndex;
     double m_sampleRate = 44100.0;
     int m_numChannels = 2;
 };

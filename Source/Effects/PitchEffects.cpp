@@ -37,6 +37,7 @@ void FrequencyShifterEffect::processSample(float** b, int c, int s, float effect
     for (int ch = 0; ch < chCount; ++ch)
     {
         float x = b[ch][s];
+        if (!std::isfinite(x)) x = 0.0f;
         auto& chState = m_channels[static_cast<size_t>(ch)];
 
         float q1a = kA1a * x + chState.z1a;
@@ -141,6 +142,7 @@ void GlitchStutterEffect::processSample(float** b, int c, int s, float effectPar
                 gs.playCounter = 0;
                 gs.repeatCount = 0;
                 gs.mode = GlitchState::PLAYING;
+                gs.entryXfadePos = 0;
                 gs.sliceCounter = 0;
             }
         }
@@ -153,8 +155,8 @@ void GlitchStutterEffect::processSample(float** b, int c, int s, float effectPar
             if (gs.playCounter >= xfadeStart && gs.playCounter < sliceEnd)
             {
                 int offset = gs.playCounter - xfadeStart;
-                float fadeIn = static_cast<float>(offset) / static_cast<float>(kXfadeLen);
-                float fadeOut = 1.0f - fadeIn;
+                float fadeIn  = 0.5f * (1.0f - std::cos(3.14159265f * static_cast<float>(offset) / static_cast<float>(kXfadeLen)));
+                float fadeOut = 0.5f * (1.0f + std::cos(3.14159265f * static_cast<float>(offset) / static_cast<float>(kXfadeLen)));
                 size_t curPos = (gs.sliceStart + static_cast<size_t>(gs.playCounter)) % bufSize;
                 size_t wrapPos = (gs.sliceStart + static_cast<size_t>(offset)) % bufSize;
                 b[ch][s] = gs.buf[curPos] * fadeOut + gs.buf[wrapPos] * fadeIn;
@@ -162,13 +164,20 @@ void GlitchStutterEffect::processSample(float** b, int c, int s, float effectPar
             else
             {
                 size_t pos = (gs.sliceStart + static_cast<size_t>(gs.playCounter)) % bufSize;
-                b[ch][s] = gs.buf[pos];
+                float out = gs.buf[pos];
+                if (gs.entryXfadePos < GlitchState::kXfadeLen)
+                {
+                    float w = static_cast<float>(gs.entryXfadePos) / static_cast<float>(GlitchState::kXfadeLen);
+                    out *= w;
+                    gs.entryXfadePos++;
+                }
+                b[ch][s] = out;
             }
             gs.playCounter++;
 
             if (gs.playCounter >= sliceEnd)
             {
-                gs.playCounter = kXfadeLen;
+                gs.playCounter = 0;
                 gs.repeatCount++;
                 if (gs.repeatCount >= maxRepeats)
                 {
@@ -203,6 +212,13 @@ void GlitchStutterEffect::processSample(float** b, int c, int s, float effectPar
 
         gs.writePtr = (gs.writePtr + 1) % bufSize;
     }
+}
+
+void GlitchStutterEffect::processBlock(float** b, int c, int n, const float* params)
+{
+    juce::ScopedNoDenormals noDenorm;
+    for (int s = 0; s < n; ++s)
+        processSample(b, c, s, params[0]);
 }
 
 void FrequencyShifterEffect::processBlock(float** b, int c, int n, const float* params)

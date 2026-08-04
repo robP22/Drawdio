@@ -1,16 +1,16 @@
 #pragma once
 #include <vector>
-#include "PedalStructures.h"
+#include "Dsp/DelayPrimitives.h"
 #include "Effects/DspEffect.h"
 
 class MicroPitchChorusEffect : public DspEffect
 {
 public:
+    MicroPitchChorusEffect() : DspEffect(0) {}
     void prepare(double sampleRate, int numChannels) override;
     void reset() override;
     void processSample(float** b, int c, int s, float effectParam) override;
     void processBlock(float** b, int c, int n, const float* params) override;
-    int mixKnobIndex() const override { return 0; }
 
 private:
     struct MicropitchState {
@@ -22,31 +22,33 @@ private:
     };
     std::vector<MicropitchState> m_channels;
     float m_depth = 0.5f;
+    float m_lfoRate = 0.3f;
 };
 
 class SimpleDelayEffect : public DspEffect
 {
 public:
+    SimpleDelayEffect() : DspEffect(0) {}
     void prepare(double sampleRate, int numChannels) override;
     void reset() override;
     void processSample(float** b, int c, int s, float effectParam) override;
     void processBlock(float** b, int c, int n, const float* params) override;
-    int mixKnobIndex() const override { return 0; }
 
 private:
     std::vector<SimpleDelayState> m_delays;
     std::vector<float> m_fbLpState;
     std::vector<float> m_lfoPhase;
-    float m_fbLpCoeff = 0.0f;
+    float m_smoothedDelaySamples = 4410.0f;
 };
 
 class TapeStopEchoEffect : public DspEffect
 {
 public:
+    TapeStopEchoEffect() : DspEffect(0) {}
     void prepare(double sampleRate, int numChannels) override;
     void reset() override;
     void processSample(float** b, int c, int s, float effectParam) override;
-    int mixKnobIndex() const override { return 0; }
+    void processBlock(float** b, int c, int n, const float* params) override;
 
 private:
     struct TapeStopChannel {
@@ -56,6 +58,8 @@ private:
         float readSpeed = 1.0f;
         bool wasBraking = false;
         float wowPhase = 0.0f;
+        int brakeXfadePos = 32;
+        float brakeXfadeOldOutput = 0.0f;
     };
     std::vector<TapeStopChannel> m_channels;
     float m_predelayMs = 100.0f;
@@ -66,6 +70,5 @@ private:
 class GranularDelayEffect : public GranularBaseEffect
 {
 public:
-    GranularDelayEffect() : GranularBaseEffect(0.15f, 2.0) {}
-    int mixKnobIndex() const override { return 0; }
+    GranularDelayEffect() : GranularBaseEffect(0.15f, 2.0, 0) {}
 };

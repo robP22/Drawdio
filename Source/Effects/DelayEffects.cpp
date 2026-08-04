@@ -37,9 +37,6 @@ void MicroPitchChorusEffect::processSample(float** b, int c, int s, float effect
     float pitch1 = 1.0f + detuneCents / 1200.0f;
     float pitch2 = 1.0f - detuneCents / 1200.0f;
 
-    static constexpr float kLfoRate = 0.3f;
-    static constexpr float kLfoDepthSamples = 0.002f;  // 2ms
-
     int chCount = std::min(c, static_cast<int>(m_channels.size()));
     for (int ch = 0; ch < chCount; ++ch)
     {
@@ -51,11 +48,12 @@ void MicroPitchChorusEffect::processSample(float** b, int c, int s, float effect
         if (!std::isfinite(in)) in = 0.0f;
         mc.buf[mc.writePtr] = in;
 
-        mc.lfoPhase += static_cast<float>(kLfoRate / m_sampleRate);
+        mc.lfoPhase += m_lfoRate / static_cast<float>(m_sampleRate);
         if (mc.lfoPhase >= 1.0f) mc.lfoPhase -= 1.0f;
         float lfo1 = std::sin(mc.lfoPhase * 2.0f * 3.14159265f);
-        float lfo2 = std::sin((mc.lfoPhase + 0.5f) * 2.0f * 3.14159265f);
+        float lfo2 = std::sin((mc.lfoPhase + 0.5f + static_cast<float>(ch) * 0.25f) * 2.0f * 3.14159265f);
 
+        static constexpr float kLfoDepthSamples = 0.002f;
         float mod1 = lfo1 * kLfoDepthSamples * static_cast<float>(m_sampleRate);
         float mod2 = lfo2 * kLfoDepthSamples * static_cast<float>(m_sampleRate);
 
@@ -89,6 +87,8 @@ void SimpleDelayEffect::processBlock(float** b, int c, int n, const float* param
     juce::ScopedNoDenormals noDenorm;
     float delaySec = 0.1f + params[1] * 0.9f;
     float feedback = 0.3f + params[2] * 0.6f;
+    float damp = params[3];
+    float dampCoeff = 1.0f - std::exp(-2.0f * 3.14159265f * (500.0f + damp * 15000.0f) / static_cast<float>(m_sampleRate));
 
     int chCount = std::min(c, static_cast<int>(m_delays.size()));
     for (int ch = 0; ch < chCount; ++ch)
@@ -98,7 +98,9 @@ void SimpleDelayEffect::processBlock(float** b, int c, int n, const float* param
         float bufSizeF = static_cast<float>(bufSize);
         if (bufSize == 0) continue;
 
-        float delaySamplesF = static_cast<float>(m_sampleRate) * delaySec;
+        float targetDelay = static_cast<float>(m_sampleRate) * delaySec;
+        m_smoothedDelaySamples += (targetDelay - m_smoothedDelaySamples) * 0.05f;
+        float delaySamplesF = m_smoothedDelaySamples;
         if (delaySamplesF >= bufSizeF) delaySamplesF = bufSizeF - 1.0f;
 
         float& fbLp = m_fbLpState[static_cast<size_t>(ch)];
@@ -115,7 +117,7 @@ void SimpleDelayEffect::processBlock(float** b, int c, int n, const float* param
             float readPos = static_cast<float>(d.writePtr + bufSize) - modDelay;
             if (readPos >= bufSizeF) readPos -= bufSizeF;
             float delayed = interpolateDelayRead(d.buf, readPos);
-            fbLp = fbLp + m_fbLpCoeff * (delayed - fbLp);
+            fbLp = fbLp + dampCoeff * (delayed - fbLp);
             d.buf[d.writePtr] = in + std::tanh(fbLp * feedback);
             b[ch][s] = delayed;
             d.writePtr = (d.writePtr + 1) % bufSize;
@@ -127,8 +129,9 @@ void MicroPitchChorusEffect::processBlock(float** b, int c, int n, const float* 
 {
     juce::ScopedNoDenormals noDenorm;
     m_depth = params[1];
+    m_lfoRate = 0.05f + params[3] * 2.95f;
     for (int s = 0; s < n; ++s)
-        processSample(b, c, s, params[3]);
+        processSample(b, c, s, params[2]);
 }
 
 void SimpleDelayEffect::prepare(double sampleRate, int numChannels)
@@ -138,7 +141,6 @@ void SimpleDelayEffect::prepare(double sampleRate, int numChannels)
     for (auto& d : m_delays)
         prepareSimpleDelay(d, sampleRate, 2.0);
     m_fbLpState.assign(static_cast<size_t>(numChannels), 0.0f);
-    m_fbLpCoeff = 1.0f - std::exp(-2.0f * 3.14159265f * 5000.0f / static_cast<float>(sampleRate));
     m_lfoPhase.assign(static_cast<size_t>(numChannels), 0.0f);
 }
 
@@ -172,11 +174,18 @@ void SimpleDelayEffect::processSample(float** b, int c, int s, float effectParam
         if (readPos >= static_cast<float>(bufSize)) readPos -= static_cast<float>(bufSize);
         float delayed = interpolateDelayRead(d.buf, readPos);
         float& fbLp = m_fbLpState[static_cast<size_t>(ch)];
-        fbLp = fbLp + m_fbLpCoeff * (delayed - fbLp);
-        d.buf[d.writePtr] = in + std::tanh(fbLp * feedback);
-        b[ch][s] = delayed;
+            fbLp = fbLp + 0.2f * (delayed - fbLp);
+            d.buf[d.writePtr] = in + std::tanh(fbLp * feedback);
+            b[ch][s] = delayed;
         d.writePtr = (d.writePtr + 1) % bufSize;
     }
+}
+
+void TapeStopEchoEffect::processBlock(float** b, int c, int n, const float* params)
+{
+    juce::ScopedNoDenormals noDenorm;
+    for (int s = 0; s < n; ++s)
+        processSample(b, c, s, params[0]);
 }
 
 void TapeStopEchoEffect::prepare(double sampleRate, int numChannels)
@@ -202,6 +211,7 @@ void TapeStopEchoEffect::reset()
         ch.readPos = 0.0f;
         ch.readSpeed = 1.0f;
         ch.wasBraking = false;
+        ch.wowPhase = 0.0f;
     }
 }
 
@@ -227,6 +237,8 @@ void TapeStopEchoEffect::processSample(float** b, int c, int s, float effectPara
         if (isBraking && !chState.wasBraking)
         {
             chState.wasBraking = true;
+            chState.brakeXfadeOldOutput = b[ch][s];
+            chState.brakeXfadePos = 0;
             float pos = static_cast<float>(chState.writePtr) - predelaySamps;
             if (pos < 0.0f) pos += static_cast<float>(bufSize);
             chState.readPos = pos;
@@ -234,6 +246,8 @@ void TapeStopEchoEffect::processSample(float** b, int c, int s, float effectPara
         else if (!isBraking && chState.wasBraking)
         {
             chState.wasBraking = false;
+            chState.brakeXfadeOldOutput = b[ch][s];
+            chState.brakeXfadePos = 0;
             chState.readSpeed = 1.0f;
             chState.readPos = static_cast<float>(chState.writePtr);
         }
@@ -256,7 +270,14 @@ void TapeStopEchoEffect::processSample(float** b, int c, int s, float effectPara
         else if (modReadPos < 0.0f)
             modReadPos += static_cast<float>(bufSize);
 
-        b[ch][s] = interpolateDelayRead(chState.buf, modReadPos);
+        float newOut = interpolateDelayRead(chState.buf, modReadPos);
+        if (chState.brakeXfadePos < 32)
+        {
+            float w = static_cast<float>(chState.brakeXfadePos) / 32.0f;
+            newOut = chState.brakeXfadeOldOutput * (1.0f - w) + newOut * w;
+            chState.brakeXfadePos++;
+        }
+        b[ch][s] = newOut;
 
         chState.writePtr = (chState.writePtr + 1) % bufSize;
     }
