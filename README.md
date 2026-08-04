@@ -57,6 +57,48 @@ Install CMake 3.24+, open the folder in VS2022, select a configuration, and buil
 
 ## Architecture
 
+### Source Tree
+
+```
+Assets/
+└── Sprites/                     PNG sprites (embedded into binary via JUCE BinaryData)
+Source/
+├── Core/                        Cross-cutting contracts & constants
+│   ├── Contracts/               IConfigConsumer, IResourceProvider, IComponentBounds, ProcessorInterfaces
+│   ├── CanvasAnalysis.cpp       Grid → score/accumulation analysis
+│   ├── CompiledPedalConfig.h    Immutable DSP configuration payloads
+│   ├── DrawdioConstants.h       Canvas size, grid, color constants
+│   ├── DspModuleType.h          Effect type enum (19 modules)
+│   └── ParameterTypes.h         Knob/parameter value types
+├── Dsp/                         DSP primitives & effect construction
+│   ├── DspEffectFactory.cpp     Creates effect instances from DspModuleType
+│   ├── GranularProcessor.h      Overlapping dual-grain engine
+│   ├── ReverbNetwork.cpp        Comb+allpass diffused network
+│   └── DelayPrimitives.h        Ring buffer primitives
+├── Compile/                     Background canvas compilation pipeline
+│   ├── CanvasMessageQueue       SPSC lock-free ring buffer (cap 8)
+│   ├── CompilerThread           Background compile loop
+│   ├── CompilerEngine           Grid → PedalAssetPayload analysis
+│   └── PenDebouncer             300ms idle gate
+├── Effects/                     The 19 DSP effect modules (DspEffect subclasses)
+├── State/                       UI-visible state, serialization, automation
+│   ├── ConfigManager / ParameterCache / PedalState / ProcessorState
+│   ├── CanvasRoutingManager / ManualConnectionModel / EffectConfigRegistry
+│   ├── StateSerializer          Binary DRD format (v4)
+│   ├── ReleaseQueue             Deferred deletion of retired audio-thread objects
+│   └── Automation{Compiler,Envelope,Player}
+├── Resources/                   ResourceManager (sprite image loading)
+├── UI/                          All editor-side components
+│   ├── Canvas/                  PixelCanvasComponent, ColorPalette, ArcButton
+│   ├── Pedalboard/              PedalComponent, CableRenderer/PathBuilder, ManualRoutingController
+│   ├── Controls/                SpriteKnob, MixerStrip, BottomControlBar, AutomationDisplay
+│   ├── Theme/                   IThemeProvider, ThemeManager
+│   └── EditorSyncController / PresetFileController / EditorLayout
+├── UnifiedPedalProcessor.cpp    Sample-accurate audio-thread chain + 1024-sample crossfade
+├── PluginProcessor.cpp          AudioProcessor entry point
+└── PluginEditor.cpp             Editor entry point, 20Hz UI sync timer
+```
+
 ### Thread Model
 
 ```
