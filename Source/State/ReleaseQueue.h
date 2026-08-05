@@ -11,23 +11,24 @@ public:
 
     void push(const PedalAssetPayload* ptr);
     void pushSingle(const PedalAssetPayload* ptr) {
-        const PedalAssetPayload* expected = nullptr;
-        if (!m_singlePtr.compare_exchange_strong(expected, ptr, std::memory_order_release))
+        for (int i = 0; i < kSingleSlots; ++i)
         {
-            expected = nullptr;
-            if (!m_overflowPtr.compare_exchange_strong(expected, ptr, std::memory_order_release))
-            {
-                // both overflow slots occupied — silently drop. audio thread must never deallocate.
-            }
+            const PedalAssetPayload* expected = nullptr;
+            if (m_singleSlots[static_cast<size_t>(i)].compare_exchange_strong(expected, ptr,
+                    std::memory_order_release, std::memory_order_relaxed))
+                return;
         }
+        m_droppedCount.fetch_add(1, std::memory_order_relaxed);
     }
     void drain();
+    uint32_t droppedCount() const { return m_droppedCount.load(std::memory_order_relaxed); }
 
 private:
     static constexpr int kCapacity = 16;
+    static constexpr int kSingleSlots = 8;
     std::array<const PedalAssetPayload*, kCapacity> m_queue{};
     std::atomic<int> m_writeIndex{0};
     std::atomic<int> m_readIndex{0};
-    std::atomic<const PedalAssetPayload*> m_singlePtr{nullptr};
-    std::atomic<const PedalAssetPayload*> m_overflowPtr{nullptr};
+    std::array<std::atomic<const PedalAssetPayload*>, kSingleSlots> m_singleSlots{};
+    std::atomic<uint32_t> m_droppedCount{0};
 };

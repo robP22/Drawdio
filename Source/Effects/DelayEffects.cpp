@@ -32,7 +32,6 @@ void MicroPitchChorusEffect::reset()
 
 void MicroPitchChorusEffect::processSample(float** b, int c, int s, float effectParam)
 {
-    juce::ScopedNoDenormals noDenorm;
     float detuneCents = effectParam * 50.0f;
     float pitch1 = 1.0f + detuneCents / 1200.0f;
     float pitch2 = 1.0f - detuneCents / 1200.0f;
@@ -185,7 +184,7 @@ void TapeStopEchoEffect::processBlock(float** b, int c, int n, const float* para
 {
     juce::ScopedNoDenormals noDenorm;
     for (int s = 0; s < n; ++s)
-        processSample(b, c, s, params[0]);
+        processSample(b, c, s, params[1]);
 }
 
 void TapeStopEchoEffect::prepare(double sampleRate, int numChannels)
@@ -217,7 +216,6 @@ void TapeStopEchoEffect::reset()
 
 void TapeStopEchoEffect::processSample(float** b, int c, int s, float effectParam)
 {
-    juce::ScopedNoDenormals noDenorm;
     float braking = effectParam;
     float brakeFactor = 0.98f - braking * 0.05f;
     float predelaySamps = m_predelayMs * 0.001f * static_cast<float>(m_sampleRate);

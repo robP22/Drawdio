@@ -54,4 +54,8 @@ private:
     AutomationPlayer m_automationPlayer;
     EditorSyncController m_syncController;
     int m_lastPedalboardWidth = -1;
+    float m_pedalTopRatio = 0.0f;
+    float m_pedalBottomRatio = 0.0f;
+    float m_paletteTopRatio = 0.0f;
+    float m_paletteBottomRatio = 0.0f;
 };

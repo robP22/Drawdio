@@ -8,7 +8,7 @@ void TimeDomainFreezeEffect::processBlock(float** b, int c, int n, const float* 
 {
     juce::ScopedNoDenormals noDenorm;
     for (int s = 0; s < n; ++s)
-        processSample(b, c, s, params[0]);
+        processSample(b, c, s, params[1]);
 }
 
 void TimeDomainFreezeEffect::prepare(double sampleRate, int numChannels)
@@ -38,12 +38,13 @@ void TimeDomainFreezeEffect::reset()
         ch.xfadePos = FreezeChannel::kXfadeLen;
         ch.oldReadPos = 0.0f;
         ch.entryXfadePos = FreezeChannel::kXfadeLen;
+        ch.exitXfadePos = FreezeChannel::kXfadeLen;
+        ch.exitXfadeFrom = 0.0f;
     }
 }
 
 void TimeDomainFreezeEffect::processSample(float** b, int c, int s, float effectParam)
 {
-    juce::ScopedNoDenormals noDenorm;
     bool frozen = (effectParam >= 0.05f);
     float pitchRatio = 0.25f + effectParam * 1.75f;
 
@@ -64,8 +65,22 @@ void TimeDomainFreezeEffect::processSample(float** b, int c, int s, float effect
         if (!frozen)
         {
             fc.readPos = static_cast<float>(fc.writePtr);
-            b[ch][s] = fc.buf[fc.writePtr];
-            fc.wasFrozen = false;
+            float live = fc.buf[fc.writePtr];
+            if (fc.wasFrozen)
+            {
+                fc.wasFrozen = false;
+                fc.exitXfadePos = 0.0f;
+            }
+            if (fc.exitXfadePos < FreezeChannel::kXfadeLen)
+            {
+                float w = fc.exitXfadePos / FreezeChannel::kXfadeLen;
+                b[ch][s] = fc.exitXfadeFrom * (1.0f - w) + live * w;
+                fc.exitXfadePos += 1.0f;
+            }
+            else
+            {
+                b[ch][s] = live;
+            }
         }
         else
         {
@@ -125,6 +140,8 @@ void TimeDomainFreezeEffect::processSample(float** b, int c, int s, float effect
                 b[ch][s] = in * (1.0f - w) + b[ch][s] * w;
                 fc.entryXfadePos += 1.0f;
             }
+
+            fc.exitXfadeFrom = b[ch][s];
         }
 
         fc.writePtr = (fc.writePtr + 1) % bufSize;
@@ -175,7 +192,8 @@ void DynamicResonantFilter::processSample(float** b, int c, int s, float effectP
     float a1 = -2.0f * R * cosTheta;
     float a2 = R * R;
 
-    for (int ch = 0; ch < c; ++ch)
+    int chCount = std::min(c, static_cast<int>(m_lp1.size()));
+    for (int ch = 0; ch < chCount; ++ch)
     {
         float x = b[ch][s];
         float& s1 = m_lp1[static_cast<size_t>(ch)];
@@ -183,6 +201,12 @@ void DynamicResonantFilter::processSample(float** b, int c, int s, float effectP
         float y = b0 * x + s1;
         s1 = -a1 * y + s2;
         s2 = b0 * (-x) - a2 * y;
+        if (!std::isfinite(y))
+        {
+            y = 0.0f;
+            s1 = 0.0f;
+            s2 = 0.0f;
+        }
         b[ch][s] = y;
     }
 }
@@ -266,6 +290,9 @@ void DynamicResonantFilter::processBlock(float** b, int c, int n, const float* p
     juce::ScopedNoDenormals noDenorm;
     float formantFreq = params[2];
 
+    float b0 = 0.5f, a1 = 0.0f, a2 = 0.0f;
+    int coeffUpdate = 0;
+
     for (int s = 0; s < n; ++s)
     {
         float inputLevel = 0.0f;
@@ -277,18 +304,24 @@ void DynamicResonantFilter::processBlock(float** b, int c, int n, const float* p
         else
             m_envState = m_releaseCoeff * m_envState + (1.0f - m_releaseCoeff) * inputLevel;
 
-        float envMod = std::min(1.0f, m_envState / 0.5f);
-        float modFreq = formantFreq * (0.3f + envMod * 0.7f);
-        float centerHz = 200.0f + modFreq * 1800.0f;
-        float fc = centerHz / static_cast<float>(m_sampleRate);
-        float bwHz = std::max(50.0f, centerHz / 5.0f);
-        float R = std::exp(-3.14159265f * bwHz / static_cast<float>(m_sampleRate));
-        float cosTheta = std::cos(2.0f * 3.14159265f * fc);
-        float b0 = 0.5f * (1.0f - R * R);
-        float a1 = -2.0f * R * cosTheta;
-        float a2 = R * R;
+        if (coeffUpdate <= 0)
+        {
+            float envMod = std::min(1.0f, m_envState / 0.5f);
+            float modFreq = formantFreq * (0.3f + envMod * 0.7f);
+            float centerHz = 200.0f + modFreq * 1800.0f;
+            float fc = centerHz / static_cast<float>(m_sampleRate);
+            float bwHz = std::max(50.0f, centerHz / 5.0f);
+            float R = std::exp(-3.14159265f * bwHz / static_cast<float>(m_sampleRate));
+            float cosTheta = std::cos(2.0f * 3.14159265f * fc);
+            b0 = 0.5f * (1.0f - R * R);
+            a1 = -2.0f * R * cosTheta;
+            a2 = R * R;
+            coeffUpdate = 8;
+        }
+        --coeffUpdate;
 
-        for (int ch = 0; ch < c; ++ch)
+        int chCount = std::min(c, static_cast<int>(m_lp1.size()));
+        for (int ch = 0; ch < chCount; ++ch)
         {
             float x = b[ch][s];
             float& s1 = m_lp1[static_cast<size_t>(ch)];
@@ -296,6 +329,12 @@ void DynamicResonantFilter::processBlock(float** b, int c, int n, const float* p
             float y = b0 * x + s1;
             s1 = -a1 * y + s2;
             s2 = b0 * (-x) - a2 * y;
+            if (!std::isfinite(y))
+            {
+                y = 0.0f;
+                s1 = 0.0f;
+                s2 = 0.0f;
+            }
             b[ch][s] = y;
         }
     }

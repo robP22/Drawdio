@@ -2,13 +2,18 @@
 
 A JUCE 8.0.4-based VST3/AU plugin that converts drawings on a 256×256 pixel canvas into real-time audio effect parameters. The grid is divided horizontally into row bands — one per active pedal — and each band's columns are subdivided among its 4 knobs. Color-weighted pixel accumulation within each region drives knob values, automation envelopes, and the pedal routing order.
 
+<p align="center">
+  <img src="images/screenshot-1.png" alt="Drawdio Screenshot 1" width="49%"/>
+  <img src="images/screenshot-2.png" alt="Drawdio Screenshot 2" width="49%"/>
+</p>
+
 ## Features
 
 - **23 DSP Modules**: Waveshaper, wavefolder, comb resonator, multi-mode filter, formant shifter, spectral freeze, microPitch chorus, simple delay, tape-stop echo, granular delay/pitch/scrubber, glitch stutter, SSB frequency shifter, VCA compressor, sidechain ducker, reverse buffer, spectral filter, convolution space, random modulator, diffused/plate reverb, and bypass
 - **6 Pedal Slots** in a 2×3 grid with per-pedal gain, wet/dry mix, and peak metering
 - **256×256 Drawable Canvas** with 13 colors, flood fill, undo/redo (32 levels, persisted)
 - **Real-time Canvas Compilation** via background compiler thread with 300ms pen debounce
-- **Smooth 1024-Sample Crossfade** between old and new pedal configurations
+- **Smooth 20ms Crossfade** between old and new pedal configurations
 - **Zero-Heap-Allocation Audio Thread** — effects prebuilt on UI thread, swapped atomically
 - **DAW-Synced Automation** from canvas Y-position with bar count selection (1/2/4/8) and section repositioning
 - **Knob-to-Automation Linking** with per-knob blend strength; manual adjustment auto-removes link
@@ -20,6 +25,10 @@ A JUCE 8.0.4-based VST3/AU plugin that converts drawings on a 256×256 pixel can
 - **Hardware-Styled UI** with enclosure sprites, 3D-skeuomorphic palette blobs, arc-shaped toolbar buttons, and sprite-sheet LEDs
 - **Retina-Safe Rendering** — no intermediate image caches, one-pass CoreGraphics compositing
 - **Cross-platform**: VST3, AU (macOS), and Standalone
+
+## Standalone and VST3 Release
+These are provided via link due to the file size restrictions: https://drive.google.com/drive/folders/1afhPdU5GVl5QhDcuX6LSJZy3aKaD8gQk?usp=sharing
+Understand that this software is mid-development and is intended for users to have fun. If you find any issues and want to communicate them I will start up a discord, currently it is just in my notes.app LOL.
 
 ## Building
 
@@ -80,7 +89,7 @@ Source/
 │   ├── CompilerThread           Background compile loop
 │   ├── CompilerEngine           Grid → PedalAssetPayload analysis
 │   └── PenDebouncer             300ms idle gate
-├── Effects/                     The 19 DSP effect modules (DspEffect subclasses)
+├── Effects/                     The 22 DSP effect modules (DspEffect subclasses)
 ├── State/                       UI-visible state, serialization, automation
 │   ├── ConfigManager / ParameterCache / PedalState / ProcessorState
 │   ├── CanvasRoutingManager / ManualConnectionModel / EffectConfigRegistry
@@ -94,7 +103,7 @@ Source/
 │   ├── Controls/                SpriteKnob, MixerStrip, BottomControlBar, AutomationDisplay
 │   ├── Theme/                   IThemeProvider, ThemeManager
 │   └── EditorSyncController / PresetFileController / EditorLayout
-├── UnifiedPedalProcessor.cpp    Sample-accurate audio-thread chain + 1024-sample crossfade
+├── UnifiedPedalProcessor.cpp    Sample-accurate audio-thread chain + 20ms crossfade
 ├── PluginProcessor.cpp          AudioProcessor entry point
 └── PluginEditor.cpp             Editor entry point, 20Hz UI sync timer
 ```
@@ -120,7 +129,7 @@ Audio Thread (processBlock)
 ├── processChainBlock() → iterates active routing chain
 ├── Per-effect processBlock() with batched inner loops
 ├── Per-pedal wet/dry crossfade with per-sample mix interpolation
-├── Output limiting (tanh) and per-pedal gain
+├── Output limiting (softClip) and per-pedal gain
 ├── Peak meter reading (relaxed atomics)
 └── Crossfade state machine (20ms transition window)
 ```
@@ -174,7 +183,7 @@ Audio Thread (processBlock)
 | # | Type | Mix Knob | Notes |
 |---|------|----------|-------|
 | 0 | Bypass | — | Pass-through |
-| 1 | Waveshaper | — | ADAA arctan soft-clip, separate Drive/Level |
+| 1 | Waveshaper | — | ADAA arctan soft-clip, Drive control |
 | 2 | MicroPitch | 0 | Dual-tap detuned LFO, per-channel |
 | 3 | Multi Filter | — | Orfanidis SVF (LP/BP/HP), constant-Q |
 | 4 | Pitch Shifter | — | Granular, full-wet |

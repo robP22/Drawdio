@@ -109,7 +109,7 @@ const juce::String DrawdioProcessor::getName() const { return JucePlugin_Name; }
 bool DrawdioProcessor::acceptsMidi() const { return false; }
 bool DrawdioProcessor::producesMidi() const { return false; }
 bool DrawdioProcessor::isMidiEffect() const { return false; }
-double DrawdioProcessor::getTailLengthSeconds() const { return 3.0; }
+double DrawdioProcessor::getTailLengthSeconds() const { return 5.0; }
 
 int DrawdioProcessor::getNumPrograms() { return 1; }
 int DrawdioProcessor::getCurrentProgram() { return 0; }

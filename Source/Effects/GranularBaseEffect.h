@@ -5,7 +5,8 @@
 class GranularBaseEffect : public DspEffect
 {
 public:
-    GranularBaseEffect(float grainDurationSec, float durationSec = 2.0, int mixKnobIndex = -1);
+    GranularBaseEffect(float grainDurationSec, float durationSec = 2.0, int mixKnobIndex = -1,
+                       int rateKnobIndex = 2);
     void prepare(double sampleRate, int numChannels) override;
     void reset() override;
     void processSample(float** b, int c, int s, float effectParam) override;
@@ -14,5 +15,6 @@ public:
 protected:
     float m_grainDurationSec;
     float m_durationSec;
+    int m_rateKnobIndex;
     std::vector<GranularProcessorState> m_states;
 };

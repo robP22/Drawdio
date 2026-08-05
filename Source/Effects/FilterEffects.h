@@ -23,6 +23,8 @@ private:
         float xfadePos = 32.0f;
         float oldReadPos = 0.0f;
         float entryXfadePos = 32.0f;
+        float exitXfadePos = 32.0f;
+        float exitXfadeFrom = 0.0f;
         static constexpr float kXfadeLen = 32.0f;
     };
     std::vector<FreezeChannel> m_channels;

@@ -23,10 +23,7 @@ struct ConfigAudioView
 {
     std::atomic<const PedalAssetPayload*>& currentConfig;
     std::atomic<const PedalAssetPayload*>& nextConfig;
-    std::array<std::unique_ptr<DspEffect>, PedalSlotCount>& chainEffects;
-    std::array<std::unique_ptr<DspEffect>, PedalSlotCount>& pendingEffects;
     ReleaseQueue& releaseQueue;
-    std::array<std::array<const float*, 4>, PedalSlotCount>& paramPtrs;
 };
 
 class ConfigManager : public IPedalboardModel,
@@ -109,12 +106,13 @@ public:
     // --- Audio thread config view ---
     ConfigAudioView getAudioView()
     {
-        return { m_currentConfig, m_nextConfig, m_chainEffects, m_pendingEffects, m_releaseQueue, m_paramPtrs };
+        return { m_currentConfig, m_nextConfig, m_releaseQueue };
     }
 
 private:
-    void loadPedalConfiguration(const PedalAssetPayload* config);
-    void prebuildEffects(const PedalAssetPayload* config, bool& deferred);
+    void loadPedalConfiguration(PedalAssetPayload* config);
+    void prebuildEffects(PedalAssetPayload* config, bool& deferred);
+    void rePrepareEffects();
     void syncCompilerConfig();
     void restoreKnobValuesFromState(const StateSerializer::SerializedState& state);
 
@@ -139,9 +137,7 @@ private:
     // Config lifecycle (moved from UnifiedPedalProcessor)
     std::atomic<const PedalAssetPayload*> m_currentConfig{nullptr};
     std::atomic<const PedalAssetPayload*> m_nextConfig{nullptr};
-    std::atomic<const PedalAssetPayload*> m_deferredConfig{nullptr};
+    std::atomic<PedalAssetPayload*> m_deferredConfig{nullptr};
     ReleaseQueue m_releaseQueue;
-    std::array<std::unique_ptr<DspEffect>, PedalSlotCount> m_chainEffects;
-    std::array<std::unique_ptr<DspEffect>, PedalSlotCount> m_pendingEffects;
-    std::array<std::array<const float*, 4>, PedalSlotCount> m_paramPtrs{};
+    double m_sampleRate = 44100.0;
 };

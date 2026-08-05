@@ -80,10 +80,34 @@ void ConfigManager::setManualMode(bool m)
 
 void ConfigManager::prepare(double sampleRate, int samplesPerBlock)
 {
-    juce::ignoreUnused(sampleRate, samplesPerBlock);
+    juce::ignoreUnused(samplesPerBlock);
+
+    if (std::abs(sampleRate - m_sampleRate) > 0.5)
+    {
+        m_sampleRate = sampleRate;
+        rePrepareEffects();
+    }
+
     std::vector<DspModuleType> slots(m_pedalSlots.begin(), m_pedalSlots.end());
     m_compilerThread.setPedalSlots(slots);
     m_compilerThread.start(m_messageQueue, m_penDebouncer);
+}
+
+void ConfigManager::rePrepareEffects()
+{
+    double sr = m_dsp.getSampleRate();
+    int maxCh = m_dsp.getMaxChannels();
+
+    auto reprepare = [sr, maxCh](const PedalAssetPayload* config) {
+        if (!config) return;
+        for (auto& effect : config->effects)
+            if (effect)
+                effect->prepare(sr, maxCh);
+    };
+
+    reprepare(m_currentConfig.load(std::memory_order_acquire));
+    reprepare(m_nextConfig.load(std::memory_order_acquire));
+    reprepare(m_deferredConfig.load(std::memory_order_acquire));
 }
 
 void ConfigManager::releaseResources()
@@ -101,7 +125,7 @@ void ConfigManager::syncCompilerConfig()
     m_compilerThread.notify();
 }
 
-void ConfigManager::prebuildEffects(const PedalAssetPayload* config, bool& deferred)
+void ConfigManager::prebuildEffects(PedalAssetPayload* config, bool& deferred)
 {
     deferred = false;
     if (!config) return;
@@ -115,7 +139,7 @@ void ConfigManager::prebuildEffects(const PedalAssetPayload* config, bool& defer
     double sr = m_dsp.getSampleRate();
     int maxCh = m_dsp.getMaxChannels();
 
-    for (size_t i = 0; i < m_chainEffects.size(); ++i)
+    for (size_t i = 0; i < config->effects.size(); ++i)
     {
         DspModuleType neededType = (i < config->activeRoutingChain.size())
             ? config->activeRoutingChain[i]
@@ -123,28 +147,28 @@ void ConfigManager::prebuildEffects(const PedalAssetPayload* config, bool& defer
 
         if (neededType != DspModuleType::BYPASS)
         {
-            m_pendingEffects[i] = createDspEffect(neededType);
-            if (m_pendingEffects[i])
-                m_pendingEffects[i]->prepare(sr, maxCh);
+            config->effects[i] = createDspEffect(neededType);
+            if (config->effects[i])
+                config->effects[i]->prepare(sr, maxCh);
         }
         else
         {
-            m_pendingEffects[i].reset();
+            config->effects[i].reset();
         }
     }
 }
 
-void ConfigManager::loadPedalConfiguration(const PedalAssetPayload* config)
+void ConfigManager::loadPedalConfiguration(PedalAssetPayload* config)
 {
     if (!config) return;
 
-    for (auto& row : m_paramPtrs)
+    for (auto& row : config->paramPtrs)
         row.fill(nullptr);
     for (auto& p : config->parameters)
     {
         auto reg = p.targetDspNodeRegister;
         if (reg < PedalSlotCount && p.parameterToken < 4)
-            m_paramPtrs[reg][p.parameterToken] = &p.currentValue;
+            config->paramPtrs[reg][p.parameterToken] = &p.currentValue;
     }
 
     const auto* current = m_currentConfig.load(std::memory_order_acquire);
@@ -170,11 +194,7 @@ void ConfigManager::loadPedalConfiguration(const PedalAssetPayload* config)
     {
         bool unused = false;
         prebuildEffects(config, unused);
-        for (size_t i = 0; i < m_chainEffects.size(); ++i)
-            if (m_pendingEffects[i])
-                std::swap(m_chainEffects[i], m_pendingEffects[i]);
-
-        m_dsp.reset(m_chainEffects);
+        m_dsp.reset(*config);
 
         const auto* oldCurrent = m_currentConfig.exchange(config, std::memory_order_acq_rel);
         if (oldCurrent)

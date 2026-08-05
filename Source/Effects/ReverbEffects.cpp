@@ -2,8 +2,8 @@
 #include "Effects/ReverbEffects.h"
 #include "State/EffectConfigRegistry.h"
 
-ReverbNetworkEffect::ReverbNetworkEffect(const ReverbNetworkConfig& config)
-    : DspEffect(0), m_config(config)
+ReverbNetworkEffect::ReverbNetworkEffect(const ReverbNetworkConfig& config, int decayKnobIndex)
+    : DspEffect(0), m_config(config), m_decayKnobIndex(decayKnobIndex)
 {
 }
 
@@ -19,7 +19,6 @@ void ReverbNetworkEffect::reset()
 
 void ReverbNetworkEffect::processSample(float** b, int c, int s, float effectParam)
 {
-    juce::ScopedNoDenormals noDenorm;
     float decay = effectParam;
 
     float dryL = (c > 0) ? b[0][s] : 0.0f;
@@ -36,8 +35,8 @@ void ReverbNetworkEffect::processBlock(float** b, int c, int n, const float* par
 {
     juce::ScopedNoDenormals noDenorm;
     for (int s = 0; s < n; ++s)
-        processSample(b, c, s, params[0]);
+        processSample(b, c, s, params[m_decayKnobIndex]);
 }
 
-DiffusedReverbEffect::DiffusedReverbEffect() : ReverbNetworkEffect(EffectConfigRegistry::getDiffusedReverbConfig()) {}
-PlateReverbEffect::PlateReverbEffect() : ReverbNetworkEffect(EffectConfigRegistry::getPlateReverbConfig()) {}
+DiffusedReverbEffect::DiffusedReverbEffect() : ReverbNetworkEffect(EffectConfigRegistry::getDiffusedReverbConfig(), 3) {}
+PlateReverbEffect::PlateReverbEffect() : ReverbNetworkEffect(EffectConfigRegistry::getPlateReverbConfig(), 2) {}

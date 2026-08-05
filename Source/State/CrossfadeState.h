@@ -64,9 +64,11 @@ public:
         for (int smp = 0; smp < numSamples; ++smp)
         {
             float g = std::min(1.0f, static_cast<float>(cc) / static_cast<float>(cfSamps));
+            float gOld = std::cos(g * 3.14159265f * 0.5f);
+            float gNew = std::sin(g * 3.14159265f * 0.5f);
             for (int ch = 0; ch < numChannels; ++ch)
-                buffer[ch][smp] = m_crossfadeOldOut[static_cast<size_t>(ch)][static_cast<size_t>(smp)] * (1.0f - g)
-                                + buffer[ch][smp] * g;
+                buffer[ch][smp] = m_crossfadeOldOut[static_cast<size_t>(ch)][static_cast<size_t>(smp)] * gOld
+                                + buffer[ch][smp] * gNew;
             ++cc;
         }
         m_crossfadeCounter.store(cc, std::memory_order_relaxed);

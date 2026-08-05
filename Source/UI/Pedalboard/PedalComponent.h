@@ -53,4 +53,6 @@ private:
     std::array<juce::Rectangle<float>, kKnobCount> m_knobBounds;
     std::array<std::unique_ptr<SpriteKnob>, kKnobCount> m_knobs;
     float m_knobDragStartValues[kKnobCount]{};
+    juce::Font m_lcdFont;
+    juce::Font m_labelFont;
 };
