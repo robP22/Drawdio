@@ -101,9 +101,9 @@ optimizations. Companion to [`architecture.md`](./architecture.md).
 
 - **Algorithm**: Dual-grain granular delay. Two grains at 50% overlap with
   independent Hann windows (windows sum to unity — zero amplitude modulation).
-  Grain length 0.15 s, buffer 2.0 s. Random start spray (±10%) jitters grain
-  placement; grain2 phase gets a small bounded jitter (0.5 ± 0.01·grainLen)
-  around the overlap point.
+  Grain length 0.15 s, buffer 2.0 s. Random start spray (up to 10% one-sided)
+  jitters grain placement; grain2 phase gets a bounded jitter of up to
+  0.1·grainLen (one-sided, spray ∈ [−1, 0]) around the 50% overlap point.
 - **Knobs**: `params[3]` (Rate) → `playbackSpeed = exp2(rate·2 − 1)` (0.5–2.0×).
   Spread(1), Size(2) are unwired. Mix(0) for blend.
 - **Guardrails**: input sanitized inside `processGranularSample`; grain-length
@@ -235,7 +235,7 @@ Both share `ReverbNetworkEffect` (a `DspEffect` wrapper) over
      2-stage allpass.
   3. **Stereo decorrelation**: a cross-feeding Schroeder decorrelator
      (k = 0.25) on the mono comb output, with independent left/right state.
-  - Diffused config: comb times 1373–1617 ms, combGains 0.80–0.85,
+  - Diffused config: comb times 1373–1617 ms, combGains 0.78–0.85,
     feedbackBase 0.75 (+0.15 range), allpass coeff 0.5, allpass times
     225/556 ms.
   - Plate config: comb times 1189–1355 ms, combGains 0.85–0.90,
@@ -274,7 +274,9 @@ Both share `ReverbNetworkEffect` (a `DspEffect` wrapper) over
 - **Algorithm**: Envelope-followed compressor. Peak detection across channels →
   one-pole attack/release follower → soft-knee gain reduction (4:1 ratio,
   6 dB knee) + makeup gain.
-  `gain = exp2((gain_dB + makeup_dB)·log2(e)/20)`.
+  `gain = exp2f((gain_dB + makeup_dB)·log2(10)/20)` — the standard 10^(dB/20)
+  curve, implemented with a fast exp2f and the constant
+  `dB20ToLinearExp2 = log2(10)/20 ≈ 0.1660964`.
 - **Knobs**: `params[0]` (Attack) → 0.5–50 ms; `params[1]` (Release) →
   10–500 ms; `params[2]` (Thresh) → −45 to −5 dB; `params[3]` (Level/makeup) →
   0.5–2.0×.
@@ -310,12 +312,12 @@ Both share `ReverbNetworkEffect` (a `DspEffect` wrapper) over
 ### Reverse Buffer (`REVERSE_BUFFER`, `ReverseBufferEffect`)
 
 - **Algorithm**: Reverse-slice playback. Records a slice of `sr·grainSec`
-  samples, then plays it back backwards with equal-power (Hann) crossfades at
-  slice boundaries and up to `1 + (1 − density)·4` repeats.
+  samples, then plays it back backwards with a Hann fade-in at playback start,
+  a linear fade-out at record end, and up to `1 + (1 − density)·4` repeats.
 - **Knobs**: `params[3]` (Density) → grain length 0.05–1.0 s and repeat count.
   Length(1), Dir(2) are unwired. Mix(0) for blend.
 - **Guardrails**: input sanitized; slice length clamped [2, bufSize−1];
-  32-sample equal-power crossfades.
+  32-sample fades at playback/record boundaries.
 - **Optimizations**: block-level wrapper; per-sample denormal guard removed.
 
 ---

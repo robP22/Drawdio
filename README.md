@@ -11,10 +11,10 @@ A JUCE 8.0.4-based VST3/AU plugin that converts drawings on a 256×256 pixel can
 
 - **23 DSP Modules**: Waveshaper, wavefolder, comb resonator, multi-mode filter, formant shifter, spectral freeze, microPitch chorus, simple delay, tape-stop echo, granular delay/pitch/scrubber, glitch stutter, SSB frequency shifter, VCA compressor, sidechain ducker, reverse buffer, spectral filter, convolution space, random modulator, diffused/plate reverb, and bypass
 - **6 Pedal Slots** in a 2×3 grid with per-pedal gain, wet/dry mix, and peak metering
-- **256×256 Drawable Canvas** with 13 colors, flood fill, undo/redo (32 levels, persisted)
+- **256×256 Drawable Canvas** with 13 colors (12 drawable + Transparent sentinel), flood fill, undo/redo (32 levels, in-session)
 - **Real-time Canvas Compilation** via background compiler thread with 300ms pen debounce
 - **Smooth 20ms Crossfade** between old and new pedal configurations
-- **Zero-Heap-Allocation Audio Thread** — effects prebuilt on UI thread, swapped atomically
+- **Zero-Heap-Allocation Audio Thread** — effects prebuilt on UI thread into the config payload, handed off via atomic pointer exchange
 - **DAW-Synced Automation** from canvas Y-position with bar count selection (1/2/4/8) and section repositioning
 - **Knob-to-Automation Linking** with per-knob blend strength; manual adjustment auto-removes link
 - **Manual Cable Drag-and-Drop** routing between pedals
@@ -23,7 +23,7 @@ A JUCE 8.0.4-based VST3/AU plugin that converts drawings on a 256×256 pixel can
 - **Preset File Chooser** with SafePointer-guarded async dialogs
 - **Bottom Control Bar** with input/output gain knobs, mixer strips, and automation graph
 - **Hardware-Styled UI** with enclosure sprites, 3D-skeuomorphic palette blobs, arc-shaped toolbar buttons, and sprite-sheet LEDs
-- **Retina-Safe Rendering** — no intermediate image caches, one-pass CoreGraphics compositing
+- **Retina-Safe Rendering** — overlay images cached and rebuilt only on change; no per-frame image rebuilds
 - **Cross-platform**: VST3, AU (macOS), and Standalone
 
 ## Standalone and VST3 Release
@@ -76,8 +76,8 @@ Source/
 │   ├── Contracts/               IConfigConsumer, IResourceProvider, IComponentBounds, ProcessorInterfaces
 │   ├── CanvasAnalysis.cpp       Grid → score/accumulation analysis
 │   ├── CompiledPedalConfig.h    Immutable DSP configuration payloads
-│   ├── DrawdioConstants.h       Canvas size, grid, color constants
-│   ├── DspModuleType.h          Effect type enum (19 modules)
+│   ├── DrawdioConstants.h       Canvas size, grid constants
+│   ├── DspModuleType.h          Effect type enum (22 effects + Bypass)
 │   └── ParameterTypes.h         Knob/parameter value types
 ├── Dsp/                         DSP primitives & effect construction
 │   ├── DspEffectFactory.cpp     Creates effect instances from DspModuleType
@@ -93,7 +93,7 @@ Source/
 ├── State/                       UI-visible state, serialization, automation
 │   ├── ConfigManager / ParameterCache / PedalState / ProcessorState
 │   ├── CanvasRoutingManager / ManualConnectionModel / EffectConfigRegistry
-│   ├── StateSerializer          Binary DRD format (v4)
+│   ├── StateSerializer          Binary DRD format (v5)
 │   ├── ReleaseQueue             Deferred deletion of retired audio-thread objects
 │   └── Automation{Compiler,Envelope,Player}
 ├── Resources/                   ResourceManager (sprite image loading)
@@ -117,7 +117,7 @@ UI Thread (20Hz timer)
 ├── PedalboardGrid (pedals, cables)
 ├── BottomControlBar (mixer, knobs, automation display)
 ├── CompilerThread notification → consumes compiled payload
-└── checkForUpdates() → syncs knobs, automation, routing
+└── EditorSyncController::tick() → syncs knobs, automation, routing
 
 Background Thread (Compile)
 ├── CanvasMessageQueue (SPSC lock-free ring buffer, cap 8)
@@ -140,7 +140,7 @@ Audio Thread (processBlock)
 2. Compiler thread wakes (50ms cv wait + pen debounce gate) → pops snapshot → calls `compileCanvas()`
 3. `compileCanvas()` builds active chain (filtering BYPASS), auto-scores by horizontal pixel distribution, divides 256 rows among pedals, accumulates color weights per parameter, returns `PedalAssetPayload`
 4. `consumeCompiledResultIfAvailable()` (called from UI timer) → `loadPedalConfiguration()` → `prebuildEffects()` creates+prepares new effects on UI thread
-5. Audio thread swaps in new effects via atomic pointer exchange + crossfade
+5. Audio thread swaps in the new config (and its prebuilt effects) via atomic pointer exchange + crossfade
 6. After crossfade completes, old config is pushed to release queue (deleted on UI tick)
 7. Automation is compiled separately from Y-axis pixel distribution (64 slices) and played back via DAW-synced one-pole smoothed envelope
 
@@ -176,7 +176,7 @@ Audio Thread (processBlock)
 | Red | 3 | +0.8 | Pink |
 | White | 4 | −0.7 | — |
 
-`PixelColor::Transparent(5)` is the empty-cell sentinel — never drawn on the overlay, shows canvas texture through. `pixelFromRaw(0)` returns Transparent, so the initial all-zero grid shows the canvas texture.
+`PixelColor::Transparent(5)` is the empty-cell sentinel — never drawn on the overlay, shows canvas texture through. `gridValueToPixel(0)` returns Transparent, so the initial all-zero grid shows the canvas texture. Note: the "Grid Value" column shows enum values; the serialized grid bytes differ (Transparent → 0, Black → 5, others → enum value).
 
 ## Effect Catalog
 
@@ -219,10 +219,10 @@ Binary serialization format (`DRD` magic, version 0x04):
 
 ## Thread Safety Guarantees
 
-- **Zero heap allocations on the audio thread**: All `std::make_unique`, `std::vector::resize`, and effect construction happen in `prebuildEffects()` which is called from the UI thread path only. Audio thread uses atomic `std::swap`.
+- **Zero heap allocations on the audio thread**: All `std::make_unique`, `std::vector::resize`, and effect construction happen in `prebuildEffects()` which is called from the UI thread path only. Effect instances live inside the published `PedalAssetPayload`; the audio thread hands off via atomic config-pointer exchange (`compare_exchange_strong` / `exchange`).
 - **Lock-free synchronization**: All inter-thread state transfers use `std::atomic` with explicit memory ordering (`acquire`/`release`). No mutex is locked on the audio thread.
-- **Deferred deletion**: Old effects/config payloads are pushed to a lock-free circular release queue from the audio thread and physically deleted (`drainReleaseQueue()`) on the UI thread.
-- **NaN/inf contagion guards**: All delay-line buffer writes are guarded by `std::isfinite()` checks to prevent NaN propagation.
+- **Deferred deletion**: Old config payloads are pushed to a lock-free release queue (16-entry ring + 8 atomic slots) from the audio thread and physically deleted (`drainReleaseQueue()`) on the UI thread.
+- **NaN/inf contagion guards**: `std::isfinite()` checks guard input writes to delay lines and the shared interpolated delay read; the reverb comb/allpass writes are protected by tanh-bounded feedback instead. Filter states reset on non-finite output.
 - **Denormal flush**: Every DSP processing entry point has `juce::ScopedNoDenormals`.
 
 ## Security
