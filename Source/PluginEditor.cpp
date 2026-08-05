@@ -107,6 +107,16 @@ DrawdioProcessorEditor::DrawdioProcessorEditor(DrawdioProcessor& p)
 
     setSize(GridLayout::DesignResolution::Width, GridLayout::DesignResolution::Height);
     startTimerHz(20);
+
+    {
+        const auto& pedalImg = m_resourceManager.getImage(ResourceManager::ImageId::PedalboardSprite);
+        const auto& paletteImg = m_resourceManager.getImage(ResourceManager::ImageId::ColorPaletteBody);
+        m_pedalTopRatio = EditorLayout::topOpaqueRatio(pedalImg);
+        m_pedalBottomRatio = EditorLayout::bottomOpaqueRatio(pedalImg);
+        m_paletteTopRatio = EditorLayout::topOpaqueRatio(paletteImg);
+        m_paletteBottomRatio = EditorLayout::bottomOpaqueRatio(paletteImg);
+    }
+
     juce::MessageManager::callAsync([self = juce::Component::SafePointer<DrawdioProcessorEditor>(this)]()
     {
         if (self != nullptr)
@@ -145,10 +155,10 @@ void DrawdioProcessorEditor::resized()
     const auto& pedalImg = m_resourceManager.getImage(ResourceManager::ImageId::PedalboardSprite);
     const auto& paletteImg = m_resourceManager.getImage(ResourceManager::ImageId::ColorPaletteBody);
     int pedalH = pedalboardArea.getHeight();
-    float pedalTopR = EditorLayout::topOpaqueRatio(pedalImg);
-    float pedalBotR = EditorLayout::bottomOpaqueRatio(pedalImg);
-    float paletteTopR = EditorLayout::topOpaqueRatio(paletteImg);
-    float paletteBotR = EditorLayout::bottomOpaqueRatio(paletteImg);
+    float pedalTopR = m_pedalTopRatio;
+    float pedalBotR = m_pedalBottomRatio;
+    float paletteTopR = m_paletteTopRatio;
+    float paletteBotR = m_paletteBottomRatio;
     int paletteH = juce::roundToInt(canvasArea.getHeight() * GridLayout::PaletteHeightRatio);
     int canvasTopPx = juce::roundToInt(pedalH * pedalTopR);
     int paletteShiftPx = juce::roundToInt(pedalH * pedalBotR) - juce::roundToInt(paletteH * paletteBotR);
@@ -234,7 +244,7 @@ void DrawdioProcessorEditor::loadPreset()
         },
         [this]() {
             m_pixelCanvas.setGridData(audioProcessor.getGridData());
-            triggerRecompile();
+            m_syncController.setAutoEnvelopeDirty();
             auto knobVals = audioProcessor.getKnobValues();
             for (int s = 0; s < PedalSlotCount; ++s)
                 if (auto* pedal = m_pedalboardGrid.getPedal(s))

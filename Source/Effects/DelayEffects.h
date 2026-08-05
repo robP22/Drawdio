@@ -70,5 +70,5 @@ private:
 class GranularDelayEffect : public GranularBaseEffect
 {
 public:
-    GranularDelayEffect() : GranularBaseEffect(0.15f, 2.0, 0) {}
+    GranularDelayEffect() : GranularBaseEffect(0.15f, 2.0, 0, 3) {}
 };

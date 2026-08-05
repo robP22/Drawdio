@@ -58,7 +58,7 @@ bool CompilerThread::hasCompiledResult() const noexcept
     return m_slotFull.load(std::memory_order_acquire);
 }
 
-const PedalAssetPayload* CompilerThread::getCompiledPayloadPtr() noexcept
+PedalAssetPayload* CompilerThread::getCompiledPayloadPtr() noexcept
 {
     bool expected = true;
     if (!m_slotFull.compare_exchange_strong(expected, false, std::memory_order_acq_rel, std::memory_order_acquire))

@@ -11,7 +11,7 @@
 - **Zero Conversational Filler:** Omit all introductory pleasantries, meta-commentary, system updates, success confirmations, greeting lines, or transition words. Begin the response immediately with the raw technical payload to optimize server-side prefix caching.
 
 ## Codebase Architecture Blueprint
-- **Product:** Drawdio - Visual Audio Effects Pedalboard (19 DSP modules).
+- **Product:** Drawdio - Visual Audio Effects Pedalboard (22 DSP modules).
 - **Core Pipelines:**
   - `PixelCanvasComponent` -> `CanvasMessageQueue` (SPSC lock-free ring buffer).
   - `CompilerThread` invokes `compileCanvas()` to process pixel data without blocking.
@@ -60,12 +60,10 @@
 - **`pixelFromRaw(0)` → Transparent:** Fixed "black square" bug where initial grid data (all 0s) rendered as solid black, hiding the canvas texture. Now `pixelFromRaw(0)` returns `PixelColor::Transparent` instead of `Black`.
 - **Color well sprites:** Added `ColorWell` to `ResourceManager::ImageId`/`TextureId`; loads `colorwell.png`. In `ColorPalette::paint()`, draws well sprite beneath each blob centered at blob center, sized at 1.5× blob diameter. Rendering order: palette background → well sprites → color blobs.
 - **P0 (audio thread allocations):** Added `m_spareEffects` array to `UnifiedPedalProcessor`. `prebuildEffects()` creates+prepares effects on the calling thread (UI thread via `consumeCompiledResultIfAvailable()`). `loadPedalConfiguration()` swaps from spare pool via `std::swap` — zero heap alloc/dealloc on audio thread. Removed `consumeCompiledResultIfAvailable()` from `PluginProcessor::processBlock()` — config loading only happens on UI timer path.
-- **P1 (per-channel stereo):** All 6 delay-based effects now use per-channel delay lines/held values:
-  - `ModulatedDelayEffect`: `std::vector<SimpleDelayState> m_delays`
+- **P1 (per-channel stereo):** All delay-based effects now use per-channel delay lines/held values:
+  - `MicroPitchChorusEffect`: `std::vector<MicropitchState> m_channels`
   - `SimpleDelayEffect`: `std::vector<SimpleDelayState> m_delays`
-  - `DynamicRingBufferEffect`: `std::vector<RingBufferState> m_buffers`
   - `TapeStopEchoEffect`: `std::vector<TapeStopChannel> m_channels` (struct with buf/writePtr/readHead)
-  - `SampleRateDegraderEffect`: `std::vector<float> m_heldValues`
   - `GranularBaseEffect`: `std::vector<GranularProcessorState> m_states`
   - Each writes/reads its own channel's delay line or held value; no cross-channel broadcast.
 - **P2 (TapeStopEcho clamp):** Added `std::fmax(0.001f, ...)` lower bound on `readSpeed`; removed dead `if (readSpeed >= 0)` / `else` branch (both computed same value). Included in P1 changes.
@@ -118,8 +116,8 @@
 - **Source/UnifiedPedalProcessor.h/.cpp**: P0 — `prebuildEffects()`, `m_spareEffects`, swap-based `loadPedalConfiguration()`, atomic `m_crossfadeCounter`, `m_pendingReset`, `m_chainEffects[6]`. Phase 5 — `processChainBlock`, block-sized `m_dryBuffer`/`m_crossfadeOldOut`.
 - **Source/PluginProcessor.h/.cpp**: P0 — `consumeCompiledResultIfAvailable()` removed from `processBlock()`.
 - **Source/PluginEditor.cpp**: UI update loop — `consumeCompiledResultIfAvailable()` runs on timer (UI thread).
-- **Source/Effects/DelayEffects.h/.cpp**: P1 — per-channel delay lines for ModulatedDelay, SimpleDelay, DynamicRingBuffer, TapeStopEcho. P2 — clamp in TapeStop.
-- **Source/Effects/MiscEffects.h/.cpp**: P1 — `SampleRateDegraderEffect` per-channel `m_heldValues`.
+- **Source/Effects/DelayEffects.h/.cpp**: P1 — per-channel delay lines for MicroPitch, SimpleDelay, TapeStopEcho. P2 — clamp in TapeStop.
+- **Source/Effects/MiscEffects.h/.cpp**: P1 — per-channel state for VCA compressor and sidechain ducker.
 - **Source/Effects/GranularBaseEffect.h/.cpp**: P1 — per-channel `GranularProcessorState`.
 - **Source/Effects/DistortionEffects.h/.cpp**: P3 — Wavefolder multiplier 9.0f→4.0f. P4 — SoftDistortion drive before clipper. Phase 5 — `processBlock` overrides for Waveshaper/Wavefolder.
 - **Source/Effects/FilterEffects.cpp**: P7 target (FormantShifter bandwidth).

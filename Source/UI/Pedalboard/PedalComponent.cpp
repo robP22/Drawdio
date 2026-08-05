@@ -116,9 +116,7 @@ void PedalComponent::paint(juce::Graphics& g)
         g.fillRoundedRectangle(labelArea, m_theme.pedalStyle().lcdRadius);
 
         g.setColour(juce::Colour(0xFFC8E0E8));
-        auto lcdFont = juce::Font(juce::FontOptions(labelArea.getHeight() * 0.35f));
-        lcdFont.setTypefaceName(juce::Font::getDefaultMonospacedFontName());
-        g.setFont(lcdFont);
+        g.setFont(m_lcdFont);
         g.drawFittedText(m_definition ? juce::String(m_definition->displayName) : "---",
                          labelArea.toNearestInt().reduced(2, 0),
                          juce::Justification::centred, 2, 0.85f);
@@ -151,7 +149,7 @@ void PedalComponent::paint(juce::Graphics& g)
     const float offsetY = pedalH * GridLayout::KnobLabelOffsetYRatio;
 
     g.setColour(juce::Colours::white.withAlpha(0.75f));
-    g.setFont(juce::Font(juce::FontOptions(fontSize)));
+    g.setFont(m_labelFont);
 
     for (int i = 0; i < kKnobCount; ++i)
     {
@@ -168,6 +166,11 @@ void PedalComponent::paint(juce::Graphics& g)
 
 void PedalComponent::resized()
 {
+    const float pedalH = static_cast<float>(getHeight());
+    m_lcdFont = juce::Font(juce::FontOptions(std::max(8.0f, getLabelArea().getHeight() * 0.35f)));
+    m_lcdFont.setTypefaceName(juce::Font::getDefaultMonospacedFontName());
+    m_labelFont = juce::Font(juce::FontOptions(std::max(6.0f, pedalH * GridLayout::KnobFontSizeRatio)));
+
     updateKnobBounds();
     for (int i = 0; i < kKnobCount; ++i)
         if (m_knobs[i])

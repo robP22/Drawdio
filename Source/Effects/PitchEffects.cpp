@@ -14,12 +14,11 @@ void FrequencyShifterEffect::prepare(double sampleRate, int numChannels)
 void FrequencyShifterEffect::reset()
 {
     m_phase = 0.0f;
-    m_channels.assign(m_channels.size(), FreqShiftChannel{});
+    std::fill(m_channels.begin(), m_channels.end(), FreqShiftChannel{});
 }
 
 void FrequencyShifterEffect::processSample(float** b, int c, int s, float effectParam)
 {
-    juce::ScopedNoDenormals noDenorm;
     float shift = effectParam;
     float shiftHz = shift * shift * 2000.0f;
     float sr = static_cast<float>(m_sampleRate);
@@ -99,7 +98,6 @@ void GlitchStutterEffect::reset()
 
 void GlitchStutterEffect::processSample(float** b, int c, int s, float effectParam)
 {
-    juce::ScopedNoDenormals noDenorm;
     float sliceLenSec = 0.05f + effectParam * 0.45f;
     int maxRepeats = 1 + static_cast<int>((1.0f - effectParam) * 4.0f);
     static constexpr int kXfadeLen = 32;

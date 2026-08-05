@@ -153,21 +153,35 @@ void PixelCanvasComponent::beginStroke()
     m_redoStack.clear();
 }
 
-void PixelCanvasComponent::commitStroke()
+bool PixelCanvasComponent::commitStroke()
 {
     if (!m_activeStrokeOpen)
-        return;
+        return false;
+
+    bool changed = false;
 
     if (!m_activeStroke.empty())
     {
+        changed = true;
         if (m_undoStack.size() == static_cast<size_t>(MaxUndoLevels))
+        {
+            m_undoBytes -= m_undoStack.front().size() * sizeof(PixelChange);
             m_undoStack.erase(m_undoStack.begin());
+        }
 
         m_undoStack.push_back(std::move(m_activeStroke));
+        m_undoBytes += m_undoStack.back().size() * sizeof(PixelChange);
+
+        while (m_undoBytes > MaxUndoBytes && !m_undoStack.empty())
+        {
+            m_undoBytes -= m_undoStack.front().size() * sizeof(PixelChange);
+            m_undoStack.erase(m_undoStack.begin());
+        }
     }
 
     m_activeStroke.clear();
     m_activeStrokeOpen = false;
+    return changed;
 }
 
 void PixelCanvasComponent::rasterizeBrushStroke(juce::Point<int> from, juce::Point<int> to)
@@ -270,6 +284,7 @@ void PixelCanvasComponent::mouseDown(const juce::MouseEvent& event)
 
     auto pos = gridCoordsFromUI(event.x, event.y);
     rasterizeBrushStroke(pos, pos);
+    flushPendingOverlay();
     m_lastDrawPos = pos;
 }
 
@@ -290,6 +305,7 @@ void PixelCanvasComponent::mouseDrag(const juce::MouseEvent& event)
     }
 
     rasterizeBrushStroke(m_lastDrawPos, pos);
+    flushPendingOverlay();
     m_lastDrawPos = pos;
 }
 
@@ -299,8 +315,10 @@ void PixelCanvasComponent::mouseUp(const juce::MouseEvent&)
         return;
 
     m_drawing = false;
-    commitStroke();
-    notifySnapshot();
+    const bool changed = commitStroke();
+    flushPendingOverlay();
+    if (changed)
+        notifySnapshot();
 
     if (m_onPenUp)
         m_onPenUp();
@@ -456,6 +474,9 @@ void PixelCanvasComponent::applyUndoData(const std::vector<uint8_t>& data)
         }
         m_undoStack.push_back(std::move(transaction));
     }
+    m_undoBytes = 0;
+    for (const auto& t : m_undoStack)
+        m_undoBytes += t.size() * sizeof(PixelChange);
 }
 
 void PixelCanvasComponent::setGridData(const std::array<uint8_t, TotalCells>& data)
@@ -466,6 +487,7 @@ void PixelCanvasComponent::setGridData(const std::array<uint8_t, TotalCells>& da
     rebuildGridCache();
     m_overlayDirty = true;
     m_undoStack.clear();
+    m_undoBytes = 0;
     m_activeStroke.clear();
     m_activeStrokeOpen = false;
     repaint();
@@ -542,31 +564,50 @@ void PixelCanvasComponent::updateOverlayPixel(int index)
         return;
     }
 
+    if (m_pendingOverlayIndices.size() >= 4096)
+        m_pendingOverlayIndices.clear();
+    m_pendingOverlayIndices.push_back(index);
+}
+
+void PixelCanvasComponent::flushPendingOverlay()
+{
+    if (m_overlayDirty || m_pendingOverlayIndices.empty())
+    {
+        m_pendingOverlayIndices.clear();
+        return;
+    }
+
     auto cl = computeCanvasLayout();
     const float cellW = cl.cellW;
     const float cellH = cl.cellH;
-    const int x = index % GridSize;
-    const int y = index / GridSize;
-
-    const int px = static_cast<int>(std::round(static_cast<float>(x) * cellW));
-    const int py = static_cast<int>(std::round(static_cast<float>(y) * cellH));
-    const int pw = std::max(1, static_cast<int>(std::round(static_cast<float>(x + 1) * cellW)) - px);
-    const int ph = std::max(1, static_cast<int>(std::round(static_cast<float>(y + 1) * cellH)) - py);
-
-    auto col = (pixels[static_cast<size_t>(index)] != PixelColor::Transparent)
-        ? m_theme.canvasPixelColour(static_cast<uint8_t>(pixels[static_cast<size_t>(index)]))
-        : juce::Colours::transparentBlack;
 
     {
         juce::Image::BitmapData bd(m_pixelOverlay, juce::Image::BitmapData::writeOnly);
 
-        for (int sy = 0; sy < ph; ++sy)
+        for (int index : m_pendingOverlayIndices)
         {
-            auto* row = reinterpret_cast<juce::PixelARGB*>(bd.getPixelPointer(px, py + sy));
-            for (int sx = 0; sx < pw; ++sx)
-                row[sx].setARGB(col.getAlpha(), col.getRed(), col.getGreen(), col.getBlue());
+            const int x = index % GridSize;
+            const int y = index / GridSize;
+
+            const int px = static_cast<int>(std::round(static_cast<float>(x) * cellW));
+            const int py = static_cast<int>(std::round(static_cast<float>(y) * cellH));
+            const int pw = std::max(1, static_cast<int>(std::round(static_cast<float>(x + 1) * cellW)) - px);
+            const int ph = std::max(1, static_cast<int>(std::round(static_cast<float>(y + 1) * cellH)) - py);
+
+            auto col = (pixels[static_cast<size_t>(index)] != PixelColor::Transparent)
+                ? m_theme.canvasPixelColour(static_cast<uint8_t>(pixels[static_cast<size_t>(index)]))
+                : juce::Colours::transparentBlack;
+
+            for (int sy = 0; sy < ph; ++sy)
+            {
+                auto* row = reinterpret_cast<juce::PixelARGB*>(bd.getPixelPointer(px, py + sy));
+                for (int sx = 0; sx < pw; ++sx)
+                    row[sx].setARGB(col.getAlpha(), col.getRed(), col.getGreen(), col.getBlue());
+            }
         }
     }
+
+    m_pendingOverlayIndices.clear();
 }
 
 void PixelCanvasComponent::notifySnapshot()
@@ -658,8 +699,17 @@ void PixelCanvasComponent::floodFill(int startX, int startY)
 
     m_undoStack.push_back({});
     m_undoStack.back().swap(m_fillChanges);
-    if (m_undoStack.size() > static_cast<size_t>(MaxUndoLevels))
+    m_undoBytes += m_undoStack.back().size() * sizeof(PixelChange);
+    while (m_undoBytes > MaxUndoBytes && m_undoStack.size() > 1)
+    {
+        m_undoBytes -= m_undoStack.front().size() * sizeof(PixelChange);
         m_undoStack.erase(m_undoStack.begin());
+    }
+    if (m_undoStack.size() > static_cast<size_t>(MaxUndoLevels))
+    {
+        m_undoBytes -= m_undoStack.front().size() * sizeof(PixelChange);
+        m_undoStack.erase(m_undoStack.begin());
+    }
 
     // Schedule overlay rebuild — BFS already updated pixels array
     m_overlayDirty = true;

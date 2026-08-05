@@ -15,6 +15,11 @@ UnifiedPedalProcessor::~UnifiedPedalProcessor()
 
 void UnifiedPedalProcessor::prepareToPlay(double sampleRate, int maxSamplesPerBlock, int numChannels)
 {
+    if (sampleRate < 1.0)
+        sampleRate = 44100.0;
+    if (maxSamplesPerBlock < 1)
+        maxSamplesPerBlock = 1;
+
     m_sampleRate.store(sampleRate, std::memory_order_release);
     m_maxSamplesPerBlock.store(maxSamplesPerBlock, std::memory_order_release);
     m_maxChannels.store(std::max(1, numChannels), std::memory_order_release);
@@ -25,6 +30,9 @@ void UnifiedPedalProcessor::prepareToPlay(double sampleRate, int maxSamplesPerBl
     constexpr float kAutoSmoothHz = 12.0f;
     m_autoSmoothAlpha = 1.0f - std::exp(-2.0f * 3.14159265f * kAutoSmoothHz * static_cast<float>(maxSamplesPerBlock) / static_cast<float>(sampleRate));
 
+    constexpr float kParamSmoothHz = 40.0f;
+    m_paramSmoothAlpha = 1.0f - std::exp(-2.0f * 3.14159265f * kParamSmoothHz * static_cast<float>(maxSamplesPerBlock) / static_cast<float>(sampleRate));
+
     m_crossfade.prepare(sampleRate, maxSamplesPerBlock, maxCh);
 
     m_dryBuffer.resize(maxCh);
@@ -32,9 +40,22 @@ void UnifiedPedalProcessor::prepareToPlay(double sampleRate, int maxSamplesPerBl
         buf.assign(maxSamples, 0.0f);
 }
 
-void UnifiedPedalProcessor::reset(std::array<std::unique_ptr<DspEffect>, PedalSlotCount>& effects)
+namespace
 {
-    for (auto& effect : effects)
+float softClip(float x)
+{
+    constexpr float knee = 0.85f;
+    float ax = std::abs(x);
+    if (ax <= knee)
+        return x;
+    float y = knee + (1.0f - knee) * std::tanh((ax - knee) / (1.0f - knee));
+    return (x >= 0.0f) ? y : -y;
+}
+}
+
+void UnifiedPedalProcessor::reset(const PedalAssetPayload& config)
+{
+    for (auto& effect : config.effects)
         if (effect)
             effect->reset();
 
@@ -56,16 +77,14 @@ void UnifiedPedalProcessor::scheduleReset()
     m_pendingReset.store(true, std::memory_order_release);
 }
 
-void UnifiedPedalProcessor::processChainBlock(float** b, int c, int s, const PedalAssetPayload& config,
-                                              std::array<std::unique_ptr<DspEffect>, PedalSlotCount>& effects,
-                                              std::array<std::array<const float*, 4>, PedalSlotCount>& paramPtrs)
+void UnifiedPedalProcessor::processChainBlock(float** b, int c, int s, const PedalAssetPayload& config)
 {
     juce::ScopedNoDenormals noDenorm;
     int chCount = std::min(c, m_maxChannels.load(std::memory_order_relaxed));
 
     for (int idx = 0; idx < static_cast<int>(config.activeRoutingChain.size()); ++idx)
     {
-        auto* effectPtr = effects[static_cast<size_t>(idx)].get();
+        auto* effectPtr = config.effects[static_cast<size_t>(idx)].get();
         if (!effectPtr)
             continue;
 
@@ -76,7 +95,7 @@ void UnifiedPedalProcessor::processChainBlock(float** b, int c, int s, const Ped
         size_t baseIdx = static_cast<size_t>(physSlot) * 4;
 
         float params[4] = {0.5f, 0.5f, 0.5f, 0.5f};
-        auto& row = paramPtrs[static_cast<size_t>(idx)];
+        const auto& row = config.paramPtrs[static_cast<size_t>(idx)];
         for (int k = 0; k < 4; ++k)
         {
             size_t ci = baseIdx + static_cast<size_t>(k);
@@ -95,6 +114,16 @@ void UnifiedPedalProcessor::processChainBlock(float** b, int c, int s, const Ped
 
         int mi = effectPtr->mixKnobIndex();
         bool hasMix = (mi >= 0 && mi < 4);
+
+        auto& smoothRow = m_smoothedParams[static_cast<size_t>(physSlot)];
+        for (int k = 0; k < 4; ++k)
+        {
+            if (k == mi)
+                continue;
+            smoothRow[static_cast<size_t>(k)] += (params[k] - smoothRow[static_cast<size_t>(k)]) * m_paramSmoothAlpha;
+            params[k] = smoothRow[static_cast<size_t>(k)];
+        }
+
         if (hasMix)
         {
             float prevMix = m_prevMix[static_cast<size_t>(physSlot)];
@@ -110,7 +139,11 @@ void UnifiedPedalProcessor::processChainBlock(float** b, int c, int s, const Ped
         float prevMix = hasMix ? m_prevMix[static_cast<size_t>(physSlot)] : 1.0f;
         float currMix = hasMix ? params[mi] : 1.0f;
         if (hasMix)
+        {
+            if (prevMix < 0.0f)
+                prevMix = currMix;
             m_prevMix[static_cast<size_t>(physSlot)] = currMix;
+        }
 
         float pedalGain = m_pedalState.gainRef(physSlot).load(std::memory_order_relaxed);
         float peak = 0.0f;
@@ -126,7 +159,7 @@ void UnifiedPedalProcessor::processChainBlock(float** b, int c, int s, const Ped
                 }
                 if (!std::isfinite(x)) x = 0.0f;
                 if (pedalGain != 1.0f) x *= pedalGain;
-                x = juce::jlimit(-1.0f, 1.0f, x);
+                x = softClip(x);
                 b[ch][smp] = x;
                 peak = std::max(peak, std::abs(x));
             }
@@ -141,14 +174,14 @@ void UnifiedPedalProcessor::processAudioBlock(float** buffer, int numChannels, i
     int maxSamples = m_maxSamplesPerBlock.load(std::memory_order_relaxed);
     if (numSamples > maxSamples) numSamples = maxSamples;
 
-    if (m_pendingReset.exchange(false, std::memory_order_acq_rel))
-        reset(cfg.chainEffects);
-
     if (m_crossfade.consumeResetRequest())
         m_crossfade.reset();
 
     const auto* current = cfg.currentConfig.load(std::memory_order_acquire);
     const auto* next = cfg.nextConfig.load(std::memory_order_acquire);
+
+    if (m_pendingReset.exchange(false, std::memory_order_acq_rel) && current)
+        reset(*current);
 
     if (!current)
         return;
@@ -162,46 +195,24 @@ void UnifiedPedalProcessor::processAudioBlock(float** buffer, int numChannels, i
                 buffer[ch][smp] *= inGain;
     }
 
-    if (!next)
-    {
-        bool silent = true;
-        int checkCh = std::min(numChannels, m_maxChannels.load(std::memory_order_relaxed));
-        for (int c = 0; c < checkCh; ++c)
-            for (int s = 0; s < std::min(16, numSamples); ++s)
-                if (std::abs(buffer[c][s]) > 1e-6f) { silent = false; break; }
-
-        if (silent)
-        {
-            ++m_silentBlockCount;
-            if (m_silentBlockCount >= 3)
-                return;
-        }
-        else
-        {
-            if (m_silentBlockCount >= 3)
-                reset(cfg.chainEffects);
-            m_silentBlockCount = 0;
-        }
-    }
-
     int copyCh = std::min(numChannels, m_maxChannels.load(std::memory_order_relaxed));
 
     if (next && m_crossfade.isActive())
     {
         m_crossfade.copyToTemp(buffer, copyCh, numSamples);
-        processChainBlock(buffer, numChannels, numSamples, *current, cfg.chainEffects, cfg.paramPtrs);
+        processChainBlock(buffer, numChannels, numSamples, *current);
         m_crossfade.captureOldOut(buffer, copyCh, numSamples);
         m_crossfade.restoreInput(buffer, copyCh, numSamples);
-        processChainBlock(buffer, numChannels, numSamples, *next, cfg.pendingEffects, cfg.paramPtrs);
+        processChainBlock(buffer, numChannels, numSamples, *next);
         m_crossfade.fadeOutputs(buffer, copyCh, numSamples);
     }
     else if (next && m_crossfade.isComplete())
     {
-        processChainBlock(buffer, numChannels, numSamples, *next, cfg.pendingEffects, cfg.paramPtrs);
+        processChainBlock(buffer, numChannels, numSamples, *next);
     }
     else
     {
-        processChainBlock(buffer, numChannels, numSamples, *current, cfg.chainEffects, cfg.paramPtrs);
+        processChainBlock(buffer, numChannels, numSamples, *current);
     }
 
     float outGain = m_pedalState.getOutputGain();
@@ -210,7 +221,7 @@ void UnifiedPedalProcessor::processAudioBlock(float** buffer, int numChannels, i
         for (int smp = 0; smp < numSamples; ++smp)
         {
             float x = buffer[ch][smp] * outGain;
-            buffer[ch][smp] = std::isfinite(x) ? std::tanh(x) : 0.0f;
+            buffer[ch][smp] = std::isfinite(x) ? softClip(x) : 0.0f;
         }
 
     if (next && m_crossfade.isComplete() && m_crossfade.counter() >= m_crossfade.samples())
@@ -227,10 +238,7 @@ void UnifiedPedalProcessor::processAudioBlock(float** buffer, int numChannels, i
         if (oldCurrent)
             cfg.releaseQueue.pushSingle(oldCurrent);
 
-        for (size_t i = 0; i < PedalSlotCount; ++i)
-            std::swap(cfg.chainEffects[i], cfg.pendingEffects[i]);
-
         m_crossfade.reset();
-        reset(cfg.chainEffects);
+        reset(*next);
     }
 }

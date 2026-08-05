@@ -17,11 +17,11 @@ void ReleaseQueue::push(const PedalAssetPayload* ptr)
 
 void ReleaseQueue::drain()
 {
-    auto* single = m_singlePtr.exchange(nullptr, std::memory_order_acq_rel);
-    delete single;
-
-    auto* overflow = m_overflowPtr.exchange(nullptr, std::memory_order_acq_rel);
-    delete overflow;
+    for (auto& slot : m_singleSlots)
+    {
+        auto* ptr = slot.exchange(nullptr, std::memory_order_acq_rel);
+        delete ptr;
+    }
 
     int rIdx = m_readIndex.load(std::memory_order_relaxed);
     int wIdx = m_writeIndex.load(std::memory_order_acquire);

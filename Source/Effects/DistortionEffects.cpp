@@ -31,7 +31,7 @@ void WaveshaperEffect::processSample(float** b, int c, int s, float effectParam)
 void WaveshaperEffect::processBlock(float** b, int c, int n, const float* params)
 {
     juce::ScopedNoDenormals noDenorm;
-    float drive = params[3];
+    float drive = params[2];
     if (drive < 0.01f) return;
     float clip = 1.0f - drive * 0.5f;
     float k = (2.0f / 3.14159265f) * clip;
@@ -44,6 +44,7 @@ void WaveshaperEffect::processBlock(float** b, int c, int n, const float* params
         for (int s = 0; s < n; ++s)
         {
             float x2 = b[ch][s];
+            if (!std::isfinite(x2)) x2 = 0.0f;
             float x1 = prev;
             prev = x2;
             float dx = x2 - x1;
@@ -92,7 +93,7 @@ void WavefolderEffect::processSample(float** b, int c, int s, float effectParam)
 void WavefolderEffect::processBlock(float** b, int c, int n, const float* params)
 {
     juce::ScopedNoDenormals noDenorm;
-    float d = 1.0f + params[3] * 4.0f;
+    float d = 1.0f + params[1] * 4.0f;
     float norm = 1.0f + d * 0.1f;
     float a = d * 3.14159265f;
 
@@ -103,6 +104,7 @@ void WavefolderEffect::processBlock(float** b, int c, int n, const float* params
         for (int s = 0; s < n; ++s)
         {
             float x2 = b[ch][s];
+            if (!std::isfinite(x2)) x2 = 0.0f;
             float x1 = prev;
             prev = x2;
             float dx = x2 - x1;
@@ -171,7 +173,7 @@ void CombResonatorEffect::processSample(float** b, int c, int s, float effectPar
 void CombResonatorEffect::processBlock(float** b, int c, int n, const float* params)
 {
     juce::ScopedNoDenormals noDenorm;
-    float freq = 20.0f * std::pow(66.666f, params[3]);
+    float freq = 20.0f * std::pow(66.666f, params[0]);
     float feedback = 0.85f;
 
     int chCount = std::min(c, static_cast<int>(m_delays.size()));
@@ -193,6 +195,7 @@ void CombResonatorEffect::processBlock(float** b, int c, int n, const float* par
             if (!std::isfinite(in)) in = 0.0f;
             size_t readPtr = (d.writePtr + bufSize - chDelaySamples) % bufSize;
             float delayed = d.buf[readPtr];
+            if (!std::isfinite(delayed)) delayed = 0.0f;
             float& damp = m_dampState[static_cast<size_t>(ch)];
             damp = damp + m_dampCoeff * (delayed - damp);
             d.buf[d.writePtr] = in + std::tanh(damp * feedback);

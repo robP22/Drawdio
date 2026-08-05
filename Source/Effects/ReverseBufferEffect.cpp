@@ -39,7 +39,6 @@ void ReverseBufferEffect::reset()
 
 void ReverseBufferEffect::processSample(float** b, int c, int s, float effectParam)
 {
-    juce::ScopedNoDenormals noDenorm;
     float density = effectParam;
     float grainSec = 0.05f + density * 0.95f;
     int maxRepeats = 1 + static_cast<int>((1.0f - density) * 4.0f);
@@ -122,5 +121,5 @@ void ReverseBufferEffect::processBlock(float** b, int c, int n, const float* par
 {
     juce::ScopedNoDenormals noDenorm;
     for (int s = 0; s < n; ++s)
-        processSample(b, c, s, params[1]);
+        processSample(b, c, s, params[3]);
 }
