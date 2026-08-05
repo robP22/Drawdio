@@ -81,23 +81,25 @@ void RandomModulatorEffect::processBlock(float** b, int c, int n, const float* p
     };
 
     int chCount = std::min(c, static_cast<int>(m_channels.size()));
-    for (int ch = 0; ch < chCount; ++ch)
+    for (int s = 0; s < n; ++s)
     {
-        auto& mc = m_channels[static_cast<size_t>(ch)];
-
-        if (mc.counter <= 0)
+        for (int ch = 0; ch < chCount; ++ch)
         {
-            mc.holdValue = xorshift32(m_rngState) * m_depth;
-            mc.counter = updateInterval + (ch * 7) % updateInterval;
-        }
-        --mc.counter;
+            auto& mc = m_channels[static_cast<size_t>(ch)];
 
-        mc.current += m_smoothFactor * (mc.holdValue - mc.current);
-        if (std::abs(mc.current - mc.holdValue) < 1e-4f)
-            mc.current = mc.holdValue;
+            if (mc.counter <= 0)
+            {
+                mc.holdValue = xorshift32(m_rngState) * m_depth;
+                mc.counter = updateInterval + (ch * 7) % updateInterval;
+            }
+            --mc.counter;
 
-        float mod = mc.current * 0.5f + 0.5f;
-        for (int s = 0; s < n; ++s)
+            mc.current += m_smoothFactor * (mc.holdValue - mc.current);
+            if (std::abs(mc.current - mc.holdValue) < 1e-4f)
+                mc.current = mc.holdValue;
+
+            float mod = mc.current * 0.5f + 0.5f;
             b[ch][s] *= mod;
+        }
     }
 }

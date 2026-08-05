@@ -5,7 +5,7 @@
 class ReverbNetworkEffect : public DspEffect
 {
 public:
-    ReverbNetworkEffect(const ReverbNetworkConfig& config);
+    ReverbNetworkEffect(const ReverbNetworkConfig& config, int decayKnobIndex = 3);
     void prepare(double sampleRate, int numChannels) override;
     void reset() override;
     void processSample(float** b, int c, int s, float effectParam) override;
@@ -13,6 +13,7 @@ public:
 private:
     ReverbNetworkConfig m_config;
     ReverbNetworkState m_state;
+    int m_decayKnobIndex;
 };
 
 class DiffusedReverbEffect : public ReverbNetworkEffect

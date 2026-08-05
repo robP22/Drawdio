@@ -11,7 +11,10 @@ inline float interpolateDelayRead(const std::vector<float>& buf, float pos)
     size_t idx = static_cast<size_t>(pos) % buf.size();
     float frac = pos - std::floor(pos);
     size_t next = (idx + 1) % buf.size();
-    return buf[idx] * (1.0f - frac) + buf[next] * frac;
+    float result = buf[idx] * (1.0f - frac) + buf[next] * frac;
+    if (!std::isfinite(result))
+        result = 0.0f;
+    return result;
 }
 
 struct SimpleDelayState

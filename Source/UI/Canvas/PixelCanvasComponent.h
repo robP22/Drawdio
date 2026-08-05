@@ -15,6 +15,7 @@ class PixelCanvasComponent : public juce::Component
 {
 public:
     static constexpr int MaxUndoLevels = 32;
+    static constexpr size_t MaxUndoBytes = 8u * 1024u * 1024u; // 8 MB across undo+redo
 
     enum class PixelColor : uint8_t
     {
@@ -98,7 +99,7 @@ private:
     juce::Rectangle<int> cellBoundsForIndex(int index) const;
 
     void beginStroke();
-    void commitStroke();
+    bool commitStroke();
     void rasterizeBrushStroke(juce::Point<int> from, juce::Point<int> to);
     void setPixel(int gridX, int gridY, PixelColor color);
     void applyPixelValue(int index, PixelColor color, bool doOverlay = true);
@@ -107,6 +108,7 @@ private:
     void rebuildOverlay();
     void rebuildOverlay(const CanvasLayout& cl);
     void updateOverlayPixel(int index);
+    void flushPendingOverlay();
     void notifySnapshot();
     void floodFill(int startX, int startY);
 
@@ -137,14 +139,15 @@ private:
     std::vector<PixelChange> m_activeStroke;
     std::vector<std::vector<PixelChange>> m_undoStack;
     std::vector<std::vector<PixelChange>> m_redoStack;
+    size_t m_undoBytes = 0;
     std::vector<int> m_fillQueue;
     std::vector<std::uint8_t> m_fillVisited;
     std::vector<PixelChange> m_fillChanges;
-
     juce::Image m_pixelOverlay;
     juce::Image m_grainOverlay;
     bool m_overlayDirty = true;
     int m_changedCellCount = 0;
+    std::vector<int> m_pendingOverlayIndices;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PixelCanvasComponent)
 };

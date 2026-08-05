@@ -70,6 +70,8 @@ void VcaCompressorEffect::processBlock(float** b, int c, int n, const float* par
     float thresh_dB = -45.0f + params[2] * 40.0f;
     float compRatio = 4.0f;
     float kneeWidth = 6.0f;
+    float makeup_dB = 20.0f * std::log10(std::fmax(m_makeupGain, 0.01f));
+    constexpr float dB20ToLinearExp2 = 0.16609640474f;   // log2(10.0f) / 20.0f  =>  exp2f(x * k) == 10^(x/20)
 
     for (int s = 0; s < n; ++s)
     {
@@ -94,8 +96,7 @@ void VcaCompressorEffect::processBlock(float** b, int c, int n, const float* par
             gain_dB = -over * (1.0f - 1.0f / compRatio) * kneeT * kneeT;
         }
 
-        float makeup_dB = 20.0f * std::log10(std::fmax(m_makeupGain, 0.01f));
-        float gain = std::pow(10.0f, (gain_dB + makeup_dB) / 20.0f);
+        float gain = std::exp2f((gain_dB + makeup_dB) * dB20ToLinearExp2);
         if (gain > 1.0f) gain = 1.0f;
 
         for (int ch = 0; ch < c; ++ch)
@@ -159,7 +160,7 @@ void SidechainDuckerEffect::processSample(float** b, int c, int s, float effectP
 void SidechainDuckerEffect::processBlock(float** b, int c, int n, const float* params)
 {
     juce::ScopedNoDenormals noDenorm;
-    float rate = params[3];
+    float rate = params[0];
     m_duckAmount = params[2];
     float intervalSec = 0.05f + rate * 1.95f;
     int intervalSamps = static_cast<int>(m_sampleRate * intervalSec);

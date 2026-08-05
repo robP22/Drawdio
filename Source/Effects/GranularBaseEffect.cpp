@@ -1,8 +1,10 @@
 #include <JuceHeader.h>
 #include "Effects/GranularBaseEffect.h"
 
-GranularBaseEffect::GranularBaseEffect(float grainDurationSec, float durationSec, int mixKnobIndex)
-    : DspEffect(mixKnobIndex), m_grainDurationSec(grainDurationSec), m_durationSec(durationSec)
+GranularBaseEffect::GranularBaseEffect(float grainDurationSec, float durationSec, int mixKnobIndex,
+                                       int rateKnobIndex)
+    : DspEffect(mixKnobIndex), m_grainDurationSec(grainDurationSec), m_durationSec(durationSec),
+      m_rateKnobIndex(rateKnobIndex)
 {
 }
 
@@ -38,7 +40,8 @@ void GranularBaseEffect::processSample(float** b, int c, int s, float effectPara
 void GranularBaseEffect::processBlock(float** b, int c, int n, const float* params)
 {
     juce::ScopedNoDenormals noDenorm;
-    float playbackSpeed = std::exp2(params[2] * 2.0f - 1.0f);
+    float rate = params[m_rateKnobIndex];
+    float playbackSpeed = std::exp2(rate * 2.0f - 1.0f);
 
     int chCount = std::min(c, static_cast<int>(m_states.size()));
     for (int ch = 0; ch < chCount; ++ch)

@@ -22,7 +22,7 @@ public:
     ~UnifiedPedalProcessor();
 
     void prepareToPlay(double sampleRate, int maxSamplesPerBlock, int numChannels = 2);
-    void reset(std::array<std::unique_ptr<DspEffect>, PedalSlotCount>& effects);
+    void reset(const PedalAssetPayload& config);
     void processAudioBlock(float** buffer, int numChannels, int numSamples,
                            ConfigAudioView& cfg);
     void setKnobParameter(int physicalSlot, int knobIdx, float dragStartValue, float newValue);
@@ -46,9 +46,7 @@ public:
     int getMaxChannels() const { return m_maxChannels.load(std::memory_order_relaxed); }
 
 private:
-    void processChainBlock(float** b, int c, int s, const PedalAssetPayload& config,
-                           std::array<std::unique_ptr<DspEffect>, PedalSlotCount>& effects,
-                           std::array<std::array<const float*, 4>, PedalSlotCount>& paramPtrs);
+    void processChainBlock(float** b, int c, int s, const PedalAssetPayload& config);
 
     std::atomic<double> m_sampleRate{44100.0};
     std::atomic<int> m_maxSamplesPerBlock{1024};
@@ -61,9 +59,17 @@ private:
     std::vector<std::vector<float>> m_dryBuffer;
 
     PedalState m_pedalState;
-    int m_silentBlockCount = 0;
     std::atomic<float> m_currentAutomationValue{0.0f};
     float m_smoothedAutoValue = 0.0f;
     float m_autoSmoothAlpha = 0.0f;
-    std::array<float, PedalSlotCount> m_prevMix = {0.5f, 0.5f, 0.5f, 0.5f, 0.5f, 0.5f};
+    float m_paramSmoothAlpha = 0.0f;
+    std::array<std::array<float, 4>, PedalSlotCount> m_smoothedParams = {
+        std::array<float, 4>{0.5f, 0.5f, 0.5f, 0.5f},
+        std::array<float, 4>{0.5f, 0.5f, 0.5f, 0.5f},
+        std::array<float, 4>{0.5f, 0.5f, 0.5f, 0.5f},
+        std::array<float, 4>{0.5f, 0.5f, 0.5f, 0.5f},
+        std::array<float, 4>{0.5f, 0.5f, 0.5f, 0.5f},
+        std::array<float, 4>{0.5f, 0.5f, 0.5f, 0.5f}
+    };
+    std::array<float, PedalSlotCount> m_prevMix = {-1.0f, -1.0f, -1.0f, -1.0f, -1.0f, -1.0f};
 };

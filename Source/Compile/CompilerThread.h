@@ -28,7 +28,7 @@ public:
     void notify();
 
     bool hasCompiledResult() const noexcept;
-    const PedalAssetPayload* getCompiledPayloadPtr() noexcept;
+    PedalAssetPayload* getCompiledPayloadPtr() noexcept;
 
 private:
     void threadFunc(CanvasMessageQueue& queue, PenDebouncer& debouncer);
