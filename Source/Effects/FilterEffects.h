@@ -17,7 +17,6 @@ private:
         std::vector<float> buf;
         size_t writePtr = 0;
         float readPos = 0.0f;
-        float lfoPhase = 0.0f;
         size_t freezeLen = 0;
         bool wasFrozen = false;
         float xfadePos = 32.0f;

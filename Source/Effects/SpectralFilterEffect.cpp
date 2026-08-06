@@ -21,8 +21,9 @@ void SpectralFilterEffect::processSample(float** b, int c, int s, float effectPa
     juce::ScopedNoDenormals noDenorm;
     float center = effectParam;
     float freqHz = 100.0f + center * 8000.0f;
-    float bwHz = 50.0f + center * 2000.0f;
-    float R = 1.0f - 3.0f * bwHz / static_cast<float>(m_sampleRate);
+    float bwHz = 20.0f + center * 4000.0f;
+    float Q = 1.0f;
+    float R = 1.0f - 3.14159265f * bwHz / (Q * static_cast<float>(m_sampleRate));
     if (R < 0.0f) R = 0.0f;
     if (R > 0.995f) R = 0.995f;
     float theta = 2.0f * 3.14159265f * freqHz / static_cast<float>(m_sampleRate);
@@ -57,9 +58,6 @@ void SpectralFilterEffect::processBlock(float** b, int c, int n, const float* pa
     float width = params[0];
     float q = params[2];
 
-    m_lfoPhase += 0.0006f;
-    if (m_lfoPhase > 6.2831853f) m_lfoPhase -= 6.2831853f;
-    center += std::sin(m_lfoPhase) * 0.10f;
     center = std::max(0.0f, std::min(1.0f, center));
 
     float freqHz = 100.0f + center * 8000.0f;

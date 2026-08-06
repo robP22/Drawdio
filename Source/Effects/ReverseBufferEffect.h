@@ -25,6 +25,7 @@ private:
         int sliceCounter = 0;
         int repeatCount = 0;
         int xfadePos = 32;
+        float xfadeFrom = 0.0f;
         static constexpr int kXfadeLen = 32;
     };
     std::vector<RevChannel> m_channels;

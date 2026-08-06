@@ -26,7 +26,7 @@ public:
                    CanvasRoutingManager& routingManager);
     ~PedalboardGrid() override = default;
 
-    void paint(juce::Graphics& g) override;
+    void paintOverChildren(juce::Graphics& g) override;
     void resized() override;
 
     void updateRouting(const std::vector<uint8_t>& routingOrder);

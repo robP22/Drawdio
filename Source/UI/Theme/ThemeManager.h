@@ -35,8 +35,7 @@ public:
     juce::Colour drawButtonAccent() const override;
     juce::Colour undoButtonAccent() const override;
     juce::Colour clearButtonAccent() const override;
-    juce::Colour cableInColour() const override;
-    juce::Colour cableOutColour() const override;
+    juce::Colour cableColour() const override;
 
     const PedalStyle& pedalStyle() const noexcept override { return m_pedalStyle; }
 

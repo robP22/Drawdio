@@ -13,5 +13,4 @@ public:
 private:
     std::vector<float> m_bqZ1;
     std::vector<float> m_bqZ2;
-    float m_lfoPhase = 0.0f;
 };
