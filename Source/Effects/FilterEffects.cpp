@@ -20,7 +20,6 @@ void TimeDomainFreezeEffect::prepare(double sampleRate, int numChannels)
         ch.buf.assign(static_cast<size_t>(sampleRate * 1.5), 0.0f);
         ch.writePtr = 0;
         ch.readPos = 0.0f;
-        ch.lfoPhase = 0.0f;
         ch.freezeLen = static_cast<size_t>(sampleRate * 1.0);
         ch.wasFrozen = false;
     }
@@ -33,7 +32,6 @@ void TimeDomainFreezeEffect::reset()
         std::fill(ch.buf.begin(), ch.buf.end(), 0.0f);
         ch.writePtr = 0;
         ch.readPos = 0.0f;
-        ch.lfoPhase = 0.0f;
         ch.wasFrozen = false;
         ch.xfadePos = FreezeChannel::kXfadeLen;
         ch.oldReadPos = 0.0f;
@@ -47,9 +45,6 @@ void TimeDomainFreezeEffect::processSample(float** b, int c, int s, float effect
 {
     bool frozen = (effectParam >= 0.05f);
     float pitchRatio = 0.25f + effectParam * 1.75f;
-
-    static constexpr float kLfoRate = 0.2f;
-    static constexpr float kLfoDepth = 0.05f;
 
     int chCount = std::min(c, static_cast<int>(m_channels.size()));
     for (int ch = 0; ch < chCount; ++ch)
@@ -88,15 +83,10 @@ void TimeDomainFreezeEffect::processSample(float** b, int c, int s, float effect
             {
                 fc.readPos = static_cast<float>((fc.writePtr + bufSize - fc.freezeLen) % bufSize);
                 fc.wasFrozen = true;
-                fc.lfoPhase = 0.0f;
                 fc.entryXfadePos = 0.0f;
             }
 
-            fc.lfoPhase += static_cast<float>(kLfoRate / m_sampleRate);
-            if (fc.lfoPhase >= 1.0f) fc.lfoPhase -= 1.0f;
-            float lfo = std::sin(fc.lfoPhase * 2.0f * 3.14159265f);
-
-            float step = pitchRatio + lfo * kLfoDepth;
+            float step = pitchRatio;
             fc.readPos += step;
             if (fc.readPos >= static_cast<float>(fc.freezeLen))
             {

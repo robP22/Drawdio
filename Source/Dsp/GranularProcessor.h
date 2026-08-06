@@ -64,6 +64,13 @@ inline float processGranularSample(float input, GranularProcessorState& state,
     if (state.grainLen == 0 || state.readPtr >= static_cast<float>(state.grainLen))
     {
         state.grainLen = std::max(1, static_cast<int>(sampleRate * grainDurationSec));
+
+        float relPhase2 = state.grain2Pos - static_cast<float>(state.grainBase);
+        if (relPhase2 < 0.0f)
+            relPhase2 += static_cast<float>(bufSize);
+        else if (relPhase2 >= static_cast<float>(bufSize))
+            relPhase2 -= static_cast<float>(bufSize);
+
         state.readPtr = 0.0f;
 
         state.rngState ^= state.rngState << 13;
@@ -76,7 +83,8 @@ inline float processGranularSample(float input, GranularProcessorState& state,
         size_t off = static_cast<size_t>(offset) % bufSize;
         state.grainBase = (state.writePtr + bufSize - static_cast<size_t>(state.grainLen) - off) % bufSize;
 
-        state.grainPhase2 = static_cast<float>(state.grainLen) * (0.5f + spray * 0.1f);
+        float grainLenF = static_cast<float>(state.grainLen);
+        state.grainPhase2 = std::fmod(relPhase2, grainLenF);
         state.grain2Pos = static_cast<float>(state.grainBase) + state.grainPhase2;
         if (state.grain2Pos >= static_cast<float>(bufSize))
             state.grain2Pos -= static_cast<float>(bufSize);
@@ -126,7 +134,7 @@ inline float processGranularSample(float input, GranularProcessorState& state,
     if (state.grainPhase2 >= grainLenF)
         state.grainPhase2 -= grainLenF;
 
-    state.grain2Pos += playbackSpeed;
+    state.grain2Pos = static_cast<float>(state.grainBase) + state.grainPhase2;
     if (state.grain2Pos >= bufSizeF)
         state.grain2Pos -= bufSizeF;
 

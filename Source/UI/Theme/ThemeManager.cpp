@@ -66,5 +66,4 @@ juce::Colour ThemeManager::paletteHoverOutline() const
 juce::Colour ThemeManager::drawButtonAccent() const { return juce::Colour(0xFF47C9A2); }
 juce::Colour ThemeManager::undoButtonAccent() const { return juce::Colour(0xFFC7B067); }
 juce::Colour ThemeManager::clearButtonAccent() const { return juce::Colour(0xFFD75B4F); }
-juce::Colour ThemeManager::cableInColour() const { return juce::Colour(0xFF2E8B57); }
-juce::Colour ThemeManager::cableOutColour() const { return juce::Colour(0xFF1565C0); }
+juce::Colour ThemeManager::cableColour() const { return juce::Colour(0xFF4A4A4A); }

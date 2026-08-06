@@ -22,7 +22,7 @@ PedalboardGrid::PedalboardGrid(IPedalboardModel& model,
     }
 }
 
-void PedalboardGrid::paint(juce::Graphics& g)
+void PedalboardGrid::paintOverChildren(juce::Graphics& g)
 {
     const bool isDragging = m_routingCtrl.isDragging();
     const int grabbedIdx = m_routingCtrl.grabbedEdgeIndex();
