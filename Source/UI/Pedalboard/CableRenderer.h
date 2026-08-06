@@ -10,7 +10,7 @@ public:
     explicit CableRenderer(const IThemeProvider& theme);
 
     static void renderSegment(juce::Graphics& g, const juce::Path& left, const juce::Path& right,
-                               juce::Colour leftBase, juce::Colour rightBase);
+                               juce::Colour base);
 
     void drawRoutingCables(juce::Graphics& g,
                            const std::vector<CachedSplitCable>& cables,

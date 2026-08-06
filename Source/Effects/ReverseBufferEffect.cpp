@@ -60,16 +60,6 @@ void ReverseBufferEffect::processSample(float** b, int c, int s, float effectPar
 
         if (rc.mode == RevState::RECORDING)
         {
-            int fadeOutStart = static_cast<int>(sliceSamples) - RevChannel::kXfadeLen;
-            if (fadeOutStart < 0) fadeOutStart = 0;
-
-            if (rc.sliceCounter >= fadeOutStart)
-            {
-                int offset = rc.sliceCounter - fadeOutStart;
-                float fade = 1.0f - static_cast<float>(offset) / static_cast<float>(RevChannel::kXfadeLen);
-                b[ch][s] *= fade;
-            }
-
             rc.sliceCounter++;
             if (rc.sliceCounter >= static_cast<int>(sliceSamples))
             {
@@ -78,6 +68,7 @@ void ReverseBufferEffect::processSample(float** b, int c, int s, float effectPar
                 rc.playPos = 0;
                 rc.repeatCount = 0;
                 rc.xfadePos = 0;
+                rc.xfadeFrom = b[ch][s];
                 rc.mode = RevState::PLAYING;
                 rc.sliceCounter = 0;
             }
@@ -90,7 +81,7 @@ void ReverseBufferEffect::processSample(float** b, int c, int s, float effectPar
             {
                 float a = static_cast<float>(rc.xfadePos) / static_cast<float>(RevChannel::kXfadeLen);
                 float w = 0.5f * (1.0f - std::cos(3.14159265f * a));
-                b[ch][s] = rc.buf[readPos] * w;
+                b[ch][s] = rc.xfadeFrom * (1.0f - w) + rc.buf[readPos] * w;
                 rc.xfadePos++;
             }
             else

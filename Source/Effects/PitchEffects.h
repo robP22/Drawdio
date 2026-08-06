@@ -47,6 +47,7 @@ private:
         int gateFadeIn = 0;
         int gateFadeOut = 0;
         int entryXfadePos = kXfadeLen;
+        float entryXfadeFrom = 0.0f;
         enum Mode { RECORDING, PLAYING, GATED };
         Mode mode = RECORDING;
     };

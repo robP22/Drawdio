@@ -8,6 +8,9 @@ struct FftChannel;
 class ConvolutionSpaceEffect : public DspEffect
 {
 public:
+    static constexpr int kFftOrder = 10;
+    static constexpr int kFftSize = 1 << kFftOrder;
+
     ConvolutionSpaceEffect();
     ~ConvolutionSpaceEffect() override;
     void prepare(double sampleRate, int numChannels) override;
@@ -16,9 +19,6 @@ public:
     void processBlock(float** b, int c, int n, const float* params) override;
 
 private:
-    static constexpr int kFftOrder = 10;
-    static constexpr int kFftSize = 1 << kFftOrder;
-
     void recomputeIrFreq(float damp, size_t chIdx);
     void processBlockBruteForce(float** b, int c, int n, float damp);
     void processSubBlock(float** b, int offset, int subN, size_t chIdx);

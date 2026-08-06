@@ -141,6 +141,7 @@ void GlitchStutterEffect::processSample(float** b, int c, int s, float effectPar
                 gs.repeatCount = 0;
                 gs.mode = GlitchState::PLAYING;
                 gs.entryXfadePos = 0;
+                gs.entryXfadeFrom = gs.buf[gs.writePtr];
                 gs.sliceCounter = 0;
             }
         }
@@ -166,7 +167,7 @@ void GlitchStutterEffect::processSample(float** b, int c, int s, float effectPar
                 if (gs.entryXfadePos < GlitchState::kXfadeLen)
                 {
                     float w = static_cast<float>(gs.entryXfadePos) / static_cast<float>(GlitchState::kXfadeLen);
-                    out *= w;
+                    out = gs.entryXfadeFrom * (1.0f - w) + out * w;
                     gs.entryXfadePos++;
                 }
                 b[ch][s] = out;

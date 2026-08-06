@@ -50,7 +50,7 @@ void VcaCompressorEffect::processSample(float** b, int c, int s, float effectPar
 
     float makeup_dB = 20.0f * std::log10(std::fmax(m_makeupGain, 0.01f));
     float gain = std::pow(10.0f, (gain_dB + makeup_dB) / 20.0f);
-    if (gain > 1.0f) gain = 1.0f;
+    if (gain < 0.0f) gain = 0.0f;
 
     for (int ch = 0; ch < c; ++ch)
         b[ch][s] = b[ch][s] * gain;
@@ -97,7 +97,7 @@ void VcaCompressorEffect::processBlock(float** b, int c, int n, const float* par
         }
 
         float gain = std::exp2f((gain_dB + makeup_dB) * dB20ToLinearExp2);
-        if (gain > 1.0f) gain = 1.0f;
+        if (gain < 0.0f) gain = 0.0f;
 
         for (int ch = 0; ch < c; ++ch)
             b[ch][s] *= gain;
@@ -141,9 +141,8 @@ void SidechainDuckerEffect::processSample(float** b, int c, int s, float effectP
     {
         auto& chState = m_channels[static_cast<size_t>(ch)];
         chState.intervalSamples = intervalSamps;
-
-        if (chState.timer >= chState.intervalSamples)
-            chState.timer = 0;
+        if (chState.timer >= intervalSamps)
+            chState.timer = chState.timer % intervalSamps;
 
         float phase = static_cast<float>(chState.timer) / static_cast<float>(chState.intervalSamples);
         float gain = 1.0f - duck * (1.0f - phase) * (1.0f - phase) * (1.0f - phase);
@@ -171,12 +170,19 @@ void SidechainDuckerEffect::processBlock(float** b, int c, int n, const float* p
 
     int chCount = std::min(c, static_cast<int>(m_channels.size()));
 
+    for (int ch = 0; ch < chCount; ++ch)
+    {
+        auto& chState = m_channels[static_cast<size_t>(ch)];
+        chState.intervalSamples = intervalSamps;
+        if (chState.timer >= intervalSamps)
+            chState.timer = chState.timer % intervalSamps;
+    }
+
     for (int s = 0; s < n; ++s)
     {
         for (int ch = 0; ch < chCount; ++ch)
         {
             auto& chState = m_channels[static_cast<size_t>(ch)];
-            chState.intervalSamples = intervalSamps;
 
             if (chState.timer >= chState.intervalSamples)
                 chState.timer = 0;

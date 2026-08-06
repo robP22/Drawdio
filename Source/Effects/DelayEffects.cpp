@@ -57,13 +57,13 @@ void MicroPitchChorusEffect::processSample(float** b, int c, int s, float effect
         float mod2 = lfo2 * kLfoDepthSamples * static_cast<float>(m_sampleRate);
 
         float depthMod = m_depth * 2.0f;
-        mc.readPos1 += pitch1 + mod1 * 0.001f * depthMod;
+        mc.readPos1 += pitch1 + mod1 * depthMod;
         if (mc.readPos1 >= static_cast<float>(bufSize))
             mc.readPos1 -= static_cast<float>(bufSize);
         else if (mc.readPos1 < 0.0f)
             mc.readPos1 += static_cast<float>(bufSize);
 
-        mc.readPos2 += pitch2 + mod2 * 0.001f * depthMod;
+        mc.readPos2 += pitch2 + mod2 * depthMod;
         if (mc.readPos2 >= static_cast<float>(bufSize))
             mc.readPos2 -= static_cast<float>(bufSize);
         else if (mc.readPos2 < 0.0f)
@@ -89,6 +89,9 @@ void SimpleDelayEffect::processBlock(float** b, int c, int n, const float* param
     float damp = params[3];
     float dampCoeff = 1.0f - std::exp(-2.0f * 3.14159265f * (500.0f + damp * 15000.0f) / static_cast<float>(m_sampleRate));
 
+    float targetDelay = static_cast<float>(m_sampleRate) * delaySec;
+    m_smoothedDelaySamples += (targetDelay - m_smoothedDelaySamples) * 0.05f;
+
     int chCount = std::min(c, static_cast<int>(m_delays.size()));
     for (int ch = 0; ch < chCount; ++ch)
     {
@@ -97,23 +100,17 @@ void SimpleDelayEffect::processBlock(float** b, int c, int n, const float* param
         float bufSizeF = static_cast<float>(bufSize);
         if (bufSize == 0) continue;
 
-        float targetDelay = static_cast<float>(m_sampleRate) * delaySec;
-        m_smoothedDelaySamples += (targetDelay - m_smoothedDelaySamples) * 0.05f;
         float delaySamplesF = m_smoothedDelaySamples;
         if (delaySamplesF >= bufSizeF) delaySamplesF = bufSizeF - 1.0f;
 
         float& fbLp = m_fbLpState[static_cast<size_t>(ch)];
-        float& lfoPhase = m_lfoPhase[static_cast<size_t>(ch)];
 
         for (int s = 0; s < n; ++s)
         {
             float in = b[ch][s];
             if (!std::isfinite(in)) in = 0.0f;
-            lfoPhase += 0.0004f;
-            if (lfoPhase > 6.2831853f) lfoPhase -= 6.2831853f;
-            float modDelay = delaySamplesF + std::sin(lfoPhase) * delaySamplesF * 0.015f;
-            if (modDelay >= bufSizeF) modDelay = bufSizeF - 1.0f;
-            float readPos = static_cast<float>(d.writePtr + bufSize) - modDelay;
+
+            float readPos = static_cast<float>(d.writePtr + bufSize) - delaySamplesF;
             if (readPos >= bufSizeF) readPos -= bufSizeF;
             float delayed = interpolateDelayRead(d.buf, readPos);
             fbLp = fbLp + dampCoeff * (delayed - fbLp);
@@ -140,7 +137,6 @@ void SimpleDelayEffect::prepare(double sampleRate, int numChannels)
     for (auto& d : m_delays)
         prepareSimpleDelay(d, sampleRate, 2.0);
     m_fbLpState.assign(static_cast<size_t>(numChannels), 0.0f);
-    m_lfoPhase.assign(static_cast<size_t>(numChannels), 0.0f);
 }
 
 void SimpleDelayEffect::reset()
@@ -148,7 +144,6 @@ void SimpleDelayEffect::reset()
     for (auto& d : m_delays)
         resetSimpleDelay(d);
     std::fill(m_fbLpState.begin(), m_fbLpState.end(), 0.0f);
-    std::fill(m_lfoPhase.begin(), m_lfoPhase.end(), 0.0f);
 }
 
 void SimpleDelayEffect::processSample(float** b, int c, int s, float effectParam)
@@ -210,7 +205,6 @@ void TapeStopEchoEffect::reset()
         ch.readPos = 0.0f;
         ch.readSpeed = 1.0f;
         ch.wasBraking = false;
-        ch.wowPhase = 0.0f;
     }
 }
 
@@ -259,10 +253,7 @@ void TapeStopEchoEffect::processSample(float** b, int c, int s, float effectPara
         if (chState.readPos >= static_cast<float>(bufSize))
             chState.readPos -= static_cast<float>(bufSize);
 
-        chState.wowPhase += 0.00075f + static_cast<float>(ch * 0.00003);
-        if (chState.wowPhase > 6.2831853f) chState.wowPhase -= 6.2831853f;
-        float wowOffset = std::sin(chState.wowPhase) * 1.8f;
-        float modReadPos = chState.readPos + wowOffset;
+        float modReadPos = chState.readPos;
         if (modReadPos >= static_cast<float>(bufSize))
             modReadPos -= static_cast<float>(bufSize);
         else if (modReadPos < 0.0f)

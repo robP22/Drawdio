@@ -37,7 +37,6 @@ public:
 private:
     std::vector<SimpleDelayState> m_delays;
     std::vector<float> m_fbLpState;
-    std::vector<float> m_lfoPhase;
     float m_smoothedDelaySamples = 4410.0f;
 };
 
@@ -57,7 +56,6 @@ private:
         float readPos = 0.0f;
         float readSpeed = 1.0f;
         bool wasBraking = false;
-        float wowPhase = 0.0f;
         int brakeXfadePos = 32;
         float brakeXfadeOldOutput = 0.0f;
     };

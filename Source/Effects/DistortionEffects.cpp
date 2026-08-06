@@ -146,8 +146,8 @@ void CombResonatorEffect::processSample(float** b, int c, int s, float effectPar
     float freq = 20.0f * std::pow(66.666f, effectParam);
     float feedback = 0.85f;
 
-    size_t delaySamples = static_cast<size_t>(m_sampleRate / freq + 0.5f);
-    if (delaySamples < 1) delaySamples = 1;
+    float delaySamplesF = static_cast<float>(m_sampleRate) / freq;
+    if (delaySamplesF < 1.0f) delaySamplesF = 1.0f;
 
     int chCount = std::min(c, static_cast<int>(m_delays.size()));
     for (int ch = 0; ch < chCount; ++ch)
@@ -156,12 +156,13 @@ void CombResonatorEffect::processSample(float** b, int c, int s, float effectPar
         size_t bufSize = d.buf.size();
         if (bufSize == 0) continue;
 
-        size_t chDelaySamples = std::min(delaySamples, bufSize - 1);
+        float chDelayF = std::min(delaySamplesF, static_cast<float>(bufSize) - 1.0f);
 
         float in = b[ch][s];
         if (!std::isfinite(in)) in = 0.0f;
-        size_t readPtr = (d.writePtr + bufSize - chDelaySamples) % bufSize;
-        float delayed = d.buf[readPtr];
+        float readPos = static_cast<float>(d.writePtr + bufSize) - chDelayF;
+        if (readPos >= static_cast<float>(bufSize)) readPos -= static_cast<float>(bufSize);
+        float delayed = interpolateDelayRead(d.buf, readPos);
         float& damp = m_dampState[static_cast<size_t>(ch)];
         damp = damp + m_dampCoeff * (delayed - damp);
         d.buf[d.writePtr] = in + std::tanh(damp * feedback);
@@ -176,10 +177,10 @@ void CombResonatorEffect::processBlock(float** b, int c, int n, const float* par
     float freq = 20.0f * std::pow(66.666f, params[0]);
     float feedback = 0.85f;
 
-    int chCount = std::min(c, static_cast<int>(m_delays.size()));
+    float delaySamplesF = static_cast<float>(m_sampleRate) / freq;
+    if (delaySamplesF < 1.0f) delaySamplesF = 1.0f;
 
-    size_t delaySamples = static_cast<size_t>(m_sampleRate / freq + 0.5f);
-    if (delaySamples < 1) delaySamples = 1;
+    int chCount = std::min(c, static_cast<int>(m_delays.size()));
 
     for (int ch = 0; ch < chCount; ++ch)
     {
@@ -187,14 +188,15 @@ void CombResonatorEffect::processBlock(float** b, int c, int n, const float* par
         size_t bufSize = d.buf.size();
         if (bufSize == 0) continue;
 
-        size_t chDelaySamples = std::min(delaySamples, bufSize - 1);
+        float chDelayF = std::min(delaySamplesF, static_cast<float>(bufSize) - 1.0f);
 
         for (int s = 0; s < n; ++s)
         {
             float in = b[ch][s];
             if (!std::isfinite(in)) in = 0.0f;
-            size_t readPtr = (d.writePtr + bufSize - chDelaySamples) % bufSize;
-            float delayed = d.buf[readPtr];
+            float readPos = static_cast<float>(d.writePtr + bufSize) - chDelayF;
+            if (readPos >= static_cast<float>(bufSize)) readPos -= static_cast<float>(bufSize);
+            float delayed = interpolateDelayRead(d.buf, readPos);
             if (!std::isfinite(delayed)) delayed = 0.0f;
             float& damp = m_dampState[static_cast<size_t>(ch)];
             damp = damp + m_dampCoeff * (delayed - damp);

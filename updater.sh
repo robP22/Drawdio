@@ -8,7 +8,7 @@ PLUGIN_NAME="Drawdio.vst3"
 BUILD_DIR="./build"
 PLUGIN_DIR="$HOME/Library/Audio/Plug-Ins/VST3"
 
-SOURCE_PLUGIN="$BUILD_DIR/Drawdio_artefacts/VST3/$PLUGIN_NAME"
+SOURCE_PLUGIN="$BUILD_DIR/Drawdio_artefacts/Release/VST3/$PLUGIN_NAME"
 DEST_PLUGIN="$PLUGIN_DIR/$PLUGIN_NAME"
 
 if [[ "${1:-}" == "--reconfigure" ]]; then

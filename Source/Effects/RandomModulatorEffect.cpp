@@ -98,7 +98,7 @@ void RandomModulatorEffect::processBlock(float** b, int c, int n, const float* p
             if (std::abs(mc.current - mc.holdValue) < 1e-4f)
                 mc.current = mc.holdValue;
 
-            float mod = mc.current * 0.5f + 0.5f;
+            float mod = mc.current;
             b[ch][s] *= mod;
         }
     }

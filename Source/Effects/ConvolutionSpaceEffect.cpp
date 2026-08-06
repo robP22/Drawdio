@@ -21,7 +21,8 @@ static std::vector<float> generateSyntheticIR(double sampleRate, float decaySec)
 {
     size_t irLen = static_cast<size_t>(sampleRate * decaySec);
     if (irLen < 16) irLen = 16;
-    if (irLen > 256) irLen = 256;
+    if (irLen > static_cast<size_t>(ConvolutionSpaceEffect::kFftSize / 2))
+        irLen = static_cast<size_t>(ConvolutionSpaceEffect::kFftSize / 2);
 
     std::vector<float> ir(irLen, 0.0f);
     std::mt19937 rng(42);
