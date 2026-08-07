@@ -35,20 +35,28 @@ void PixelCanvasComponent::resized()
 {
     m_overlayDirty = true;
     repaint();
+}
 
-    constexpr int gs = 256;
-    m_grainOverlay = juce::Image(juce::Image::ARGB, gs, gs, true);
-    if (m_grainOverlay.isValid())
+const juce::Image& PixelCanvasComponent::getGrainOverlay()
+{
+    static const juce::Image grain = []()
     {
-        juce::Graphics grainG(m_grainOverlay);
-        auto& rng = juce::Random::getSystemRandom();
-        for (int y = 0; y < gs; y += 4)
-            for (int x = 0; x < gs; x += 4)
-            {
-                grainG.setColour(juce::Colour(static_cast<uint8_t>(255), static_cast<uint8_t>(255), static_cast<uint8_t>(255), static_cast<uint8_t>(rng.nextInt(5))));
-                grainG.fillRect(static_cast<float>(x), static_cast<float>(y), 4.0f, 4.0f);
-            }
-    }
+        constexpr int gs = 256;
+        juce::Image img(juce::Image::ARGB, gs, gs, true);
+        if (img.isValid())
+        {
+            juce::Graphics grainG(img);
+            auto& rng = juce::Random::getSystemRandom();
+            for (int y = 0; y < gs; y += 4)
+                for (int x = 0; x < gs; x += 4)
+                {
+                    grainG.setColour(juce::Colour(static_cast<uint8_t>(255), static_cast<uint8_t>(255), static_cast<uint8_t>(255), static_cast<uint8_t>(rng.nextInt(5))));
+                    grainG.fillRect(static_cast<float>(x), static_cast<float>(y), 4.0f, 4.0f);
+                }
+        }
+        return img;
+    }();
+    return grain;
 }
 
 PixelCanvasComponent::CanvasLayout PixelCanvasComponent::computeCanvasLayout() const
@@ -89,9 +97,10 @@ void PixelCanvasComponent::paint(juce::Graphics& g)
         g.setOpacity(1.0f);
     }
 
-    if (m_grainOverlay.isValid())
-        g.drawImage(m_grainOverlay, cx, cy, cw, ch,
-                    0, 0, m_grainOverlay.getWidth(), m_grainOverlay.getHeight());
+    const auto& grain = getGrainOverlay();
+    if (grain.isValid())
+        g.drawImage(grain, cx, cy, cw, ch,
+                    0, 0, grain.getWidth(), grain.getHeight());
 }
 
 juce::Point<int> PixelCanvasComponent::gridCoordsFromUI(int uiX, int uiY) const
@@ -105,7 +114,7 @@ juce::Point<int> PixelCanvasComponent::gridCoordsFromUI(int uiX, int uiY) const
     float nx = (static_cast<float>(uiX) - cl.offsetX) / cl.canvasW;
     float ny = (static_cast<float>(uiY) - cl.offsetY) / cl.canvasH;
 
-    if (m_partyModeEnabled)
+    if (m_reboundModeEnabled)
     {
         bool outside = (nx < -0.02f || nx > 1.02f || ny < -0.02f || ny > 1.02f);
         if (outside && !m_bounceActive) { m_bounceActive = true; m_justBounced = true; }
@@ -297,7 +306,7 @@ void PixelCanvasComponent::mouseDrag(const juce::MouseEvent& event)
 
     if (m_justBounced)
     {
-        auto newColor = randomPartyColor();
+        auto newColor = randomReboundColor();
         m_currentColor = newColor;
         if (m_onColorChanged)
             m_onColorChanged(newColor);
@@ -624,14 +633,14 @@ void PixelCanvasComponent::setFillMode(bool active)
     repaint();
 }
 
-void PixelCanvasComponent::setPartyModeEnabled(bool on)
+void PixelCanvasComponent::setReboundModeEnabled(bool on)
 {
-    m_partyModeEnabled = on;
+    m_reboundModeEnabled = on;
     m_bounceActive = false;
     m_justBounced = false;
 }
 
-PixelCanvasComponent::PixelColor PixelCanvasComponent::randomPartyColor()
+PixelCanvasComponent::PixelColor PixelCanvasComponent::randomReboundColor()
 {
     static constexpr PixelColor colors[] = {
         PixelColor::Black, PixelColor::Brown, PixelColor::Purple,

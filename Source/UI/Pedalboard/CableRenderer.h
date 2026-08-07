@@ -2,12 +2,13 @@
 #include <JuceHeader.h>
 #include <vector>
 #include "CablePathBuilder.h"
+#include "Core/Contracts/IResourceProvider.h"
 #include "UI/Theme/IThemeProvider.h"
 
 class CableRenderer
 {
 public:
-    explicit CableRenderer(const IThemeProvider& theme);
+    explicit CableRenderer(const IThemeProvider& theme, const IResourceProvider& resources);
 
     static void renderSegment(juce::Graphics& g, const juce::Path& left, const juce::Path& right,
                                juce::Colour base);
@@ -31,4 +32,5 @@ public:
 
 private:
     const IThemeProvider& m_theme;
+    const IResourceProvider& m_resources;
 };

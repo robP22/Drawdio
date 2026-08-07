@@ -2,7 +2,9 @@
 #include "PluginProcessor.h"
 #include "GridLayout.h"
 #include "UI/EditorLayout.h"
-#include "UI/PresetFileController.h"
+
+#include <array>
+#include <limits>
 
 DrawdioProcessorEditor::DrawdioProcessorEditor(DrawdioProcessor& p)
     : AudioProcessorEditor(p),
@@ -31,6 +33,10 @@ DrawdioProcessorEditor::DrawdioProcessorEditor(DrawdioProcessor& p)
             exitManualMode();
     };
 
+    m_bottomBar.onPresetSave = [this]() { savePreset(); };
+    m_bottomBar.onPresetLoad = [this]() { loadPreset(); };
+    m_bottomBar.onPresetImport = [this]() { importImage(); };
+
     m_bottomBar.getAutomationDisplay().onBarCountChanged = [this](int bars) {
         m_automationPlayer.setBarCount(bars);
     };
@@ -52,7 +58,7 @@ DrawdioProcessorEditor::DrawdioProcessorEditor(DrawdioProcessor& p)
     });
     m_palette.setOnFill([this](bool active) { m_pixelCanvas.setFillMode(active); });
     m_palette.setOnBrushSize([this](float radius) { m_pixelCanvas.setBrushRadius(radius); });
-    m_palette.setOnPartyMode([this](bool on) { m_pixelCanvas.setPartyModeEnabled(on); });
+    m_palette.setOnReboundMode([this](bool on) { m_pixelCanvas.setReboundModeEnabled(on); });
     m_palette.setOnEraser([this](bool on) {
         if (on)
             m_pixelCanvas.setCurrentColor(PixelCanvasComponent::PixelColor::Transparent);
@@ -69,8 +75,8 @@ DrawdioProcessorEditor::DrawdioProcessorEditor(DrawdioProcessor& p)
         auto knobVals = audioProcessor.getKnobValues();
         for (int s = 0; s < PedalSlotCount; ++s)
             if (auto* pedal = m_pedalboardGrid.getPedal(s))
-                for (int k = 0; k < 4; ++k)
-                    pedal->setKnobValue(k, knobVals[static_cast<size_t>(s * 4 + k)]);
+                for (int k = 0; k < KnobsPerPedal; ++k)
+                    pedal->setKnobValue(k, knobVals[static_cast<size_t>(s * KnobsPerPedal + k)]);
     }
 
     {
@@ -194,6 +200,7 @@ void DrawdioProcessorEditor::timerCallback()
 {
     const bool neededBefore = m_syncController.needsRepaint();
     m_syncController.tick();
+    m_bottomBar.tick();
     if (m_syncController.needsRepaint() || neededBefore)
     {
         m_syncController.clearRepaintFlag();
@@ -231,24 +238,148 @@ void DrawdioProcessorEditor::exitManualMode()
 
 void DrawdioProcessorEditor::savePreset()
 {
-    PresetFileController::savePreset([this]() {
-        return audioProcessor.createPresetState();
-    });
+    auto chooser = std::make_shared<juce::FileChooser>(
+        "Save Drawdio Preset",
+        juce::File::getSpecialLocation(juce::File::userDocumentsDirectory)
+            .getChildFile("Untitled.drawdio"),
+        "*.drawdio");
+    chooser->launchAsync(juce::FileBrowserComponent::saveMode,
+        [this, chooser](const juce::FileChooser& fc)
+        {
+            auto file = fc.getResult();
+            if (file == juce::File{})
+                return;
+
+            if (file.getFileExtension().isEmpty())
+                file = file.withFileExtension(".drawdio");
+
+            juce::MemoryBlock state;
+            audioProcessor.getStateInformation(state);
+
+            if (auto stream = std::unique_ptr<juce::FileOutputStream>(file.createOutputStream()))
+            {
+                stream->write(state.getData(), state.getSize());
+                stream->flush();
+            }
+        });
 }
 
 void DrawdioProcessorEditor::loadPreset()
 {
-    PresetFileController::loadPreset(
-        [this](const void* data, int size) {
-            return audioProcessor.applyPresetState(data, size);
-        },
-        [this]() {
+    auto chooser = std::make_shared<juce::FileChooser>(
+        "Load Drawdio Preset",
+        juce::File::getSpecialLocation(juce::File::userDocumentsDirectory),
+        "*.drawdio");
+    chooser->launchAsync(juce::FileBrowserComponent::openMode,
+        [this, chooser](const juce::FileChooser& fc)
+        {
+            auto file = fc.getResult();
+            if (file == juce::File{})
+                return;
+
+            juce::MemoryBlock state;
+            if (!file.loadFileAsData(state))
+                return;
+
+            audioProcessor.setStateInformation(state.getData(), static_cast<int>(state.getSize()));
+
             m_pixelCanvas.setGridData(audioProcessor.getGridData());
             m_syncController.setAutoEnvelopeDirty();
+            m_syncController.clearRoutingCache();
+
             auto knobVals = audioProcessor.getKnobValues();
             for (int s = 0; s < PedalSlotCount; ++s)
                 if (auto* pedal = m_pedalboardGrid.getPedal(s))
-                    for (int k = 0; k < 4; ++k)
-                        pedal->setKnobValue(k, knobVals[static_cast<size_t>(s * 4 + k)]);
+                    for (int k = 0; k < KnobsPerPedal; ++k)
+                        pedal->setKnobValue(k, knobVals[static_cast<size_t>(s * KnobsPerPedal + k)]);
+
+            m_pedalboardGrid.syncPedals();
+
+            if (auto* config = audioProcessor.getCurrentConfig())
+            {
+                m_pedalboardGrid.updateRouting(config->routingSlotOrder);
+                m_pedalboardGrid.repaint();
+            }
+        });
+}
+
+namespace
+{
+struct PaletteEntry { uint8_t value; juce::Colour colour; };
+
+const std::array<PaletteEntry, 12>& drawdioPalette()
+{
+    static const std::array<PaletteEntry, 12> palette {{
+        { 1, juce::Colour(0xFF2F73D8) },  // Blue
+        { 2, juce::Colour(0xFF2BBE65) },  // Green
+        { 3, juce::Colour(0xFFE54235) },  // Red
+        { 4, juce::Colour(0xFFE8E5DC) },  // White
+        { 5, juce::Colour(0xFF121212) },  // Black
+        { 6, juce::Colour(0xFFFFD700) },  // Yellow
+        { 7, juce::Colour(0xFF8B4513) },  // Brown
+        { 8, juce::Colour(0xFF800080) },  // Purple
+        { 9, juce::Colour(0xFF808080) },  // Grey
+        { 10, juce::Colour(0xFFFF69B4) }, // Pink
+        { 11, juce::Colour(0xFFE67E22) }, // Orange
+        { 12, juce::Colour(0xFF8E44AD) }  // Violet
+    }};
+    return palette;
+}
+
+uint8_t nearestDrawdioColor(juce::Colour c)
+{
+    const auto& palette = drawdioPalette();
+    float bestDist = std::numeric_limits<float>::max();
+    uint8_t best = 0;
+    const int r = c.getRed(), g = c.getGreen(), b = c.getBlue();
+    for (const auto& entry : palette)
+    {
+        const int dr = r - entry.colour.getRed();
+        const int dg = g - entry.colour.getGreen();
+        const int db = b - entry.colour.getBlue();
+        const float dist = static_cast<float>(2 * dr * dr + 4 * dg * dg + 3 * db * db);
+        if (dist < bestDist)
+        {
+            bestDist = dist;
+            best = entry.value;
+        }
+    }
+    return best;
+}
+}
+
+void DrawdioProcessorEditor::importImage()
+{
+    auto chooser = std::make_shared<juce::FileChooser>(
+        "Import Image to Canvas",
+        juce::File::getSpecialLocation(juce::File::userDocumentsDirectory),
+        "*.png;*.jpg;*.jpeg");
+    chooser->launchAsync(juce::FileBrowserComponent::openMode,
+        [this, chooser](const juce::FileChooser& fc)
+        {
+            auto file = fc.getResult();
+            if (file == juce::File{})
+                return;
+
+            auto image = juce::ImageFileFormat::loadFrom(file);
+            if (!image.isValid())
+                return;
+
+            auto scaled = image.rescaled(GridSize, GridSize, juce::Graphics::highResamplingQuality);
+
+            std::array<uint8_t, TotalCells> grid{};
+            for (int y = 0; y < GridSize; ++y)
+                for (int x = 0; x < GridSize; ++x)
+                {
+                    auto c = scaled.getPixelAt(x, y);
+                    if (c.getAlpha() < 128)
+                        grid[static_cast<size_t>(y * GridSize + x)] = 0;
+                    else
+                        grid[static_cast<size_t>(y * GridSize + x)] = nearestDrawdioColor(c);
+                }
+
+            audioProcessor.setGridData(grid);
+            m_pixelCanvas.setGridData(grid);
+            m_syncController.setAutoEnvelopeDirty();
         });
 }

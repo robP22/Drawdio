@@ -49,4 +49,5 @@ private:
     std::vector<uint8_t> m_lastRestoredManualRouting;
     bool m_needsRepaint = false;
     bool m_autoEnvelopeDirty = true;
+    bool m_didConsumeResult = false;
 };

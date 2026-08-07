@@ -29,7 +29,7 @@ public:
     virtual bool isParamOverridden(int slot, int knob) const = 0;
     virtual float getKnobDisplayValue(int slot, int knob, float compiled) const = 0;
     virtual void storeParameterValue(int slot, int knob, float value) = 0;
-    virtual std::array<float, PedalSlotCount * 4> getKnobValues() const = 0;
+    virtual std::array<float, TotalKnobs> getKnobValues() const = 0;
     virtual bool isKnobLinked(int slot, int knob) const = 0;
     virtual float getKnobLinkStrength(int slot, int knob) const = 0;
     virtual DspModuleType getPedalSlot(int slot) const = 0;

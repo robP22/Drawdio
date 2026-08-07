@@ -2,7 +2,6 @@
 
 AutomationDisplay::AutomationDisplay()
 {
-    startTimerHz(20);
 }
 
 void AutomationDisplay::resized() {}

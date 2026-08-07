@@ -79,7 +79,9 @@ public:
     void setOnPenUp(CanvasPenCallback cb) { m_onPenUp = std::move(cb); }
     void setOnColorChanged(std::function<void(PixelColor)> cb) { m_onColorChanged = std::move(cb); }
 
-    void setPartyModeEnabled(bool on);
+    void setReboundModeEnabled(bool on);
+
+    static const juce::Image& getGrainOverlay();
 
 private:
     struct CanvasLayout
@@ -112,7 +114,7 @@ private:
     void notifySnapshot();
     void floodFill(int startX, int startY);
 
-    PixelColor randomPartyColor();
+    PixelColor randomReboundColor();
 
     const IResourceProvider& m_resources;
     const IThemeProvider& m_theme;
@@ -131,7 +133,7 @@ private:
     float m_brushRadius = 0.75f;
     int m_canvasTopOffset = 0;
 
-    bool m_partyModeEnabled = false;
+    bool m_reboundModeEnabled = false;
     mutable bool m_bounceActive = false;
     mutable bool m_justBounced = false;
     std::function<void(PixelColor)> m_onColorChanged;
@@ -144,7 +146,6 @@ private:
     std::vector<std::uint8_t> m_fillVisited;
     std::vector<PixelChange> m_fillChanges;
     juce::Image m_pixelOverlay;
-    juce::Image m_grainOverlay;
     bool m_overlayDirty = true;
     int m_changedCellCount = 0;
     std::vector<int> m_pendingOverlayIndices;

@@ -9,7 +9,7 @@ PedalboardGrid::PedalboardGrid(IPedalboardModel& model,
       m_resources(resources),
       m_theme(theme),
       m_routingManager(routingManager),
-      m_renderer(theme),
+      m_renderer(theme, m_resources),
       m_routingCtrl(m_connectionModel, m_jackMap, model)
 {
     addMouseListener(this, true);

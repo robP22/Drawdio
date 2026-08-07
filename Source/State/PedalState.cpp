@@ -34,7 +34,7 @@ void PedalState::setPedalGain(int slot, float gain)
 
 void PedalState::setKnobLink(int slot, int knob, bool linked, float strength)
 {
-    if (slot >= 0 && slot < PedalSlotCount && knob >= 0 && knob < 4)
+    if (slot >= 0 && slot < PedalSlotCount && knob >= 0 && knob < KnobsPerPedal)
     {
         m_knobLinks[static_cast<size_t>(slot)][static_cast<size_t>(knob)].store(linked, std::memory_order_release);
         m_knobLinkStrengths[static_cast<size_t>(slot)][static_cast<size_t>(knob)].store(linked ? strength : 0.0f, std::memory_order_release);
@@ -43,14 +43,14 @@ void PedalState::setKnobLink(int slot, int knob, bool linked, float strength)
 
 bool PedalState::isKnobLinked(int slot, int knob) const
 {
-    if (slot >= 0 && slot < PedalSlotCount && knob >= 0 && knob < 4)
+    if (slot >= 0 && slot < PedalSlotCount && knob >= 0 && knob < KnobsPerPedal)
         return m_knobLinks[static_cast<size_t>(slot)][static_cast<size_t>(knob)].load(std::memory_order_acquire);
     return false;
 }
 
 float PedalState::getKnobLinkStrength(int slot, int knob) const
 {
-    if (slot >= 0 && slot < PedalSlotCount && knob >= 0 && knob < 4)
+    if (slot >= 0 && slot < PedalSlotCount && knob >= 0 && knob < KnobsPerPedal)
         return m_knobLinkStrengths[static_cast<size_t>(slot)][static_cast<size_t>(knob)].load(std::memory_order_acquire);
     return 0.0f;
 }
