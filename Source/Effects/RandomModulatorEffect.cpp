@@ -9,8 +9,8 @@ void RandomModulatorEffect::prepare(double sampleRate, int numChannels)
     m_channels.resize(static_cast<size_t>(numChannels));
     for (auto& ch : m_channels)
     {
-        ch.holdValue = 0.0f;
-        ch.current = 0.0f;
+        ch.holdValue = 1.0f;
+        ch.current = 1.0f;
         ch.counter = 0;
     }
 }
@@ -19,8 +19,8 @@ void RandomModulatorEffect::reset()
 {
     for (auto& ch : m_channels)
     {
-        ch.holdValue = 0.0f;
-        ch.current = 0.0f;
+        ch.holdValue = 1.0f;
+        ch.current = 1.0f;
         ch.counter = 0;
     }
 }
@@ -47,7 +47,7 @@ void RandomModulatorEffect::processSample(float** b, int c, int s, float effectP
 
         if (mc.counter <= 0)
         {
-            mc.holdValue = xorshift32(m_rngState) * m_depth;
+            mc.holdValue = 1.0f + xorshift32(m_rngState) * m_depth;
             mc.counter = updateInterval + (ch * 7) % updateInterval;
         }
         --mc.counter;
@@ -89,7 +89,7 @@ void RandomModulatorEffect::processBlock(float** b, int c, int n, const float* p
 
             if (mc.counter <= 0)
             {
-                mc.holdValue = xorshift32(m_rngState) * m_depth;
+                mc.holdValue = 1.0f + xorshift32(m_rngState) * m_depth;
                 mc.counter = updateInterval + (ch * 7) % updateInterval;
             }
             --mc.counter;

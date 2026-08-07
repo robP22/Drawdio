@@ -38,6 +38,18 @@ public:
     uint32_t getParamOverrideMask() const { return m_paramCache.getOverrideMask(); }
     ParameterCache::Snapshot getSnapshot() const { return m_paramCache.getSnapshot(); }
 
+    void setDriftAmount(int physicalSlot, float amount)
+    {
+        if (physicalSlot >= 0 && physicalSlot < PedalSlotCount)
+            m_driftAmounts[static_cast<size_t>(physicalSlot)].store(std::max(0.0f, std::min(1.0f, amount)), std::memory_order_release);
+    }
+    float getDriftAmount(int physicalSlot) const
+    {
+        if (physicalSlot < 0 || physicalSlot >= PedalSlotCount)
+            return 0.0f;
+        return m_driftAmounts[static_cast<size_t>(physicalSlot)].load(std::memory_order_acquire);
+    }
+
     PedalState& pedalState() { return m_pedalState; }
     const PedalState& pedalState() const { return m_pedalState; }
     void setAutomationValue(float val) { m_currentAutomationValue.store(val, std::memory_order_relaxed); }
@@ -63,13 +75,35 @@ private:
     float m_smoothedAutoValue = 0.0f;
     float m_autoSmoothAlpha = 0.0f;
     float m_paramSmoothAlpha = 0.0f;
-    std::array<std::array<float, 4>, PedalSlotCount> m_smoothedParams = {
-        std::array<float, 4>{0.5f, 0.5f, 0.5f, 0.5f},
-        std::array<float, 4>{0.5f, 0.5f, 0.5f, 0.5f},
-        std::array<float, 4>{0.5f, 0.5f, 0.5f, 0.5f},
-        std::array<float, 4>{0.5f, 0.5f, 0.5f, 0.5f},
-        std::array<float, 4>{0.5f, 0.5f, 0.5f, 0.5f},
-        std::array<float, 4>{0.5f, 0.5f, 0.5f, 0.5f}
+    std::array<std::array<float, KnobsPerPedal>, PedalSlotCount> m_smoothedParams = {
+        std::array<float, KnobsPerPedal>{0.5f, 0.5f, 0.5f, 0.5f},
+        std::array<float, KnobsPerPedal>{0.5f, 0.5f, 0.5f, 0.5f},
+        std::array<float, KnobsPerPedal>{0.5f, 0.5f, 0.5f, 0.5f},
+        std::array<float, KnobsPerPedal>{0.5f, 0.5f, 0.5f, 0.5f},
+        std::array<float, KnobsPerPedal>{0.5f, 0.5f, 0.5f, 0.5f},
+        std::array<float, KnobsPerPedal>{0.5f, 0.5f, 0.5f, 0.5f}
     };
     std::array<float, PedalSlotCount> m_prevMix = {-1.0f, -1.0f, -1.0f, -1.0f, -1.0f, -1.0f};
+
+    struct DriftModulator {
+        uint32_t rngState = 0x12345678u;
+        float phase = 0.0f;
+        float value = 0.0f;
+        float target = 0.0f;
+        float phaseUnstable = 0.0f;
+        float valueUnstable = 0.0f;
+        float targetUnstable = 0.0f;
+    };
+    std::array<DriftModulator, PedalSlotCount> m_drift = {
+        DriftModulator{0x12345678u + 0u * 0x9E3779B9u},
+        DriftModulator{0x12345678u + 1u * 0x9E3779B9u},
+        DriftModulator{0x12345678u + 2u * 0x9E3779B9u},
+        DriftModulator{0x12345678u + 3u * 0x9E3779B9u},
+        DriftModulator{0x12345678u + 4u * 0x9E3779B9u},
+        DriftModulator{0x12345678u + 5u * 0x9E3779B9u}
+    };
+    std::array<std::atomic<float>, PedalSlotCount> m_driftAmounts = {
+        std::atomic<float>{0.0f}, std::atomic<float>{0.0f}, std::atomic<float>{0.0f},
+        std::atomic<float>{0.0f}, std::atomic<float>{0.0f}, std::atomic<float>{0.0f}
+    };
 };

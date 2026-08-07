@@ -21,6 +21,7 @@ public:
         CanvasTexture,
         ColorWell,
         JapanesePedalSheet,
+        InputJack,
         Count
     };
 
@@ -34,7 +35,8 @@ public:
         OverlayGloss = static_cast<size_t>(ImageId::OverlayGloss),
         CanvasTexture = static_cast<size_t>(ImageId::CanvasTexture),
         ColorWell = static_cast<size_t>(ImageId::ColorWell),
-        JapanesePedalSheet = static_cast<size_t>(ImageId::JapanesePedalSheet)
+        JapanesePedalSheet = static_cast<size_t>(ImageId::JapanesePedalSheet),
+        InputJack = static_cast<size_t>(ImageId::InputJack)
     };
 
     enum class SpriteSheetId : size_t

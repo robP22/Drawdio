@@ -56,4 +56,5 @@ public:
 private:
     struct SVFState { float lp = 0.0f, bp = 0.0f; };
     std::vector<SVFState> m_states;
+    float m_prevCutoffHz = 20.0f;
 };

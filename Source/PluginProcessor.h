@@ -38,6 +38,7 @@ public:
     bool producesMidi() const override;
     bool isMidiEffect() const override;
     double getTailLengthSeconds() const override;
+    bool silenceInProducesSilenceOut() const override;
 
     int getNumPrograms() override;
     int getCurrentProgram() override;
@@ -55,7 +56,7 @@ public:
     const std::array<uint8_t, TotalCells>& getGridData() const override { return m_config.getGridData(); }
     void setManualRouting(const std::vector<uint8_t>& routing) override { m_config.setManualRouting(routing); }
     const std::vector<uint8_t>& getManualRouting() const override { return m_config.getManualRouting(); }
-    std::array<float, PedalSlotCount * 4> getKnobValues() const override { return m_config.getKnobValues(); }
+    std::array<float, TotalKnobs> getKnobValues() const override { return m_config.getKnobValues(); }
     uint32_t getParamOverrideMask() const { return m_config.getParamOverrideMask(); }
     void setKnobParameter(int slot, int knob, float dragStartValue, float newValue) override { m_config.setKnobParameter(slot, knob, dragStartValue, newValue); }
     bool isKnobLinked(int slot, int knob) const override { return m_config.isKnobLinked(slot, knob); }
@@ -106,10 +107,8 @@ public:
     float getInputMeterLevel() const { return m_processorState.getInputMeterLevel(); }
     float getOutputMeterLevel() const { return m_processorState.getOutputMeterLevel(); }
 
-    juce::MemoryBlock createPresetState() { return m_config.createPresetState(); }
-    bool applyPresetState(const void* data, int sizeInBytes) { return m_config.applyPresetState(data, sizeInBytes); }
-
 private:
+    bool allEffectsSilent() const;
     UnifiedPedalProcessor m_dspProcessor;
     ConfigManager m_config;
     ProcessorState m_processorState;

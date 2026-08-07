@@ -64,7 +64,7 @@ void UnifiedPedalProcessor::reset(const PedalAssetPayload& config)
 
 void UnifiedPedalProcessor::setKnobParameter(int physicalSlot, int knobIdx, float dragStartValue, float newValue)
 {
-    if (physicalSlot >= 0 && physicalSlot < PedalSlotCount && knobIdx >= 0 && knobIdx < 4)
+    if (physicalSlot >= 0 && physicalSlot < PedalSlotCount && knobIdx >= 0 && knobIdx < KnobsPerPedal)
     {
         if (m_pedalState.isKnobLinked(physicalSlot, knobIdx))
             m_pedalState.setKnobLink(physicalSlot, knobIdx, false, 0.0f);
@@ -92,11 +92,11 @@ void UnifiedPedalProcessor::processChainBlock(float** b, int c, int s, const Ped
         if (static_cast<size_t>(idx) >= config.routingSlotOrder.size())
             continue;
         int physSlot = config.routingSlotOrder[static_cast<size_t>(idx)];
-        size_t baseIdx = static_cast<size_t>(physSlot) * 4;
+        size_t baseIdx = static_cast<size_t>(physSlot) * KnobsPerPedal;
 
-        float params[4] = {0.5f, 0.5f, 0.5f, 0.5f};
+        float params[KnobsPerPedal] = {0.5f, 0.5f, 0.5f, 0.5f};
         const auto& row = config.paramPtrs[static_cast<size_t>(idx)];
-        for (int k = 0; k < 4; ++k)
+        for (int k = 0; k < KnobsPerPedal; ++k)
         {
             size_t ci = baseIdx + static_cast<size_t>(k);
             if ((mask & (1u << ci)) != 0)
@@ -105,23 +105,62 @@ void UnifiedPedalProcessor::processChainBlock(float** b, int c, int s, const Ped
                 params[k] = *row[static_cast<size_t>(k)];
         }
 
+        int mi = effectPtr->mixKnobIndex();
+        bool hasMix = (mi >= 0 && mi < KnobsPerPedal);
+
         float rawAuto = m_currentAutomationValue.load(std::memory_order_relaxed);
         m_smoothedAutoValue += (rawAuto - m_smoothedAutoValue) * m_autoSmoothAlpha;
         float autoVal = m_smoothedAutoValue;
-        for (int k = 0; k < 4; ++k)
-            if (m_pedalState.knobLinked(physSlot, k))
+        for (int k = 0; k < KnobsPerPedal; ++k)
+            if (k != mi && m_pedalState.knobLinked(physSlot, k))
                 params[k] = params[k] * (1.0f - m_pedalState.knobLinkStrength(physSlot, k)) + autoVal * m_pedalState.knobLinkStrength(physSlot, k);
 
-        int mi = effectPtr->mixKnobIndex();
-        bool hasMix = (mi >= 0 && mi < 4);
-
         auto& smoothRow = m_smoothedParams[static_cast<size_t>(physSlot)];
-        for (int k = 0; k < 4; ++k)
+        for (int k = 0; k < KnobsPerPedal; ++k)
         {
             if (k == mi)
                 continue;
             smoothRow[static_cast<size_t>(k)] += (params[k] - smoothRow[static_cast<size_t>(k)]) * m_paramSmoothAlpha;
             params[k] = smoothRow[static_cast<size_t>(k)];
+        }
+
+        const float driftAmount = m_driftAmounts[static_cast<size_t>(physSlot)].load(std::memory_order_acquire);
+        if (driftAmount > 0.0001f)
+        {
+            auto& dm = m_drift[static_cast<size_t>(physSlot)];
+            const float srF = static_cast<float>(m_sampleRate.load(std::memory_order_relaxed));
+            const float blockSec = (srF > 0.0f) ? static_cast<float>(s) / srF : 0.0f;
+            const float driftRate = 0.3f + driftAmount * 2.7f;
+            const float unstableRate = 6.0f + driftAmount * 9.0f;
+
+            auto updateMod = [](float& phase, float& value, float& target, uint32_t& rng,
+                                float rateHz, float blockSec, float maxMod, float tau)
+            {
+                phase += rateHz * blockSec;
+                if (phase >= 1.0f)
+                {
+                    phase -= 1.0f;
+                    rng ^= rng << 13; rng ^= rng >> 17; rng ^= rng << 5;
+                    const float r = static_cast<float>(rng & 0xFFFF) / 65535.0f * 2.0f - 1.0f;
+                    target = r * maxMod;
+                }
+                const float alpha = (blockSec > 0.0f) ? 1.0f - std::exp(-blockSec / tau) : 0.0f;
+                value += (target - value) * alpha;
+            };
+
+            const float tau = 0.5f + (1.0f - driftAmount) * 1.5f;
+            updateMod(dm.phase, dm.value, dm.target, dm.rngState, driftRate, blockSec, driftAmount * 0.02f, tau);
+            updateMod(dm.phaseUnstable, dm.valueUnstable, dm.targetUnstable, dm.rngState, unstableRate, blockSec, driftAmount * 0.008f, 0.08f);
+
+            const float mod = dm.value + dm.valueUnstable;
+            for (int k = 0; k < KnobsPerPedal; ++k)
+            {
+                if (k == mi)
+                    continue;
+                params[k] += mod;
+                if (params[k] < 0.0f) params[k] = 0.0f;
+                else if (params[k] > 1.0f) params[k] = 1.0f;
+            }
         }
 
         if (hasMix)
@@ -134,7 +173,9 @@ void UnifiedPedalProcessor::processChainBlock(float** b, int c, int s, const Ped
                         m_dryBuffer[static_cast<size_t>(ch)][static_cast<size_t>(smp)] = b[ch][smp];
         }
 
-        effectPtr->processBlock(b, chCount, s, params);
+        const bool fullyDry = (hasMix && m_prevMix[static_cast<size_t>(physSlot)] == 0.0f && params[mi] == 0.0f);
+        if (!(fullyDry && !effectPtr->hasActiveTail()))
+            effectPtr->processBlock(b, chCount, s, params);
 
         float prevMix = hasMix ? m_prevMix[static_cast<size_t>(physSlot)] : 1.0f;
         float currMix = hasMix ? params[mi] : 1.0f;
@@ -180,6 +221,9 @@ void UnifiedPedalProcessor::processAudioBlock(float** buffer, int numChannels, i
     const auto* current = cfg.currentConfig.load(std::memory_order_acquire);
     const auto* next = cfg.nextConfig.load(std::memory_order_acquire);
 
+    if (next != nullptr && next == current)
+        cfg.nextConfig.store(nullptr, std::memory_order_release);
+
     if (m_pendingReset.exchange(false, std::memory_order_acq_rel) && current)
         reset(*current);
 
@@ -217,12 +261,24 @@ void UnifiedPedalProcessor::processAudioBlock(float** buffer, int numChannels, i
 
     float outGain = m_pedalState.getOutputGain();
     int gainCh = std::min(numChannels, m_maxChannels.load(std::memory_order_relaxed));
-    for (int ch = 0; ch < gainCh; ++ch)
-        for (int smp = 0; smp < numSamples; ++smp)
-        {
-            float x = buffer[ch][smp] * outGain;
-            buffer[ch][smp] = std::isfinite(x) ? softClip(x) : 0.0f;
-        }
+    if (outGain == 1.0f)
+    {
+        for (int ch = 0; ch < gainCh; ++ch)
+            for (int smp = 0; smp < numSamples; ++smp)
+            {
+                float x = buffer[ch][smp];
+                buffer[ch][smp] = std::isfinite(x) ? softClip(x) : 0.0f;
+            }
+    }
+    else
+    {
+        for (int ch = 0; ch < gainCh; ++ch)
+            for (int smp = 0; smp < numSamples; ++smp)
+            {
+                float x = buffer[ch][smp] * outGain;
+                buffer[ch][smp] = std::isfinite(x) ? softClip(x) : 0.0f;
+            }
+    }
 
     if (next && m_crossfade.isComplete() && m_crossfade.counter() >= m_crossfade.samples())
     {

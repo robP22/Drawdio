@@ -7,6 +7,9 @@ BottomControlBar::BottomControlBar(IBottomBarModel& model, const IResourceProvid
 {
     addAndMakeVisible(m_barsBtn);
     addAndMakeVisible(m_manualBtn);
+    addAndMakeVisible(m_saveBtn);
+    addAndMakeVisible(m_loadBtn);
+    addAndMakeVisible(m_importBtn);
 
     auto& knobImg = m_resources.getImage(IResourceProvider::ImageId::PedalKnobImage);
     m_inputKnob = std::make_unique<SpriteKnob>(knobImg, 0.0f, 2.0f);
@@ -29,7 +32,7 @@ BottomControlBar::BottomControlBar(IBottomBarModel& model, const IResourceProvid
         int next = m_automationDisplay.getBarCount() * 2;
         if (next > 8) next = 1;
         m_automationDisplay.setBarCount(next);
-        m_barsBtn.setButtonText(juce::String(next) + " bar" + (next > 1 ? "s" : ""));
+        m_barsBtn.setButtonText("Length: " + juce::String(next) + " bar" + (next > 1 ? "s" : ""));
         m_model.setBarCount(next);
         if (m_automationDisplay.onBarCountChanged)
             m_automationDisplay.onBarCountChanged(next);
@@ -42,7 +45,19 @@ BottomControlBar::BottomControlBar(IBottomBarModel& model, const IResourceProvid
         m_model.setManualMode(next);
         if (onManualModeToggled)
             onManualModeToggled(next);
-        m_manualBtn.setButtonText(next ? "Canvas" : "Manual");
+        m_manualBtn.setButtonText(next ? "Routing: Canvas" : "Routing: Manual");
+    };
+    m_saveBtn.onClick = [this]() {
+        if (onPresetSave)
+            onPresetSave();
+    };
+    m_loadBtn.onClick = [this]() {
+        if (onPresetLoad)
+            onPresetLoad();
+    };
+    m_importBtn.onClick = [this]() {
+        if (onPresetImport)
+            onPresetImport();
     };
 
     auto styleBtn = [](juce::TextButton& b, juce::Colour accent) {
@@ -54,6 +69,9 @@ BottomControlBar::BottomControlBar(IBottomBarModel& model, const IResourceProvid
     };
     styleBtn(m_barsBtn, juce::Colour(0xFF8E44AD));
     styleBtn(m_manualBtn, juce::Colour(0xFFE67E22));
+    styleBtn(m_saveBtn, juce::Colour(0xFF47C9A2));
+    styleBtn(m_loadBtn, juce::Colour(0xFF4A90D9));
+    styleBtn(m_importBtn, juce::Colour(0xFF8E44AD));
 
     for (int i = 0; i < PedalSlotCount; ++i)
     {
@@ -78,16 +96,16 @@ void BottomControlBar::resized()
     m_inputKnob->setBounds(static_cast<int>(pad), static_cast<int>(knobY),
                            static_cast<int>(knobSize), static_cast<int>(knobSize));
 
-    // Button stack: 2 buttons, evenly spaced
+    // Button stack: 5 buttons, evenly spaced
     const float btnW = std::min(usableH * GridLayout::BottomBar::BtnWidthRatio,
                                 GridLayout::BottomBar::BtnMaxWidth);
     const float btnH = std::min(usableH * GridLayout::BottomBar::BtnHeightRatio,
                                 GridLayout::BottomBar::BtnMaxHeight);
-    const float btnGap = usableH - btnH * 2.0f;
+    const float btnGap = (usableH - btnH * 5.0f) / 4.0f;
     float btnX = pad + knobSize + pad;
 
-    juce::TextButton* btns[2] = {&m_barsBtn, &m_manualBtn};
-    for (int i = 0; i < 2; ++i)
+    juce::TextButton* btns[5] = {&m_barsBtn, &m_manualBtn, &m_saveBtn, &m_loadBtn, &m_importBtn};
+    for (int i = 0; i < 5; ++i)
         btns[i]->setBounds(static_cast<int>(btnX), static_cast<int>(pad + (btnH + btnGap) * i),
                            static_cast<int>(btnW), static_cast<int>(btnH));
 
@@ -171,4 +189,11 @@ void BottomControlBar::syncGainKnobs()
 {
     m_inputKnob->setValue(m_model.getInputGain());
     m_outputKnob->setValue(m_model.getOutputGain());
+}
+
+void BottomControlBar::tick()
+{
+    m_automationDisplay.tick();
+    for (auto& strip : m_mixerStrips)
+        strip->tick();
 }

@@ -29,9 +29,11 @@ PedalDefinition makeDefinition(DspModuleType type, const char* displayName,
     };
 }
 
-const std::array<PedalDefinition, 23>& definitions()
+const std::array<PedalDefinition, 27>& definitions()
 {
-    static const std::array<PedalDefinition, 23> defs {{
+    static_assert(27 == static_cast<size_t>(DspModuleType::ANALOG_OCTAVER) + 1,
+                  "PedalDefinitions array must match DspModuleType enum count");
+    static const std::array<PedalDefinition, 27> defs {{
 makeDefinition(DspModuleType::BYPASS, "Bypass",             "Mix",    "",       "",       ""),
         makeDefinition(DspModuleType::WAVESHAPER_DISTORTION, "Waveshaper",   "Tone",   "Sym",   "Drive",  "Level"),
         makeDefinition(DspModuleType::MICROPITCH_CHORUS,     "MicroPitch",  "Mix",    "Depth", "Detune", "Rate"),
@@ -45,7 +47,7 @@ makeDefinition(DspModuleType::BYPASS, "Bypass",             "Mix",    "",       
         makeDefinition(DspModuleType::TAPE_STOP_REVERSE_ECHO,"Tape Stop Echo",     "Mix",    "Brake", "Speed",  "Decay"),
         makeDefinition(DspModuleType::SIMPLE_DELAY,          "Simple Delay",       "Mix",    "Time",  "Feed",   "Damp"),
         makeDefinition(DspModuleType::PLATE_REVERB,          "Plate Reverb",       "Mix",    "Size",  "Decay",  "Damp"),
-        makeDefinition(DspModuleType::SIDECHAIN_DUCKER,      "Sidechain Pump",     "Rate",   "Shape", "Amount", "Level"),
+        makeDefinition(DspModuleType::RHYTHM_GATE,              "Rhythm Gate",        "Rate",   "Shape", "Depth",  "Mix"),
         makeDefinition(DspModuleType::GRANULAR_DELAY,        "Granular Delay",     "Mix",    "Spread","Size",   "Rate"),
         makeDefinition(DspModuleType::COMB_RESONATOR,        "Comb Resonator",     "Freq",   "Feed",  "Decay",  "Level"),
         makeDefinition(DspModuleType::SPECTRAL_FREEZE,       "Spectral Freeze",    "Mix",    "Freeze","Drift",  "Window"),
@@ -55,6 +57,10 @@ makeDefinition(DspModuleType::BYPASS, "Bypass",             "Mix",    "",       
         makeDefinition(DspModuleType::SPECTRAL_FILTER,       "Spectral Filter",    "Width",  "Center","Q",      "Level"),
         makeDefinition(DspModuleType::CONVOLUTION_SPACE,     "Conv Space",  "Mix",    "Space", "Size",   "Damp"),
         makeDefinition(DspModuleType::RANDOM_MODULATOR,      "Random Modulator",   "Depth",  "Smooth","Rate",   "Shape"),
+        makeDefinition(DspModuleType::RESAMPLE_BITCRUSH,     "Resampler",          "Rate",   "Bits",  "Dither", "Filter"),
+        makeDefinition(DspModuleType::TREMOLO,               "Tremolo",            "Mix",    "Rate",  "Depth",  "Shape"),
+        makeDefinition(DspModuleType::FLANGER,               "Flanger",            "Mix",    "Rate",  "Depth",  "Feed"),
+        makeDefinition(DspModuleType::ANALOG_OCTAVER,        "Octaver",            "Mix",    "Sub",   "Upper",  "Tone"),
     }};
     return defs;
 }

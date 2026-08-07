@@ -14,7 +14,7 @@ DEST_PLUGIN="$PLUGIN_DIR/$PLUGIN_NAME"
 if [[ "${1:-}" == "--reconfigure" ]]; then
     echo "Reconfiguring build directory..."
     rm -rf "$BUILD_DIR"
-    cmake -B "$BUILD_DIR"
+    cmake -B "$BUILD_DIR" -DCMAKE_BUILD_TYPE=Release
 fi
 
 echo "Building..."

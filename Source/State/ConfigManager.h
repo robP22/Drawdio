@@ -41,7 +41,7 @@ public:
     const std::array<uint8_t, TotalCells>& getGridData() const override { return m_gridData; }
     void setManualRouting(const std::vector<uint8_t>& routing) override;
     const std::vector<uint8_t>& getManualRouting() const override { return m_manualRouting; }
-    std::array<float, PedalSlotCount * 4> getKnobValues() const override { return m_dsp.getSnapshot().values; }
+    std::array<float, TotalKnobs> getKnobValues() const override { return m_dsp.getSnapshot().values; }
     uint32_t getParamOverrideMask() const { return m_dsp.getParamOverrideMask(); }
     void setKnobParameter(int slot, int knob, float dragStartValue, float newValue) override { m_dsp.setKnobParameter(slot, knob, dragStartValue, newValue); }
     bool isKnobLinked(int slot, int knob) const override { return m_dsp.pedalState().isKnobLinked(slot, knob); }
@@ -69,6 +69,7 @@ public:
     void triggerUINotification();
     const ConfigSyncData& getLastConfigSync() const override { return m_lastConfigSync; }
     const PedalAssetPayload* getCurrentConfig() const override { return m_currentConfig.load(std::memory_order_acquire); }
+    bool hasPendingConfig() const { return m_nextConfig.load(std::memory_order_acquire) != nullptr; }
     bool isParamOverridden(int slot, int knob) const override { return m_dsp.isParamOverridden(slot, knob); }
     float getKnobDisplayValue(int slot, int knob, float val) const override { return m_dsp.getKnobDisplayValue(slot, knob, val); }
     void storeParameterValue(int slot, int knob, float v) override { m_dsp.storeParameterValue(slot, knob, v); }
@@ -100,8 +101,6 @@ public:
     // --- State serialization ---
     void getStateInformation(juce::MemoryBlock& destData);
     void setStateInformation(const void* data, int sizeInBytes);
-    juce::MemoryBlock createPresetState();
-    bool applyPresetState(const void* data, int sizeInBytes);
 
     // --- Audio thread config view ---
     ConfigAudioView getAudioView()

@@ -23,8 +23,7 @@ void SpectralFilterEffect::processSample(float** b, int c, int s, float effectPa
     float freqHz = 100.0f + center * 8000.0f;
     float bwHz = 20.0f + center * 4000.0f;
     float Q = 1.0f;
-    float R = 1.0f - 3.14159265f * bwHz / (Q * static_cast<float>(m_sampleRate));
-    if (R < 0.0f) R = 0.0f;
+    float R = std::exp(-3.14159265f * bwHz / (Q * static_cast<float>(m_sampleRate)));
     if (R > 0.995f) R = 0.995f;
     float theta = 2.0f * 3.14159265f * freqHz / static_cast<float>(m_sampleRate);
     float cosTheta = std::cos(theta);
@@ -63,8 +62,7 @@ void SpectralFilterEffect::processBlock(float** b, int c, int n, const float* pa
     float freqHz = 100.0f + center * 8000.0f;
     float bwHz = 20.0f + width * 4000.0f;
     float Q = 0.5f + q * 9.5f;
-    float R = 1.0f - 3.14159265f * bwHz / (Q * static_cast<float>(m_sampleRate));
-    if (R < 0.0f) R = 0.0f;
+    float R = std::exp(-3.14159265f * bwHz / (Q * static_cast<float>(m_sampleRate)));
     if (R > 0.995f) R = 0.995f;
     float theta = 2.0f * 3.14159265f * freqHz / static_cast<float>(m_sampleRate);
     float cosTheta = std::cos(theta);

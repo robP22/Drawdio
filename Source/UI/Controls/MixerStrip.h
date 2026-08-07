@@ -2,7 +2,7 @@
 #include <JuceHeader.h>
 #include "Core/Contracts/ProcessorInterfaces.h"
 
-class MixerStrip : public juce::Component, private juce::Timer
+class MixerStrip : public juce::Component
 {
 public:
     MixerStrip(IMixerStripModel& model, int slotIdx);
@@ -11,7 +11,7 @@ public:
     void mouseDown(const juce::MouseEvent& e) override;
     void mouseDrag(const juce::MouseEvent& e) override;
     void mouseUp(const juce::MouseEvent&) override;
-    void timerCallback() override;
+    void tick();
     void setPedalName(const juce::String& n) { if (n != m_pedalName) { m_pedalName = n; repaint(); } }
 
 private:

@@ -33,11 +33,14 @@ public:
     void reset() override;
     void processSample(float** b, int c, int s, float effectParam) override;
     void processBlock(float** b, int c, int n, const float* params) override;
+    bool hasActiveTail() const override { return m_hasTail; }
+    double getTailLength() const override { return 2.5; }
 
 private:
     std::vector<SimpleDelayState> m_delays;
     std::vector<float> m_fbLpState;
     float m_smoothedDelaySamples = 4410.0f;
+    bool m_hasTail = false;
 };
 
 class TapeStopEchoEffect : public DspEffect
@@ -48,6 +51,8 @@ public:
     void reset() override;
     void processSample(float** b, int c, int s, float effectParam) override;
     void processBlock(float** b, int c, int n, const float* params) override;
+    bool hasActiveTail() const override { return m_hasTail; }
+    double getTailLength() const override { return 2.5; }
 
 private:
     struct TapeStopChannel {
@@ -61,6 +66,7 @@ private:
     };
     std::vector<TapeStopChannel> m_channels;
     float m_predelayMs = 100.0f;
+    bool m_hasTail = false;
 };
 
 #include "Effects/GranularBaseEffect.h"

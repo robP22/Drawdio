@@ -7,9 +7,11 @@
 class ParameterCache
 {
 public:
+    static_assert(TotalKnobs <= 32, "ParameterCache mask is uint32_t; TotalKnobs must fit in 32 bits");
+
     struct Snapshot
     {
-        std::array<float, 24> values{};
+        std::array<float, TotalKnobs> values{};
         uint32_t revision = 0;
     };
 
@@ -30,10 +32,10 @@ public:
     float readOffset(int idx) const { return m_offsets[static_cast<size_t>(idx)]; }
 
 private:
-    static size_t index(int slot, int knob) { return static_cast<size_t>(slot * 4 + knob); }
+    static size_t index(int slot, int knob) { return static_cast<size_t>(slot * KnobsPerPedal + knob); }
 
     std::atomic<uint32_t> m_revision{0};
-    std::array<std::atomic<float>, 24> m_cache;
+    std::array<std::atomic<float>, TotalKnobs> m_cache;
     std::atomic<uint32_t> m_validMask{0};
-    std::array<float, 24> m_offsets{};
+    std::array<float, TotalKnobs> m_offsets{};
 };

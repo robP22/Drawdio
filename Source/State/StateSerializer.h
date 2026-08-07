@@ -18,7 +18,7 @@ public:
         std::array<uint8_t, TotalCells> gridData;
         std::array<DspModuleType, PedalSlotCount> pedalSlots;
         std::vector<uint8_t> manualRouting;
-        std::array<float, PedalSlotCount * 4> knobValues{}; // 24 knob floats, zero-initialized
+        std::array<float, TotalKnobs> knobValues{}; // 24 knob floats, zero-initialized
         uint32_t overrideMask = 0xFFFFFFFF; // bit n = (slot*4+knob) → 1 = manually overridden
         uint8_t barCount = 1;
         uint8_t sectionStartBar = 0;
@@ -36,7 +36,7 @@ public:
         const std::array<uint8_t, TotalCells>& gridData,
         const std::array<DspModuleType, PedalSlotCount>& pedalSlots,
         const std::vector<uint8_t>& manualRouting,
-        const std::array<float, PedalSlotCount * 4>& knobValues,
+        const std::array<float, TotalKnobs>& knobValues,
         uint32_t overrideMask,
         uint8_t barCount, uint8_t sectionStart, uint8_t manualMode);
 

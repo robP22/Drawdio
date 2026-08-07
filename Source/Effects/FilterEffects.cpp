@@ -205,16 +205,17 @@ void MultiModeFilterEffect::processBlock(float** b, int c, int n, const float* p
 {
     juce::ScopedNoDenormals noDenorm;
     float cutoffParam = params[2];
-    float fcHz = 20.0f + (20000.0f - 20.0f) * cutoffParam * cutoffParam;
-    float g = std::tan(3.14159265f * fcHz / static_cast<float>(m_sampleRate));
+    float cutoffEnd = 20.0f + (20000.0f - 20.0f) * cutoffParam * cutoffParam;
+    float cutoffStart = m_prevCutoffHz;
+    m_prevCutoffHz = cutoffEnd;
 
     float bandPos = params[0] * 3.0f;
     int mode = std::min(2, static_cast<int>(bandPos));
     float withinBand = bandPos - static_cast<float>(mode);
     float R = 1.0f - withinBand * 0.9f;
     if (R > 0.98f) R = 0.98f;
-
-    float invScale = 1.0f / (1.0f + 2.0f * R * g + g * g);
+    const float srF = static_cast<float>(m_sampleRate);
+    const float twoRg = 2.0f * R;
 
     int maxCh = std::min(c, static_cast<int>(m_states.size()));
     for (int ch = 0; ch < maxCh; ++ch)
@@ -222,8 +223,13 @@ void MultiModeFilterEffect::processBlock(float** b, int c, int n, const float* p
         auto& st = m_states[static_cast<size_t>(ch)];
         for (int s = 0; s < n; ++s)
         {
+            const float t = static_cast<float>(s) / static_cast<float>(n);
+            const float fcHz = cutoffStart + (cutoffEnd - cutoffStart) * t;
+            const float g = std::tan(3.14159265f * fcHz / srF);
+            const float invScale = 1.0f / (1.0f + twoRg * g + g * g);
+
             float x = b[ch][s];
-            float hp = (x - (2.0f * R + g) * st.bp - st.lp) * invScale;
+            float hp = (x - (twoRg + g) * st.bp - st.lp) * invScale;
             st.bp = g * hp + st.bp;
             st.lp = g * st.bp + st.lp;
             if (std::abs(st.lp) > 8.0f) st.lp = (st.lp >= 0.0f) ? 8.0f : -8.0f;
@@ -251,6 +257,7 @@ void MultiModeFilterEffect::reset()
 {
     for (auto& s : m_states)
         s = {};
+    m_prevCutoffHz = 20.0f;
 }
 
 void MultiModeFilterEffect::processSample(float** b, int c, int s, float effectParam)
@@ -281,7 +288,6 @@ void DynamicResonantFilter::processBlock(float** b, int c, int n, const float* p
     float formantFreq = params[2];
 
     float b0 = 0.5f, a1 = 0.0f, a2 = 0.0f;
-    int coeffUpdate = 0;
 
     for (int s = 0; s < n; ++s)
     {
@@ -294,7 +300,6 @@ void DynamicResonantFilter::processBlock(float** b, int c, int n, const float* p
         else
             m_envState = m_releaseCoeff * m_envState + (1.0f - m_releaseCoeff) * inputLevel;
 
-        if (coeffUpdate <= 0)
         {
             float envMod = std::min(1.0f, m_envState / 0.5f);
             float modFreq = formantFreq * (0.3f + envMod * 0.7f);
@@ -306,9 +311,7 @@ void DynamicResonantFilter::processBlock(float** b, int c, int n, const float* p
             b0 = 0.5f * (1.0f - R * R);
             a1 = -2.0f * R * cosTheta;
             a2 = R * R;
-            coeffUpdate = 8;
         }
-        --coeffUpdate;
 
         int chCount = std::min(c, static_cast<int>(m_lp1.size()));
         for (int ch = 0; ch < chCount; ++ch)

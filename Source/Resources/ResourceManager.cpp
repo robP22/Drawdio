@@ -55,6 +55,8 @@ void ResourceManager::loadProceduralTextures()
         decodeImageFromBinaryData(BinaryData::colorwell_png, BinaryData::colorwell_pngSize);
     m_images[static_cast<size_t>(ImageId::JapanesePedalSheet)] =
         decodeImageFromBinaryData(BinaryData::jap_pedal_sprite_sheet_png, BinaryData::jap_pedal_sprite_sheet_pngSize);
+    m_images[static_cast<size_t>(ImageId::InputJack)] =
+        decodeImageFromBinaryData(BinaryData::input_jack_png, BinaryData::input_jack_pngSize);
 }
 
 void ResourceManager::loadSpriteSheets()

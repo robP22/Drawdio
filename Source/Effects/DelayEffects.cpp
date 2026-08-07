@@ -90,18 +90,18 @@ void SimpleDelayEffect::processBlock(float** b, int c, int n, const float* param
     float dampCoeff = 1.0f - std::exp(-2.0f * 3.14159265f * (500.0f + damp * 15000.0f) / static_cast<float>(m_sampleRate));
 
     float targetDelay = static_cast<float>(m_sampleRate) * delaySec;
+    float delayStart = m_smoothedDelaySamples;
     m_smoothedDelaySamples += (targetDelay - m_smoothedDelaySamples) * 0.05f;
+    float delayEnd = m_smoothedDelaySamples;
 
     int chCount = std::min(c, static_cast<int>(m_delays.size()));
+    float peak = 0.0f;
     for (int ch = 0; ch < chCount; ++ch)
     {
         auto& d = m_delays[static_cast<size_t>(ch)];
         size_t bufSize = d.buf.size();
         float bufSizeF = static_cast<float>(bufSize);
         if (bufSize == 0) continue;
-
-        float delaySamplesF = m_smoothedDelaySamples;
-        if (delaySamplesF >= bufSizeF) delaySamplesF = bufSizeF - 1.0f;
 
         float& fbLp = m_fbLpState[static_cast<size_t>(ch)];
 
@@ -110,15 +110,21 @@ void SimpleDelayEffect::processBlock(float** b, int c, int n, const float* param
             float in = b[ch][s];
             if (!std::isfinite(in)) in = 0.0f;
 
+            const float t = static_cast<float>(s) / static_cast<float>(n);
+            float delaySamplesF = delayStart + (delayEnd - delayStart) * t;
+            if (delaySamplesF >= bufSizeF) delaySamplesF = bufSizeF - 1.0f;
+
             float readPos = static_cast<float>(d.writePtr + bufSize) - delaySamplesF;
             if (readPos >= bufSizeF) readPos -= bufSizeF;
             float delayed = interpolateDelayRead(d.buf, readPos);
             fbLp = fbLp + dampCoeff * (delayed - fbLp);
             d.buf[d.writePtr] = in + std::tanh(fbLp * feedback);
             b[ch][s] = delayed;
+            peak = std::max(peak, std::abs(delayed));
             d.writePtr = (d.writePtr + 1) % bufSize;
         }
     }
+    m_hasTail = (peak > 1e-8f);
 }
 
 void MicroPitchChorusEffect::processBlock(float** b, int c, int n, const float* params)
@@ -178,8 +184,14 @@ void SimpleDelayEffect::processSample(float** b, int c, int s, float effectParam
 void TapeStopEchoEffect::processBlock(float** b, int c, int n, const float* params)
 {
     juce::ScopedNoDenormals noDenorm;
+    float peak = 0.0f;
     for (int s = 0; s < n; ++s)
+    {
         processSample(b, c, s, params[1]);
+        for (int ch = 0; ch < c; ++ch)
+            peak = std::max(peak, std::abs(b[ch][s]));
+    }
+    m_hasTail = (peak > 1e-8f);
 }
 
 void TapeStopEchoEffect::prepare(double sampleRate, int numChannels)

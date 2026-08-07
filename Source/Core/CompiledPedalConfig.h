@@ -20,5 +20,5 @@ struct PedalAssetPayload
     // before the payload is published; immutable (const) once visible to the
     // audio thread. Ownership travels with the config through the release queue.
     std::array<std::unique_ptr<DspEffect>, PedalSlotCount> effects;
-    std::array<std::array<const float*, 4>, PedalSlotCount> paramPtrs{};
+    std::array<std::array<const float*, KnobsPerPedal>, PedalSlotCount> paramPtrs{};
 };
