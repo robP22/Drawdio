@@ -8,6 +8,7 @@ void VcaCompressorEffect::prepare(double sampleRate, int numChannels)
 {
     DspEffect::prepare(sampleRate, numChannels);
     m_envelopeFollower = 0.0f;
+    m_makeupGain = 1.0f;
     float defaultAttackMs = 2.0f;
     float attackSec = defaultAttackMs * 0.001f;
     double sr = m_sampleRate == 0.0 ? 44100.0 : m_sampleRate;
@@ -104,98 +105,81 @@ void VcaCompressorEffect::processBlock(float** b, int c, int n, const float* par
     }
 }
 
-void SidechainDuckerEffect::prepare(double sampleRate, int numChannels)
+void RhythmGateEffect::prepare(double sampleRate, int numChannels)
 {
     DspEffect::prepare(sampleRate, numChannels);
-    m_duckAmount = 0.5f;
-    m_channels.resize(static_cast<size_t>(numChannels));
-    for (auto& ch : m_channels)
-    {
-        ch.timer = 0;
-        ch.intervalSamples = static_cast<int>(sampleRate * 0.5f);
-    }
+    m_phase = 0;
+    m_smoothEnv = 1.0f;
+    m_smoothCoeff = 1.0f - std::exp(-1.0f / (static_cast<float>(sampleRate) * 0.001f));
 }
 
-void SidechainDuckerEffect::reset()
+void RhythmGateEffect::reset()
 {
-    for (auto& ch : m_channels)
-    {
-        ch.timer = 0;
-        ch.intervalSamples = static_cast<int>(0.5f * static_cast<float>(m_sampleRate));
-    }
+    m_phase = 0;
+    m_smoothEnv = 1.0f;
 }
 
-void SidechainDuckerEffect::processSample(float** b, int c, int s, float effectParam)
+void RhythmGateEffect::processSample(float** b, int c, int s, float)
 {
     juce::ScopedNoDenormals noDenorm;
-    float rate = effectParam;
-    float intervalSec = 0.05f + rate * 1.95f;
-    int intervalSamps = static_cast<int>(m_sampleRate * intervalSec);
-    if (intervalSamps < 1) intervalSamps = 1;
-    float duck = m_duckAmount;
-    if (duck < 0.0f) duck = 0.0f;
-    if (duck > 1.0f) duck = 1.0f;
-
-    int chCount = std::min(c, static_cast<int>(m_channels.size()));
-    for (int ch = 0; ch < chCount; ++ch)
-    {
-        auto& chState = m_channels[static_cast<size_t>(ch)];
-        chState.intervalSamples = intervalSamps;
-        if (chState.timer >= intervalSamps)
-            chState.timer = chState.timer % intervalSamps;
-
-        float phase = static_cast<float>(chState.timer) / static_cast<float>(chState.intervalSamples);
-        float gain = 1.0f - duck * (1.0f - phase) * (1.0f - phase) * (1.0f - phase);
-        if (gain < 0.0f) gain = 0.0f;
-
-        b[ch][s] = b[ch][s] * gain;
-
-        ++chState.timer;
-        if (chState.timer >= chState.intervalSamples)
-            chState.timer = 0;
-    }
+    for (int ch = 0; ch < c; ++ch)
+        b[ch][s] *= m_smoothEnv;
 }
 
-void SidechainDuckerEffect::processBlock(float** b, int c, int n, const float* params)
+void RhythmGateEffect::processBlock(float** b, int c, int n, const float* params)
 {
     juce::ScopedNoDenormals noDenorm;
-    float rate = params[0];
-    m_duckAmount = params[2];
-    float intervalSec = 0.05f + rate * 1.95f;
-    int intervalSamps = static_cast<int>(m_sampleRate * intervalSec);
-    if (intervalSamps < 1) intervalSamps = 1;
-    float duck = m_duckAmount;
-    if (duck < 0.0f) duck = 0.0f;
-    if (duck > 1.0f) duck = 1.0f;
 
-    int chCount = std::min(c, static_cast<int>(m_channels.size()));
+    const float rateParam = params[0];
+    const float shapeParam = params[1];
+    const float depth = std::max(0.0f, std::min(1.0f, params[2]));
 
-    for (int ch = 0; ch < chCount; ++ch)
-    {
-        auto& chState = m_channels[static_cast<size_t>(ch)];
-        chState.intervalSamples = intervalSamps;
-        if (chState.timer >= intervalSamps)
-            chState.timer = chState.timer % intervalSamps;
-    }
+    const float sr = static_cast<float>(m_sampleRate);
+    const float cycleSec = 0.05f + rateParam * 9.95f;
+    int cycleSamples = static_cast<int>(sr * cycleSec);
+    if (cycleSamples < 2) cycleSamples = 2;
+
+    if (m_phase >= cycleSamples)
+        m_phase %= cycleSamples;
+
+    const float invCycleSamples = 1.0f / static_cast<float>(cycleSamples);
 
     for (int s = 0; s < n; ++s)
     {
-        for (int ch = 0; ch < chCount; ++ch)
+        const float phase = static_cast<float>(m_phase) * invCycleSamples;
+
+        float env;
+        if (shapeParam < 0.33f)
         {
-            auto& chState = m_channels[static_cast<size_t>(ch)];
-
-            if (chState.timer >= chState.intervalSamples)
-                chState.timer = 0;
-
-            float phase = static_cast<float>(chState.timer) / static_cast<float>(chState.intervalSamples);
-            float gain = 1.0f - duck * (1.0f - phase) * (1.0f - phase) * (1.0f - phase);
-            if (gain < 0.0f) gain = 0.0f;
-
-            b[ch][s] *= gain;
-
-            ++chState.timer;
-            if (chState.timer >= chState.intervalSamples)
-                chState.timer = 0;
+            const float t = shapeParam / 0.33f;
+            const float sine = 0.5f + 0.5f * std::sin(phase * 6.2831853f);
+            const float tri  = 1.0f - 2.0f * std::fabs(phase - 0.5f);
+            env = sine + (tri - sine) * t;
         }
+        else if (shapeParam <= 0.66f)
+        {
+            const float t = (shapeParam - 0.33f) / 0.33f;
+            const float exponent = 1.5f + t * 6.0f;
+            env = 1.0f - std::pow(1.0f - phase, exponent);
+        }
+        else
+        {
+            const float t = (shapeParam - 0.66f) / 0.34f;
+            const float duty = 0.5f + t * 0.3f;
+            env = (phase < duty) ? 1.0f : 0.0f;
+        }
+
+        float gain = 1.0f - depth * (1.0f - env);
+        if (gain < 0.0f) gain = 0.0f;
+        if (gain > 1.0f) gain = 1.0f;
+
+        m_smoothEnv += (gain - m_smoothEnv) * m_smoothCoeff;
+
+        for (int ch = 0; ch < c; ++ch)
+            b[ch][s] *= m_smoothEnv;
+
+        ++m_phase;
+        if (m_phase >= cycleSamples)
+            m_phase = 0;
     }
 }

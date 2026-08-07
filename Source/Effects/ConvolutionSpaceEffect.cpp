@@ -235,6 +235,11 @@ void ConvolutionSpaceEffect::processBlock(float** b, int c, int n, const float* 
     if (useFallback)
     {
         processBlockBruteForce(b, chCount, n, damp);
+        float peak = 0.0f;
+        for (int ch = 0; ch < chCount; ++ch)
+            for (int s = 0; s < n; ++s)
+                peak = std::max(peak, std::abs(b[ch][s]));
+        m_hasTail = (peak > 1e-8f);
         return;
     }
 
@@ -251,4 +256,10 @@ void ConvolutionSpaceEffect::processBlock(float** b, int c, int n, const float* 
             processed += subN;
         }
     }
+
+    float peak = 0.0f;
+    for (int ch = 0; ch < chCount; ++ch)
+        for (int s = 0; s < n; ++s)
+            peak = std::max(peak, std::abs(b[ch][s]));
+    m_hasTail = (peak > 1e-8f);
 }

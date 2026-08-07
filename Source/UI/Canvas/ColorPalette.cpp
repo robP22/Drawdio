@@ -4,113 +4,135 @@
 
 namespace {
 
-static void drawStar(juce::Graphics& g, juce::Rectangle<float> r)
-{
-    float cx = r.getCentreX(), cy = r.getCentreY();
-    float outer = std::min(r.getWidth(), r.getHeight()) * 0.5f;
-    float inner = outer * 0.35f;
-
-    juce::Path p;
-    for (int i = 0; i < 8; ++i)
-    {
-        float rad = (i % 2 == 0) ? outer : inner;
-        float a = juce::degreesToRadians(static_cast<float>(i) * 45.0f - 90.0f);
-        float x = cx + rad * std::cos(a);
-        float y = cy + rad * std::sin(a);
-        if (i == 0) p.startNewSubPath(x, y);
-        else p.lineTo(x, y);
-    }
-    p.closeSubPath();
-    g.fillPath(p);
-}
-
-static void drawDiamond(juce::Graphics& g, juce::Rectangle<float> r)
+static void drawTrash(juce::Graphics& g, juce::Rectangle<float> r)
 {
     float cx = r.getCentreX(), cy = r.getCentreY();
     float s = std::min(r.getWidth(), r.getHeight()) * 0.5f;
 
     juce::Path p;
-    p.startNewSubPath(cx, cy - s);
-    p.lineTo(cx + s * 0.55f, cy);
-    p.lineTo(cx, cy + s);
-    p.lineTo(cx - s * 0.55f, cy);
-    p.closeSubPath();
-    g.fillPath(p);
-}
-
-static void drawDroplet(juce::Graphics& g, juce::Rectangle<float> r)
-{
-    float cx = r.getCentreX(), cy = r.getCentreY();
-    float s = std::min(r.getWidth(), r.getHeight()) * 0.4f;
-
-    juce::Path p;
-    p.addEllipse(cx - s * 0.4f, cy - s * 0.1f, s * 0.8f, s * 0.8f);
-    p.startNewSubPath(cx - s * 0.25f, cy - s * 0.05f);
-    p.lineTo(cx + s * 0.25f, cy - s * 0.05f);
-    p.lineTo(cx, cy - s * 0.6f);
-    p.closeSubPath();
-    g.fillPath(p);
-}
-
-static void drawBackspace(juce::Graphics& g, juce::Rectangle<float> r)
-{
-    float cx = r.getCentreX(), cy = r.getCentreY();
-    float s = std::min(r.getWidth(), r.getHeight()) * 0.5f;
-
-    juce::Path p;
-    p.startNewSubPath(cx + s * 0.25f, cy - s * 0.35f);
-    p.lineTo(cx + s * 0.5f, cy - s * 0.35f);
-    p.lineTo(cx + s * 0.5f, cy + s * 0.35f);
-    p.lineTo(cx + s * 0.25f, cy + s * 0.35f);
-    p.lineTo(cx - s * 0.25f, cy);
-    p.closeSubPath();
+    p.addRectangle(cx - s * 0.28f, cy - s * 0.10f, s * 0.56f, s * 0.62f);
+    p.addRectangle(cx - s * 0.38f, cy - s * 0.28f, s * 0.76f, s * 0.16f);
+    p.addRectangle(cx - s * 0.10f, cy - s * 0.48f, s * 0.20f, s * 0.22f);
     g.fillPath(p);
 }
 
 static void drawUndoArrow(juce::Graphics& g, juce::Rectangle<float> r)
 {
     float cx = r.getCentreX(), cy = r.getCentreY();
-    float s = std::min(r.getWidth(), r.getHeight()) * 0.35f;
+    float s = std::min(r.getWidth(), r.getHeight()) * 0.5f;
+    float arcR = s * 0.38f;
 
-    juce::Path p;
-    p.startNewSubPath(cx + s * 0.5f, cy - s);
-    p.lineTo(cx - s * 0.5f, cy);
-    p.lineTo(cx + s * 0.5f, cy + s);
-    g.strokePath(p, juce::PathStrokeType(s * 0.35f));
+    juce::Path arc;
+    arc.addCentredArc(cx, cy, arcR, arcR, 0.0f,
+                      juce::degreesToRadians(210.0f), juce::degreesToRadians(390.0f), true);
+    g.strokePath(arc, juce::PathStrokeType(s * 0.30f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
 
-    float ah = s * 0.5f;
-    juce::Path a;
-    a.startNewSubPath(cx - s * 0.5f - ah * 0.6f, cy);
-    a.lineTo(cx - s * 0.5f + ah * 0.3f, cy - ah * 0.6f);
-    a.lineTo(cx - s * 0.5f + ah * 0.3f, cy + ah * 0.6f);
-    a.closeSubPath();
-    g.fillPath(a);
+    float hx = cx + arcR * std::cos(juce::degreesToRadians(210.0f));
+    float hy = cy + arcR * std::sin(juce::degreesToRadians(210.0f));
+    juce::Path tip;
+    tip.addTriangle(hx, hy,
+                    hx + s * 0.26f, hy - s * 0.20f,
+                    hx + s * 0.26f, hy + s * 0.20f);
+    g.fillPath(tip);
 }
 
 static void drawRedoArrow(juce::Graphics& g, juce::Rectangle<float> r)
 {
     float cx = r.getCentreX(), cy = r.getCentreY();
-    float s = std::min(r.getWidth(), r.getHeight()) * 0.35f;
+    float s = std::min(r.getWidth(), r.getHeight()) * 0.5f;
+    float arcR = s * 0.38f;
 
-    juce::Path p;
-    p.startNewSubPath(cx - s * 0.5f, cy - s);
-    p.lineTo(cx + s * 0.5f, cy);
-    p.lineTo(cx - s * 0.5f, cy + s);
-    g.strokePath(p, juce::PathStrokeType(s * 0.35f));
+    juce::Path arc;
+    arc.addCentredArc(cx, cy, arcR, arcR, 0.0f,
+                      juce::degreesToRadians(150.0f), juce::degreesToRadians(330.0f), true);
+    g.strokePath(arc, juce::PathStrokeType(s * 0.30f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
 
-    float ah = s * 0.5f;
-    juce::Path a;
-    a.startNewSubPath(cx + s * 0.5f + ah * 0.6f, cy);
-    a.lineTo(cx + s * 0.5f - ah * 0.3f, cy - ah * 0.6f);
-    a.lineTo(cx + s * 0.5f - ah * 0.3f, cy + ah * 0.6f);
-    a.closeSubPath();
-    g.fillPath(a);
+    float hx = cx + arcR * std::cos(juce::degreesToRadians(330.0f));
+    float hy = cy + arcR * std::sin(juce::degreesToRadians(330.0f));
+    juce::Path tip;
+    tip.addTriangle(hx, hy,
+                    hx - s * 0.26f, hy - s * 0.20f,
+                    hx - s * 0.26f, hy + s * 0.20f);
+    g.fillPath(tip);
 }
 
-static void drawSizeText(juce::Graphics& g, juce::Rectangle<float> r)
+static void drawBrushCircle(juce::Graphics& g, juce::Rectangle<float> r, int sizeIndex)
 {
-    g.setFont(juce::Font(juce::FontOptions(r.getHeight() * 0.55f)));
-    g.drawText("S", r, juce::Justification::centred, false);
+    float cx = r.getCentreX(), cy = r.getCentreY();
+    float s = std::min(r.getWidth(), r.getHeight()) * 0.5f;
+
+    juce::Path ring;
+    ring.addEllipse(cx - s * 0.36f, cy - s * 0.36f, s * 0.72f, s * 0.72f);
+    g.strokePath(ring, juce::PathStrokeType(s * 0.10f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+
+    float dotR = s * (0.12f + 0.04f * static_cast<float>(sizeIndex));
+    g.fillEllipse(cx - dotR, cy - dotR, dotR * 2.0f, dotR * 2.0f);
+}
+
+static void drawEraser(juce::Graphics& g, juce::Rectangle<float> r)
+{
+    float cx = r.getCentreX(), cy = r.getCentreY();
+    float s = std::min(r.getWidth(), r.getHeight()) * 0.5f;
+
+    juce::Path p;
+    p.startNewSubPath(cx - s * 0.34f, cy - s * 0.20f);
+    p.lineTo(cx - s * 0.10f, cy - s * 0.40f);
+    p.lineTo(cx + s * 0.34f, cy - s * 0.40f);
+    p.lineTo(cx + s * 0.34f, cy + s * 0.26f);
+    p.lineTo(cx + s * 0.10f, cy + s * 0.40f);
+    p.lineTo(cx - s * 0.34f, cy + s * 0.26f);
+    p.closeSubPath();
+    g.fillPath(p);
+
+    g.setColour(juce::Colours::white.withAlpha(0.45f));
+    g.drawLine(cx - s * 0.28f, cy + s * 0.32f,
+               cx + s * 0.28f, cy + s * 0.32f,
+               s * 0.08f);
+}
+
+static void drawFillBucket(juce::Graphics& g, juce::Rectangle<float> r)
+{
+    float cx = r.getCentreX(), cy = r.getCentreY();
+    float s = std::min(r.getWidth(), r.getHeight()) * 0.5f;
+
+    juce::Path p;
+    p.startNewSubPath(cx - s * 0.26f, cy - s * 0.05f);
+    p.lineTo(cx + s * 0.26f, cy - s * 0.05f);
+    p.lineTo(cx + s * 0.40f, cy + s * 0.42f);
+    p.lineTo(cx - s * 0.40f, cy + s * 0.42f);
+    p.closeSubPath();
+    g.fillPath(p);
+
+    juce::Path handle;
+    handle.addArc(cx - s * 0.16f, cy - s * 0.44f, s * 0.32f, s * 0.36f,
+                  juce::degreesToRadians(200.0f), juce::degreesToRadians(340.0f), true);
+    g.strokePath(handle, juce::PathStrokeType(s * 0.13f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+}
+
+static void drawReboundArrow(juce::Graphics& g, juce::Rectangle<float> r)
+{
+    float cx = r.getCentreX(), cy = r.getCentreY();
+    float s = std::min(r.getWidth(), r.getHeight()) * 0.5f;
+
+    g.drawLine(cx + s * 0.34f, cy - s * 0.38f,
+               cx + s * 0.34f, cy + s * 0.38f,
+               s * 0.12f);
+
+    juce::Path path;
+    path.startNewSubPath(cx - s * 0.32f, cy - s * 0.32f);
+    path.quadraticTo(cx, cy - s * 0.34f,
+                     cx + s * 0.32f, cy);
+    path.quadraticTo(cx, cy + s * 0.34f,
+                     cx - s * 0.32f, cy + s * 0.36f);
+    g.strokePath(path, juce::PathStrokeType(s * 0.14f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+
+    float tipX = cx - s * 0.32f - s * 0.06f;
+    float tipY = cy + s * 0.36f;
+    juce::Path head;
+    head.addTriangle(tipX, tipY,
+                     tipX + s * 0.22f, tipY - s * 0.14f,
+                     tipX + s * 0.22f, tipY + s * 0.14f);
+    g.fillPath(head);
 }
 
 }
@@ -133,7 +155,8 @@ ColorPalette::ColorPalette(const IResourceProvider& resources, const IThemeProvi
           { 4, {} }    // White   (weight -0.7)
       }}
 {
-    addAndMakeVisible(m_partyButton);
+    setBufferedToImage(true);
+    addAndMakeVisible(m_reboundButton);
     addAndMakeVisible(m_undoButton);
     addAndMakeVisible(m_redoButton);
     addAndMakeVisible(m_fillButton);
@@ -141,12 +164,12 @@ ColorPalette::ColorPalette(const IResourceProvider& resources, const IThemeProvi
     addAndMakeVisible(m_eraserButton);
     addAndMakeVisible(m_clearButton);
 
-    m_partyButton.setDrawIcon(drawStar);
-    m_partyButton.setAccentColour(juce::Colour(0xFF8E44AD));
-    m_partyButton.setClickingTogglesState(true);
-    m_partyButton.onClick = [this]() {
-        if (m_onPartyMode)
-            m_onPartyMode(m_partyButton.getToggleState());
+    m_reboundButton.setDrawIcon(drawReboundArrow);
+    m_reboundButton.setAccentColour(juce::Colour(0xFF8E44AD));
+    m_reboundButton.setClickingTogglesState(true);
+    m_reboundButton.onClick = [this]() {
+        if (m_onReboundMode)
+            m_onReboundMode(m_reboundButton.getToggleState());
     };
 
     m_undoButton.setDrawIcon(drawUndoArrow);
@@ -161,7 +184,7 @@ ColorPalette::ColorPalette(const IResourceProvider& resources, const IThemeProvi
         if (m_onRedo) m_onRedo();
     };
 
-    m_fillButton.setDrawIcon(drawDroplet);
+    m_fillButton.setDrawIcon(drawFillBucket);
     m_fillButton.setAccentColour(juce::Colour(0xFF2ECC40));
     m_fillButton.setClickingTogglesState(true);
     m_fillButton.onClick = [this]() {
@@ -169,11 +192,13 @@ ColorPalette::ColorPalette(const IResourceProvider& resources, const IThemeProvi
             m_onFill(m_fillButton.getToggleState());
     };
 
-    m_sizeButton.setDrawIcon(drawSizeText);
+    m_sizeButton.setDrawIcon([this](juce::Graphics& g, juce::Rectangle<float> r) {
+        drawBrushCircle(g, r, m_currentBrushIndex);
+    });
     m_sizeButton.setAccentColour(juce::Colour(0xFFF39C12));
     m_sizeButton.onClick = [this]() { cycleBrushSize(); };
 
-    m_eraserButton.setDrawIcon(drawDiamond);
+    m_eraserButton.setDrawIcon(drawEraser);
     m_eraserButton.setAccentColour(juce::Colour(0xFF888888));
     m_eraserButton.setClickingTogglesState(true);
     m_eraserButton.onClick = [this]() {
@@ -191,7 +216,7 @@ ColorPalette::ColorPalette(const IResourceProvider& resources, const IThemeProvi
         }
     };
 
-    m_clearButton.setDrawIcon(drawBackspace);
+    m_clearButton.setDrawIcon(drawTrash);
     m_clearButton.setAccentColour(juce::Colour(0xFFE74C3C));
     m_clearButton.onClick = [this]() {
         if (m_onClear) m_onClear();
@@ -367,7 +392,7 @@ void ColorPalette::resized()
         btn.setArc(cx, cy, ringInnerR, ringOuterR, innerStart, innerEnd, outerStart, outerEnd);
     };
 
-    setRing(m_partyButton,  0);
+    setRing(m_reboundButton, 0);
     setRing(m_redoButton,   1);
     setRing(m_sizeButton,   2);
     setRing(m_eraserButton, 3);
@@ -430,12 +455,7 @@ void ColorPalette::cycleBrushSize()
 {
     m_currentBrushIndex = (m_currentBrushIndex + 1) % 4;
     float radius = m_brushSizes[m_currentBrushIndex];
-    static const char* labels[] = {"S", "M", "L", "XL"};
-    auto newIcon = [txt = juce::String(labels[m_currentBrushIndex])](juce::Graphics& g, juce::Rectangle<float> r) {
-        g.setFont(juce::Font(juce::FontOptions(r.getHeight() * 0.55f)));
-        g.drawText(txt, r, juce::Justification::centred, false);
-    };
-    m_sizeButton.setDrawIcon(newIcon);
+    m_sizeButton.repaint();
     if (m_onBrushSize)
         m_onBrushSize(radius);
 }

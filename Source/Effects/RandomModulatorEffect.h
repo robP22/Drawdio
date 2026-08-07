@@ -13,8 +13,8 @@ public:
 
 private:
     struct ModChannel {
-        float holdValue = 0.0f;
-        float current = 0.0f;
+        float holdValue = 1.0f;
+        float current = 1.0f;
         int counter = 0;
     };
     std::vector<ModChannel> m_channels;

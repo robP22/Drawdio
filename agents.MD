@@ -11,7 +11,7 @@
 - **Zero Conversational Filler:** Omit all introductory pleasantries, meta-commentary, system updates, success confirmations, greeting lines, or transition words. Begin the response immediately with the raw technical payload to optimize server-side prefix caching.
 
 ## Codebase Architecture Blueprint
-- **Product:** Drawdio - Visual Audio Effects Pedalboard (22 DSP modules).
+- **Product:** Drawdio - Visual Audio Effects Pedalboard (26 DSP modules + BYPASS).
 - **Core Pipelines:**
   - `PixelCanvasComponent` -> `CanvasMessageQueue` (SPSC lock-free ring buffer).
   - `CompilerThread` invokes `compileCanvas()` to process pixel data without blocking.
@@ -83,6 +83,23 @@
 - **Minimize/restore rendering (FL Studio):** Added `repaint()` to `PixelCanvasComponent::resized()` (was setting `m_overlayDirty=true` but never queuing repaint). Repaint is gated behind `needsRepaint` in `EditorSyncController::tick()` — handles FL Studio window hide/show cycles that don't trigger OS expose events. `PixelCanvasComponent.cpp:32-35`, `PluginEditor.cpp:195-201`.
 - **Knob labels:** Added parameter labels (Wet, Dry, Vol, Drive/Rate/etc.) rendered centered beneath each knob at `pedalH * 0.10` below knob center (~30px at design resolution). Text drawn after knobs, white 75% opacity, font `pedalH * 0.04`. `GridLayout.h:42`, `PedalComponent.cpp:92-114`.
 - **Phase 5 (block processing):** Restructured `processAudioBlock` from per-sample to per-block processing. Added `processBlock` virtual to `DspEffect` with default sample-by-sample fallback. Waveshaper/Wavefolder override with tight inner loops. `processWithConfig` renamed to `processChainBlock` — processes the full sample block per node instead of one sample per call. `m_dryBuffer` and `m_crossfadeOldOut` changed from per-channel scalar to per-channel block buffers (`vector<vector<float>>`). Crossfade path processes both configs as full blocks then per-sample mixes. Reduces virtual dispatch from 18,432 calls/block (6 nodes × 3 params + 6 processSample × 512 samples) to ~42 (6× processBlock + batched preamble). `DspEffect.h:17-21`, `DistortionEffects.cpp:20-37`, `UnifiedPedalProcessor.cpp:307-354`.
+- **Unconditional LFO removals:** SimpleDelay ±1.5% delay-time LFO, TapeStopEcho ±1.8-sample wow, SpectralFreeze ±5% pitch wobble, SpectralFilter ±10% center LFO — all removed (inaudible-but-costly artifacts, no user control). `DelayEffects.cpp`, `FilterEffects.cpp`, `SpectralFilterEffect.cpp`.
+- **Comb resonator interpolated reads:** Integer `buf[readPtr]` → fractional `interpolateDelayRead()` — fixes zipper noise on frequency sweeps. `DistortionEffects.cpp:163,196`.
+- **Glitch/Reverse crossfades:** GlitchStutter entry xfade blends from captured dry sample (was fade-from-zero click); ReverseBuffer replaced record-end fade-out + fade-in-zero with a single cosine crossfade from captured dry. `PitchEffects.cpp:166-171`, `ReverseBufferEffect.cpp:61-95`.
+- **MicroPitch depth fix:** stray `* 0.001f` scalar cancelled LFO depth — removed; chorus modulation now audible. `DelayEffects.cpp:60`.
+- **Sidechain ducker phase reset:** interval change used `timer = 0` (abrupt phase jump/click) — now `timer %= interval`, assigned once per block. `MiscEffects.cpp:133,165-166`.
+- **VCA makeup clamp:** `gain > 1.0` clamp removed (defeated makeup gain knob) — now only `gain < 0.0` blocked. `MiscEffects.cpp:53,100`.
+- **Convolution IR cap:** 256 → `kFftSize/2` (512); `kFftOrder`/`kFftSize` made public. `ConvolutionSpaceEffect.h/.cpp`.
+- **RandomModulator bipolar:** output mapped `1.0 + noise·depth` (modulates around unity) — was unipolar/zero-centered which silenced output at depth 0. `RandomModulatorEffect.cpp:92,101-102`.
+- **4 new effects (v0.2):** Resampler/Bitcrusher (`ResamplerEffect.h/.cpp`), Tremolo + Flanger (`ModulationEffects.h/.cpp`), Analog Octaver (`OctaverEffect.h/.cpp`). Registered in `DspModuleType.h` (23–26), `PedalDefinition.cpp` (27 entries + static_assert), `DspEffectFactory.cpp`, `PedalComponent.cpp` popup, `CMakeLists.txt`.
+- **DRIFT/UNSTABLE modulators:** per-slot dual-rate random-walk in `UnifiedPedalProcessor` — slow drift (0.3–3 Hz, τ 0.5–2 s, ±2%) + fast unstable (6–15 Hz, τ 80 ms, ±0.8%), applied to non-mix params after smoothing. Atomic per-slot amounts (`setDriftAmount`/`getDriftAmount`), per-slot RNG seeds. `UnifiedPedalProcessor.h:88-107`.
+- **Cable z-order + solid color:** `paint()` → `paintOverChildren()` (cables above pedals); two-tone in/out colors → single `cableColour()` (0xFF4A4A4A); shadow alpha 0.45→0.30, edge 6.2→5.8. `PedalboardGrid.h/.cpp`, `CableRenderer.h/.cpp`, `IThemeProvider.h`, `ThemeManager.h/.cpp`.
+- **updater.sh path fix:** `Drawdio_artefacts/VST3/` → `Drawdio_artefacts/Release/VST3/` (Release build layout). `updater.sh:11`.
+- **StateSerializer maxPedalType:** `RANDOM_MODULATOR` → `ANALOG_OCTAVER` — presets with the 4 new effects were silently clamped to BYPASS on load. `StateSerializer.cpp:120`.
+- **KnobsPerPedal constant:** `constexpr KnobsPerPedal = 4`/`TotalKnobs` in `DrawdioConstants.h`; all parameter-pipeline `4`s replaced; `static_assert(TotalKnobs <= 32)` in `ParameterCache.h`.
+- **Mix knob excluded from automation link:** linked automation no longer jumps the mix knob (zipper); `mi` computed before the link loop. `UnifiedPedalProcessor.cpp:109-117`.
+- **Crossfade identical-config guard:** `next == current` clears `nextConfig` (protects the completion exchange from self-freeing a live config). `UnifiedPedalProcessor.cpp:183-186`.
+- **Rhythm Gate rewrite:** `SidechainDuckerEffect` → `RhythmGateEffect` (`DspModuleType::SIDECHAIN_DUCKER` → `RHYTHM_GATE`, integer value 13 unchanged — serialized presets unaffected). Replaced the old back-loaded cubic recovery envelope (`1 − duck·(1−phase)³`), dead Shape/Level knobs, per-channel timers (stereo wobble), and cycle-boundary click with a Gross Beat-style volume envelope shaper: 3 morphing zones (sine→triangle blend, pump `1 − (1−phase)^exp` with exponent 1.5→7.5, hard square gate with duty 50%→80%), `gain = 1 − depth·(1−env)` clamped [0,1], click-free 1ms smoothing (`m_smoothCoeff = 1 − exp(−1/(sr·0.001))`), single shared `m_phase` (L/R synced — no per-channel state), `m_phase %= cycleSamples` mid-rate-change guard, cycle expanded to 0.05–10s, `DspEffect(3)` so the Mix knob is the processor's external wet/dry blend (effect never reads params[3]). All 4 knobs wired: Rate[0], Shape[1], Depth[2], Mix[3]. `MiscEffects.h/.cpp`, `PedalDefinition.cpp`, `DspEffectFactory.cpp`.
 
 ### Pending
 - (none)
@@ -116,11 +133,15 @@
 - **Source/PluginProcessor.h/.cpp**: P0 — `consumeCompiledResultIfAvailable()` removed from `processBlock()`.
 - **Source/PluginEditor.cpp**: UI update loop — `consumeCompiledResultIfAvailable()` runs on timer (UI thread).
 - **Source/Effects/DelayEffects.h/.cpp**: P1 — per-channel delay lines for MicroPitch, SimpleDelay, TapeStopEcho. P2 — clamp in TapeStop.
-- **Source/Effects/MiscEffects.h/.cpp**: P1 — per-channel state for sidechain ducker; VCA compressor uses a single shared envelope (max across channels).
+- **Source/Effects/MiscEffects.h/.cpp**: Rhythm Gate (`RhythmGateEffect`) — 3-zone morphable envelope shaper, single shared phase (no per-channel state), 1ms smoothing, mixKnobIndex=3 handled externally by the processor; VCA compressor uses a single shared envelope (max across channels).
 - **Source/Effects/GranularBaseEffect.h/.cpp**: P1 — per-channel `GranularProcessorState`.
 - **Source/Effects/DistortionEffects.h/.cpp**: P3 — Wavefolder multiplier 9.0f→4.0f. P4 — Waveshaper drive before clipper. Phase 5 — `processBlock` overrides for Waveshaper/Wavefolder.
 - **Source/Effects/FilterEffects.cpp**: P7 target (DynamicResonantFilter bandwidth).
 - **Source/Effects/DspEffect.h**: Phase 5 — `processBlock` virtual with default sample-by-sample fallback.
 - **Source/PedalComponent.h/.cpp**: Cleaned of PedalSkinManager references.
+- **Source/Effects/ResamplerEffect.h/.cpp**: v0.2 — S&H resampler + bitcrusher with TPDF dither, anti-alias biquad, DC blocker.
+- **Source/Effects/ModulationEffects.h/.cpp**: v0.2 — Tremolo (3 shapes, smoothed square) + Flanger (0.5–10 ms comb, tanh feedback).
+- **Source/Effects/OctaverEffect.h/.cpp**: v0.2 — flip-flop sub-octave + rectified upper octave, tone LP.
+- **Source/Core/DrawdioConstants.h**: `KnobsPerPedal`/`TotalKnobs` constants for the parameter pipeline.
 - **Assets/Sprites/canvastexture.png**: Canvas background texture.
 - **Assets/Sprites/colorwell.png**: Color palette well sprite (7.9KB).

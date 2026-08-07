@@ -29,11 +29,12 @@ public:
 
     void paint(juce::Graphics& g) override;
     void resized() override;
-    void savePreset();
-    void loadPreset();
     void enterManualMode();
     void exitManualMode();
     void clearManualState();
+    void savePreset();
+    void loadPreset();
+    void importImage();
 
 private:
     void triggerRecompile();

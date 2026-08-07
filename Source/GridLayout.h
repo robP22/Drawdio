@@ -61,7 +61,7 @@ namespace BottomBar {
     constexpr float PadRatio              = 0.0833f;  //  10 / 120
     constexpr float KnobMaxSizeRatio      = 0.50f;    //  50 / 100 usable
     constexpr float BtnWidthRatio         = 0.65f;    //  65 / 100 usable
-    constexpr float BtnHeightRatio        = 0.17f;    //  17 / 100 usable
+    constexpr float BtnHeightRatio        = 0.14f;    //  14 / 100 usable
     constexpr float BtnMaxHeight          = 18.0f;    // cap
     constexpr float BtnMaxWidth           = 70.0f;    // cap
     constexpr float StripWidthRatio       = 0.42f;    //  45 / 100 usable

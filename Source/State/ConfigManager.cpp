@@ -47,7 +47,6 @@ void ConfigManager::setPedalSlot(int slot, DspModuleType type)
 
     m_dsp.invalidateParamCacheForSlot(slot);
     syncCompilerConfig();
-    triggerUINotification();
 }
 
 DspModuleType ConfigManager::getPedalSlot(int slot) const
@@ -167,7 +166,7 @@ void ConfigManager::loadPedalConfiguration(PedalAssetPayload* config)
     for (auto& p : config->parameters)
     {
         auto reg = p.targetDspNodeRegister;
-        if (reg < PedalSlotCount && p.parameterToken < 4)
+        if (reg < PedalSlotCount && p.parameterToken < KnobsPerPedal)
             config->paramPtrs[reg][p.parameterToken] = &p.currentValue;
     }
 
@@ -286,41 +285,12 @@ void ConfigManager::setStateInformation(const void* data, int sizeInBytes)
     syncCompilerConfig();
 }
 
-juce::MemoryBlock ConfigManager::createPresetState()
-{
-    auto snap = m_dsp.getSnapshot();
-    auto mask = m_dsp.getParamOverrideMask();
-    auto state = StateSerializer::createState(m_gridData, m_pedalSlots, m_manualRouting, snap.values, mask,
-                                              static_cast<uint8_t>(m_barCount),
-                                              static_cast<uint8_t>(m_sectionStartBar),
-                                              static_cast<uint8_t>(m_manualMode ? 1 : 0));
-    juce::MemoryBlock result;
-    StateSerializer::serialize(state, result);
-    return result;
-}
-
-bool ConfigManager::applyPresetState(const void* data, int sizeInBytes)
-{
-    StateSerializer::SerializedState state;
-    if (!StateSerializer::deserialize(static_cast<const uint8_t*>(data),
-                                     static_cast<size_t>(sizeInBytes), state))
-        return false;
-
-    m_gridData = state.gridData;
-    m_pedalSlots = state.pedalSlots;
-    m_manualRouting = state.manualRouting;
-    restoreKnobValuesFromState(state);
-    m_dsp.scheduleReset();
-    syncCompilerConfig();
-    return true;
-}
-
 void ConfigManager::restoreKnobValuesFromState(const StateSerializer::SerializedState& state)
 {
     for (int s = 0; s < PedalSlotCount; ++s)
-        for (int k = 0; k < 4; ++k)
+        for (int k = 0; k < KnobsPerPedal; ++k)
         {
-            size_t idx = static_cast<size_t>(s * 4 + k);
+            size_t idx = static_cast<size_t>(s * KnobsPerPedal + k);
             if (state.overrideMask & (1u << idx))
                 m_dsp.updateParameter(s, k, state.knobValues[idx]);
             else

@@ -12,7 +12,7 @@ void ParameterCache::update(int physicalSlot, int knobIdx, float newValue)
     if (!std::isfinite(newValue))
         newValue = 0.0f;
 
-    if (physicalSlot >= 0 && physicalSlot < PedalSlotCount && knobIdx >= 0 && knobIdx < 4)
+    if (physicalSlot >= 0 && physicalSlot < PedalSlotCount && knobIdx >= 0 && knobIdx < KnobsPerPedal)
     {
         size_t idx = index(physicalSlot, knobIdx);
         m_cache[idx].store(newValue, std::memory_order_release);
@@ -25,7 +25,7 @@ void ParameterCache::update(int physicalSlot, int knobIdx, float newValue)
 
 void ParameterCache::store(int physicalSlot, int knobIdx, float value)
 {
-    if (physicalSlot >= 0 && physicalSlot < PedalSlotCount && knobIdx >= 0 && knobIdx < 4)
+    if (physicalSlot >= 0 && physicalSlot < PedalSlotCount && knobIdx >= 0 && knobIdx < KnobsPerPedal)
     {
         size_t idx = index(physicalSlot, knobIdx);
         m_cache[idx].store(value, std::memory_order_release);
@@ -35,7 +35,7 @@ void ParameterCache::store(int physicalSlot, int knobIdx, float value)
 
 void ParameterCache::applyOffset(int physicalSlot, int knobIdx, float dragStartValue, float newValue)
 {
-    if (physicalSlot >= 0 && physicalSlot < PedalSlotCount && knobIdx >= 0 && knobIdx < 4)
+    if (physicalSlot >= 0 && physicalSlot < PedalSlotCount && knobIdx >= 0 && knobIdx < KnobsPerPedal)
     {
         size_t idx = index(physicalSlot, knobIdx);
         m_offsets[idx] += newValue - dragStartValue;
@@ -55,7 +55,7 @@ void ParameterCache::clearOffsets()
 
 float ParameterCache::getKnobDisplayValue(int slot, int knob, float compiledValue) const
 {
-    if (slot >= 0 && slot < PedalSlotCount && knob >= 0 && knob < 4)
+    if (slot >= 0 && slot < PedalSlotCount && knob >= 0 && knob < KnobsPerPedal)
     {
         size_t idx = index(slot, knob);
         float val = compiledValue + m_offsets[idx];
@@ -68,7 +68,7 @@ void ParameterCache::invalidateSlot(int physicalSlot)
 {
     if (physicalSlot < 0 || physicalSlot >= PedalSlotCount) return;
     uint32_t mask = m_validMask.load(std::memory_order_relaxed);
-    for (int k = 0; k < 4; ++k)
+    for (int k = 0; k < KnobsPerPedal; ++k)
         mask &= ~(1u << index(physicalSlot, k));
     m_validMask.store(mask, std::memory_order_release);
 }

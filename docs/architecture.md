@@ -204,11 +204,61 @@ changes but long enough to avoid zipper/click artifacts from the topology change
 The swap is a single CAS on `nextConfig`; if the CAS fails (a newer config was
 published mid-fade), the crossfade resets and the fade restarts toward the newer
 config. The deferred-config mechanism in `ConfigManager` queues a config that
-arrives while another is still fading.
+arrives while another is still fading. A guard clears `nextConfig` when it is
+pointer-identical to `currentConfig` — this can never happen today (configs are
+always freshly built), but protects the completion exchange from self-freeing a
+live config if the invariant ever changes.
 
 ---
 
-## 5. Effect Ownership & Real-Time Safety
+## 5. Drift / Unstable Modulation
+
+A per-pedal analog-warmth system implemented in `UnifiedPedalProcessor` (not in
+`DspEffect` — effect instances are ephemeral and recreated on every config
+reload; drift state must survive pedal-type changes).
+
+### Why in the processor
+
+| Approach | Problem |
+|---|---|
+| State in `DspEffect` | Instances are destroyed/recreated per config compile → drift resets to zero on every canvas change |
+| State in `DspEffect` | The base class can't know which params are "primary" per effect |
+| State in processor, indexed by `physSlot` | Survives config changes; per-slot independence (real analog gear has independent component tolerances) |
+
+### Signal design
+
+Each of the 6 slots owns a `DriftModulator` with two independent random-walk
+channels:
+
+| Channel | Rate | Smoothing τ | Max depth |
+|---|---|---|---|
+| **drift** (slow) | 0.3–3.0 Hz (scales with amount) | 0.5–2.0 s | ±2% of parameter |
+| **unstable** (fast) | 6.0–15.0 Hz | 80 ms | ±0.8% |
+
+Both use xorshift32 (lock-free, deterministic, per-slot seeds — no two slots
+correlate). On phase wrap a new target is drawn; the output value is one-pole
+smoothed toward it per block, producing a natural filtered-noise wander.
+Per-block update cost is ~6 ops per slot — negligible next to the DSP itself.
+
+### Application
+
+In `processChainBlock`, after the 40 Hz parameter smoother and *before*
+`effectPtr->processBlock`:
+
+```
+mod = drift.value + unstable.value
+for each knob k (k != mixKnobIndex):
+    params[k] = clamp(params[k] + mod, 0, 1)
+```
+
+- Mix knob is excluded (its per-sample ramp already handles zipper-free motion).
+- Additive modulation with clamping; at amount 0 the entire path is skipped.
+- Amounts are `std::atomic<float>` per slot with release/acquire ordering
+  (`setDriftAmount` from any thread, audio thread reads each block).
+
+---
+
+## 6. Effect Ownership & Real-Time Safety
 
 ### Zero heap allocation on the audio thread
 
@@ -269,7 +319,7 @@ was a sound-quality bug, not a design choice.
 
 ---
 
-## 6. Design Decision Rationale
+## 7. Design Decision Rationale
 
 | Decision | Rationale |
 |---|---|
@@ -278,20 +328,23 @@ was a sound-quality bug, not a design choice.
 | **Mix knob: per-sample ramp, not smoother** | The wet/dry blend already interpolates per-sample; cheaper and click-free (§3). |
 | **Equal-power crossfade** | Constant power through uncorrelated topology transition (§4). |
 | **Per-channel stereo delay lines** | Stereo image preserved through every delay/ring/tape/granular effect; no mono-summing anywhere. |
+| **Rhythm Gate: single shared phase + 1 ms smoothing** | One phase accumulator drives all channels so L/R gating stays sample-aligned (the old per-channel-timer ducking wobbled the stereo image); 1 ms one-pole envelope smoothing makes hard gate transitions click-free while keeping rate responsiveness. |
 | **Dual-grain granular (50% overlap, Hann)** | Two grains at half-grain offset with Hann windows sum to unity — zero amplitude modulation at grain boundaries. Single-grain designs with 100% window modulation "tapped" audibly. |
 | **ADAA antiderivative (Waveshaper/Wavefolder)** | Antiderivative integration suppresses aliasing from the nonlinear curve without oversampling; the `dx > 1e-10` guard keeps the integral well-defined at DC. |
-| **Direct convolution (256-tap, FFT-based)** | 256-tap IR is short enough that overlap-add FFT at 1024-frame blocks is cheap; the synthetic IR is normalized to peak 0.833 to prevent clipping. |
+| **Direct convolution (512-tap, FFT-based)** | 512-tap IR is short enough that overlap-add FFT at 1024-frame blocks is cheap; the synthetic IR is normalized to peak 0.833 to prevent clipping. |
 | **SPSC lock-free ring buffer (CanvasMessageQueue)** | Single producer (UI) / single consumer (compiler) with explicit fences; last-write-wins drops are safe because every message is a full grid snapshot. |
 | **Deferred deletion (ReleaseQueue)** | Audio thread must never `free`; UI thread drains on its tick (§2). |
-| **Unity-gain softClip output** | Bypass transparency + smooth limiting; C1-continuous at the knee (§5). |
+| **Unity-gain softClip output** | Bypass transparency + smooth limiting; C1-continuous at the knee (§6). |
 | **20 ms crossfade window** | Instant-feeling preset changes without topology-change clicks (§4). |
 | **12 Hz automation smoothing** | DAW-synced envelope is already slow-moving; 12 Hz removes staircase without lagging the visual playhead. |
 | **Sub-block coefficient updates (every 8 samples)** | DynamicResonant biquad coefficients track a slow envelope; updating every 8 samples (~0.18 ms) is inaudible and cuts transcendental cost 8×. |
 | **Undo: 8 MB byte budget + 32 levels** | Full-canvas transactions are 256 KB; a byte budget bounds worst-case memory while the level cap keeps undo semantics predictable. |
+| **Drift in the processor, not the effect** | Effects are ephemeral (recreated per compile); per-slot processor state survives config changes and keeps pedals independent (§5). |
+| **Cables above pedals (`paintOverChildren`)** | JUCE paints children after `paint()`; moving cable drawing to `paintOverChildren` renders cables on top of pedal enclosures, with the shadow landing on the pedals for depth. |
 
 ---
 
-## 7. Guardrail Catalog
+## 8. Guardrail Catalog
 
 Where the key safety mechanisms live:
 
@@ -308,12 +361,12 @@ Where the key safety mechanisms live:
 | Channel bounds | `std::min(c, state.size())` in every per-channel loop |
 | Division-by-zero guards | `bufSize == 0` checks, `sliceSamples ≥ 2`, `delaySamples` clamped, `R` clamps |
 | Feedback stability | tanh-bounded feedback, `R ≤ 0.995` pole-radius clamp |
-| Zero heap on audio thread | structural — all allocation on UI thread (§5) |
+| Zero heap on audio thread | structural — all allocation on UI thread (§6) |
 | Lock-free hand-offs | `std::atomic` with release/acquire; SPSC queue with explicit fences |
 
 ---
 
-## 8. Known Simplifications & Trade-offs
+## 9. Known Simplifications & Trade-offs
 
 - **Unused knobs**: all pedals render 4 knobs for visual consistency, but many
   effects read only a subset of `params[0..3]`. This is intentional (uniform UI);
@@ -324,6 +377,6 @@ Where the key safety mechanisms live:
   lookahead limiter. For a creative/experimental plugin this is acceptable;
   loud transients get a smooth clip rather than gain-reduction ducking.
 - **Direct convolution only**: no IR import; the "space" is a synthetic,
-  seeded exponential-decay noise IR (256 taps).
+  seeded exponential-decay noise IR (512 taps).
 - **Tail length**: `getTailLengthSeconds()` returns 5.0 s to cover the longest
   delay (2 s) + reverb decay.

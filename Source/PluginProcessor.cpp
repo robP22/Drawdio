@@ -83,6 +83,12 @@ void DrawdioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     for (auto ch = totalNumInputChannels; ch < totalNumOutputChannels; ++ch)
         buffer.clear(ch, 0, buffer.getNumSamples());
 
+    if (inputPeak < 1e-6f && allEffectsSilent() && !m_config.hasPendingConfig())
+    {
+        m_processorState.publishMeterLevels(0.0f, 0.0f);
+        return;
+    }
+
     auto& channelBuffer = m_processorState.getChannelBuffer();
     int bufCh = std::min(totalNumOutputChannels, static_cast<int>(channelBuffer.size()));
     for (int ch = 0; ch < bufCh; ++ch)
@@ -109,9 +115,39 @@ const juce::String DrawdioProcessor::getName() const { return JucePlugin_Name; }
 bool DrawdioProcessor::acceptsMidi() const { return false; }
 bool DrawdioProcessor::producesMidi() const { return false; }
 bool DrawdioProcessor::isMidiEffect() const { return false; }
-double DrawdioProcessor::getTailLengthSeconds() const { return 5.0; }
 
-int DrawdioProcessor::getNumPrograms() { return 1; }
+double DrawdioProcessor::getTailLengthSeconds() const
+{
+    if (const auto* config = m_config.getCurrentConfig())
+    {
+        double maxTail = 0.0;
+        for (const auto& effect : config->effects)
+            if (effect)
+                maxTail = std::max(maxTail, effect->getTailLength());
+        return maxTail;
+    }
+    return 5.0;
+}
+
+bool DrawdioProcessor::silenceInProducesSilenceOut() const
+{
+    if (const auto* config = m_config.getCurrentConfig())
+        for (const auto& type : config->activeRoutingChain)
+            if (type == DspModuleType::RANDOM_MODULATOR || type == DspModuleType::RESAMPLE_BITCRUSH)
+                return false;
+    return true;
+}
+
+bool DrawdioProcessor::allEffectsSilent() const
+{
+    if (const auto* config = m_config.getCurrentConfig())
+        for (const auto& effect : config->effects)
+            if (effect && effect->hasActiveTail())
+                return false;
+    return true;
+}
+
+int DrawdioProcessor::getNumPrograms() { return 0; }
 int DrawdioProcessor::getCurrentProgram() { return 0; }
 void DrawdioProcessor::setCurrentProgram(int index) { juce::ignoreUnused(index); }
 const juce::String DrawdioProcessor::getProgramName(int index)

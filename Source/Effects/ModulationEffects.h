@@ -1,33 +1,41 @@
 #pragma once
 #include <vector>
 #include "Effects/DspEffect.h"
+#include "Dsp/DelayPrimitives.h"
 
-class VcaCompressorEffect : public DspEffect
+class TremoloEffect : public DspEffect
 {
 public:
+    TremoloEffect() : DspEffect(0) {}
     void prepare(double sampleRate, int numChannels) override;
     void reset() override;
     void processSample(float** b, int c, int s, float effectParam) override;
     void processBlock(float** b, int c, int n, const float* params) override;
 
 private:
-    float m_envelopeFollower = 0.0f;
-    float m_attackCoeff = 0.0f;
-    float m_releaseCoeff = 0.0f;
-    float m_makeupGain = 1.0f;
+    struct TremChannel {
+        float phase = 0.0f;
+        float squareSmooth = 0.0f;
+    };
+    std::vector<TremChannel> m_channels;
 };
 
-class RhythmGateEffect : public DspEffect
+class FlangerEffect : public DspEffect
 {
 public:
-    RhythmGateEffect() : DspEffect(3) {}
+    FlangerEffect() : DspEffect(0) {}
     void prepare(double sampleRate, int numChannels) override;
     void reset() override;
     void processSample(float** b, int c, int s, float effectParam) override;
     void processBlock(float** b, int c, int n, const float* params) override;
 
 private:
-    int m_phase = 0;
-    float m_smoothEnv = 1.0f;
-    float m_smoothCoeff = 0.0f;
+    struct FlangerChannel {
+        std::vector<float> buf;
+        size_t writePtr = 0;
+        float lfoPhase = 0.0f;
+    };
+    std::vector<FlangerChannel> m_channels;
+    float m_minDelaySamples = 22.0f;
+    float m_maxDelaySamples = 441.0f;
 };

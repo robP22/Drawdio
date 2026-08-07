@@ -71,7 +71,6 @@ target_sources(Drawdio PRIVATE
     Source/UI/Pedalboard/CableRenderer.cpp
     Source/UI/Pedalboard/ManualRoutingController.cpp
     Source/UI/EditorSyncController.cpp
-    Source/UI/PresetFileController.cpp
     Source/UI/Controls/MixerStrip.cpp
     Source/UI/Controls/BottomControlBar.cpp
     Source/UI/Controls/AutomationDisplay.cpp
@@ -101,6 +100,9 @@ target_sources(Drawdio PRIVATE
     Source/Effects/SpectralFilterEffect.cpp
     Source/Effects/ConvolutionSpaceEffect.cpp
     Source/Effects/RandomModulatorEffect.cpp
+    Source/Effects/ResamplerEffect.cpp
+    Source/Effects/ModulationEffects.cpp
+    Source/Effects/OctaverEffect.cpp
 )
 
 target_include_directories(Drawdio PRIVATE Source)

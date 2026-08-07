@@ -10,6 +10,9 @@
 #include "Effects/SpectralFilterEffect.h"
 #include "Effects/ConvolutionSpaceEffect.h"
 #include "Effects/RandomModulatorEffect.h"
+#include "Effects/ResamplerEffect.h"
+#include "Effects/ModulationEffects.h"
+#include "Effects/OctaverEffect.h"
 
 std::unique_ptr<DspEffect> createDspEffect(DspModuleType type)
 {
@@ -27,7 +30,7 @@ std::unique_ptr<DspEffect> createDspEffect(DspModuleType type)
         case DspModuleType::TAPE_STOP_REVERSE_ECHO:   return std::make_unique<TapeStopEchoEffect>();
         case DspModuleType::SIMPLE_DELAY:             return std::make_unique<SimpleDelayEffect>();
         case DspModuleType::PLATE_REVERB:             return std::make_unique<PlateReverbEffect>();
-        case DspModuleType::SIDECHAIN_DUCKER:         return std::make_unique<SidechainDuckerEffect>();
+        case DspModuleType::RHYTHM_GATE:              return std::make_unique<RhythmGateEffect>();
         case DspModuleType::GRANULAR_DELAY:           return std::make_unique<GranularDelayEffect>();
         case DspModuleType::COMB_RESONATOR:           return std::make_unique<CombResonatorEffect>();
         case DspModuleType::SPECTRAL_FREEZE:          return std::make_unique<TimeDomainFreezeEffect>();
@@ -37,6 +40,10 @@ std::unique_ptr<DspEffect> createDspEffect(DspModuleType type)
         case DspModuleType::SPECTRAL_FILTER:          return std::make_unique<SpectralFilterEffect>();
         case DspModuleType::CONVOLUTION_SPACE:        return std::make_unique<ConvolutionSpaceEffect>();
         case DspModuleType::RANDOM_MODULATOR:         return std::make_unique<RandomModulatorEffect>();
+        case DspModuleType::RESAMPLE_BITCRUSH:        return std::make_unique<ResamplerEffect>();
+        case DspModuleType::TREMOLO:                  return std::make_unique<TremoloEffect>();
+        case DspModuleType::FLANGER:                  return std::make_unique<FlangerEffect>();
+        case DspModuleType::ANALOG_OCTAVER:           return std::make_unique<OctaverEffect>();
         default:                                      return nullptr;
     }
 }

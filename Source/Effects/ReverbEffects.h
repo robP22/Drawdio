@@ -10,10 +10,13 @@ public:
     void reset() override;
     void processSample(float** b, int c, int s, float effectParam) override;
     void processBlock(float** b, int c, int n, const float* params) override;
+    bool hasActiveTail() const override { return m_hasTail; }
+    double getTailLength() const override { return 2.5; }
 private:
     ReverbNetworkConfig m_config;
     ReverbNetworkState m_state;
     int m_decayKnobIndex;
+    bool m_hasTail = false;
 };
 
 class DiffusedReverbEffect : public ReverbNetworkEffect

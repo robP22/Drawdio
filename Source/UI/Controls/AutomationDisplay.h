@@ -2,7 +2,7 @@
 #include <JuceHeader.h>
 #include "State/AutomationEnvelope.h"
 
-class AutomationDisplay : public juce::Component, private juce::Timer
+class AutomationDisplay : public juce::Component
 {
 public:
     AutomationDisplay();
@@ -27,7 +27,7 @@ public:
     void resized() override;
     void paint(juce::Graphics& g) override;
     void mouseDown(const juce::MouseEvent&) override;
-    void timerCallback() override { if (m_needsRepaint) { repaint(); m_needsRepaint = false; } }
+    void tick() { if (m_needsRepaint) { repaint(); m_needsRepaint = false; } }
 
     std::function<void(int)> onBarCountChanged;
     std::function<void(int)> onSectionChanged;

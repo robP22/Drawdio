@@ -80,6 +80,7 @@ void EditorSyncController::syncCompiledKnobs(bool& needsRepaint)
     m_processor.consumeCompiledResultIfAvailable();
     if (m_processor.getConfigRevision() != revBefore)
     {
+        m_didConsumeResult = true;
         needsRepaint = true;
         if (!m_processor.isManualMode())
         {
@@ -148,11 +149,11 @@ void EditorSyncController::syncKnobAutomation()
     {
         auto* pedal = m_pedalboardGrid.getPedal(slot);
         if (!pedal) continue;
-        for (int k = 0; k < 4; ++k)
+        for (int k = 0; k < KnobsPerPedal; ++k)
         {
             if (!m_processor.isKnobLinked(slot, k))
                 continue;
-            size_t idx = static_cast<size_t>(slot * 4 + k);
+            size_t idx = static_cast<size_t>(slot * KnobsPerPedal + k);
             float strength = m_processor.getKnobLinkStrength(slot, k);
             float display = std::max(0.0f, std::min(1.0f, knobVals[idx] * (1.0f - strength) + autoVal * strength));
             pedal->setKnobValue(k, display);
@@ -173,19 +174,11 @@ void EditorSyncController::refreshRoutingFromConfig()
         }
         return;
     }
-    auto config = m_processor.getCurrentConfig();
-    if (config)
+    const auto& routingOrder = m_processor.getLastConfigSync().routingSlotOrder;
+    if (routingOrder != m_lastRoutingOrder || m_lastRoutingOrder.empty() || m_didConsumeResult)
     {
-        if (config->routingSlotOrder != m_lastRoutingOrder || m_lastRoutingOrder.empty())
-        {
-            m_lastRoutingOrder = config->routingSlotOrder;
-            m_pedalboardGrid.updateRouting(m_lastRoutingOrder);
-            m_needsRepaint = true;
-        }
-    }
-    else if (!m_lastRoutingOrder.empty())
-    {
-        m_lastRoutingOrder.clear();
+        m_didConsumeResult = false;
+        m_lastRoutingOrder = routingOrder;
         m_pedalboardGrid.updateRouting(m_lastRoutingOrder);
         m_needsRepaint = true;
     }

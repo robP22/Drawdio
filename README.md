@@ -9,7 +9,7 @@ A JUCE 8.0.4-based VST3/AU plugin that converts drawings on a 256×256 pixel can
 
 ## Features
 
-- **23 DSP Modules**: Waveshaper, wavefolder, comb resonator, multi-mode filter, formant shifter, spectral freeze, microPitch chorus, simple delay, tape-stop echo, granular delay/pitch/scrubber, glitch stutter, SSB frequency shifter, VCA compressor, sidechain ducker, reverse buffer, spectral filter, convolution space, random modulator, diffused/plate reverb, and bypass
+- **27 DSP Modules**: Waveshaper, wavefolder, comb resonator, multi-mode filter, formant shifter, spectral freeze, microPitch chorus, simple delay, tape-stop echo, granular delay/pitch/scrubber, glitch stutter, SSB frequency shifter, VCA compressor, rhythm gate, reverse buffer, spectral filter, convolution space, random modulator, resampler/bitcrusher, tremolo, flanger, analog octaver, diffused/plate reverb, and bypass
 - **6 Pedal Slots** in a 2×3 grid with per-pedal gain, wet/dry mix, and peak metering
 - **256×256 Drawable Canvas** with 13 colors (12 drawable + Transparent sentinel), flood fill, undo/redo (32 levels, in-session)
 - **Real-time Canvas Compilation** via background compiler thread with 300ms pen debounce
@@ -18,7 +18,8 @@ A JUCE 8.0.4-based VST3/AU plugin that converts drawings on a 256×256 pixel can
 - **DAW-Synced Automation** from canvas Y-position with bar count selection (1/2/4/8) and section repositioning
 - **Knob-to-Automation Linking** with per-knob blend strength; manual adjustment auto-removes link
 - **Manual Cable Drag-and-Drop** routing between pedals
-- **Gap-Aware Bezier Cables** that route between pedal enclosures
+- **Gap-Aware Bezier Cables** that route between pedal enclosures and render above the pedals in solid charcoal
+- **Per-Pedal Analog Drift/Unstable Modulation** — dual-rate random-walk parameter wobble for analog warmth (API-ready, UI wiring pending)
 - **Preset Save/Load** with binary serialization and versioning
 - **Preset File Chooser** with SafePointer-guarded async dialogs
 - **Bottom Control Bar** with input/output gain knobs, mixer strips, and automation graph
@@ -77,7 +78,7 @@ Source/
 │   ├── CanvasAnalysis.cpp       Grid → score/accumulation analysis
 │   ├── CompiledPedalConfig.h    Immutable DSP configuration payloads
 │   ├── DrawdioConstants.h       Canvas size, grid constants
-│   ├── DspModuleType.h          Effect type enum (22 effects + Bypass)
+│   ├── DspModuleType.h          Effect type enum (26 effects + Bypass)
 │   └── ParameterTypes.h         Knob/parameter value types
 ├── Dsp/                         DSP primitives & effect construction
 │   ├── DspEffectFactory.cpp     Creates effect instances from DspModuleType
@@ -89,7 +90,7 @@ Source/
 │   ├── CompilerThread           Background compile loop
 │   ├── CompilerEngine           Grid → PedalAssetPayload analysis
 │   └── PenDebouncer             300ms idle gate
-├── Effects/                     The 22 DSP effect modules (DspEffect subclasses)
+├── Effects/                     The 26 DSP effect modules (DspEffect subclasses)
 ├── State/                       UI-visible state, serialization, automation
 │   ├── ConfigManager / ParameterCache / PedalState / ProcessorState
 │   ├── CanvasRoutingManager / ManualConnectionModel / EffectConfigRegistry
@@ -102,7 +103,7 @@ Source/
 │   ├── Pedalboard/              PedalComponent, CableRenderer/PathBuilder, ManualRoutingController
 │   ├── Controls/                SpriteKnob, MixerStrip, BottomControlBar, AutomationDisplay
 │   ├── Theme/                   IThemeProvider, ThemeManager
-│   └── EditorSyncController / PresetFileController / EditorLayout
+│   └── EditorSyncController / EditorLayout
 ├── UnifiedPedalProcessor.cpp    Sample-accurate audio-thread chain + 20ms crossfade
 ├── PluginProcessor.cpp          AudioProcessor entry point
 └── PluginEditor.cpp             Editor entry point, 20Hz UI sync timer
@@ -195,7 +196,7 @@ Audio Thread (processBlock)
 | 10 | Tape Stop Echo | 0 | Variable-speed tape freeze |
 | 11 | Simple Delay | 0 | Feedback with LP filter |
 | 12 | Plate Reverb | 0 | Stereo-decorrelated plate |
-| 13 | Sidechain Pump | — | Rhythmic ducking oscillator |
+| 13 | Rhythm Gate | 3 | Rhythmic volume envelope shaper (tremolo → pump → hard gate) |
 | 14 | Granular Delay | 0 | 50% overlap dual-grain |
 | 15 | Comb Resonator | — | tanh-saturated feedback |
 | 16 | Spectral Freeze | 0 | LFO-modulated frozen buffer |

@@ -1,8 +1,8 @@
 #include "CableRenderer.h"
 #include "RenderUtils.h"
 
-CableRenderer::CableRenderer(const IThemeProvider& theme)
-    : m_theme(theme) {}
+CableRenderer::CableRenderer(const IThemeProvider& theme, const IResourceProvider& resources)
+    : m_theme(theme), m_resources(resources) {}
 
 void CableRenderer::renderSegment(juce::Graphics& g,
                                   const juce::Path& left, const juce::Path& right,
@@ -71,16 +71,23 @@ void CableRenderer::drawGrabbedCable(juce::Graphics& g,
 void CableRenderer::drawInputJack(juce::Graphics& g, juce::Point<float> entryPos,
                                   const juce::Path& path) const
 {
-    constexpr float jackR = 7.0f;
+    static constexpr float jackH = 14.0f;
 
-    g.setColour(juce::Colours::dimgrey);
-    g.fillEllipse(entryPos.x - jackR, entryPos.y - jackR, jackR * 2.0f, jackR * 2.0f);
-    g.setColour(juce::Colours::silver);
-    g.drawEllipse(entryPos.x - jackR, entryPos.y - jackR, jackR * 2.0f, jackR * 2.0f, 1.5f);
+    const auto& tex = m_resources.getTexture(IResourceProvider::TextureId::InputJack);
+    if (tex.isValid())
+    {
+        const float aspect = static_cast<float>(tex.getWidth()) / static_cast<float>(tex.getHeight());
+        const float jackW = jackH * aspect;
+        auto t = juce::AffineTransform::rotation(juce::MathConstants<float>::pi, entryPos.x, entryPos.y)
+                   .followedBy(juce::AffineTransform::scale(jackW / static_cast<float>(tex.getWidth()),
+                                                            jackH / static_cast<float>(tex.getHeight()),
+                                                            entryPos.x, entryPos.y));
+        g.drawImageTransformed(tex, t);
+    }
 
     g.setColour(juce::Colours::white);
     g.setFont(juce::Font(juce::FontOptions(14.0f, juce::Font::bold)));
-    g.drawText("IN", entryPos.x + jackR + 4.0f, entryPos.y - 9.0f, 30.0f, 18.0f,
+    g.drawText("IN", entryPos.x + jackH * 0.6f, entryPos.y - 9.0f, 30.0f, 18.0f,
                juce::Justification::centredLeft, false);
 
     if (path.isEmpty())
@@ -94,16 +101,23 @@ void CableRenderer::drawInputJack(juce::Graphics& g, juce::Point<float> entryPos
 void CableRenderer::drawOutputJack(juce::Graphics& g, juce::Point<float> exitPos,
                                    const juce::Path& path) const
 {
-    constexpr float jackR = 7.0f;
+    static constexpr float jackH = 14.0f;
 
-    g.setColour(juce::Colours::dimgrey);
-    g.fillEllipse(exitPos.x - jackR, exitPos.y - jackR, jackR * 2.0f, jackR * 2.0f);
-    g.setColour(juce::Colours::silver);
-    g.drawEllipse(exitPos.x - jackR, exitPos.y - jackR, jackR * 2.0f, jackR * 2.0f, 1.5f);
+    const auto& tex = m_resources.getTexture(IResourceProvider::TextureId::InputJack);
+    if (tex.isValid())
+    {
+        const float aspect = static_cast<float>(tex.getWidth()) / static_cast<float>(tex.getHeight());
+        const float jackW = jackH * aspect;
+        auto t = juce::AffineTransform::rotation(juce::MathConstants<float>::pi, exitPos.x, exitPos.y)
+                   .followedBy(juce::AffineTransform::scale(jackW / static_cast<float>(tex.getWidth()),
+                                                            jackH / static_cast<float>(tex.getHeight()),
+                                                            exitPos.x, exitPos.y));
+        g.drawImageTransformed(tex, t);
+    }
 
     g.setColour(juce::Colours::white);
     g.setFont(juce::Font(juce::FontOptions(14.0f, juce::Font::bold)));
-    g.drawText("OUT", exitPos.x - jackR - 30.0f - 4.0f, exitPos.y - 9.0f, 30.0f, 18.0f,
+    g.drawText("OUT", exitPos.x - jackH * 0.6f - 30.0f, exitPos.y - 9.0f, 30.0f, 18.0f,
                juce::Justification::centredRight, false);
 
     if (path.isEmpty())

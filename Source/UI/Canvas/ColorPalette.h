@@ -26,7 +26,7 @@ public:
     void setOnClear(std::function<void()> cb) { m_onClear = std::move(cb); }
     void setOnFill(std::function<void(bool)> cb) { m_onFill = std::move(cb); }
     void setOnBrushSize(std::function<void(float)> cb) { m_onBrushSize = std::move(cb); }
-    void setOnPartyMode(std::function<void(bool)> cb) { m_onPartyMode = std::move(cb); }
+    void setOnReboundMode(std::function<void(bool)> cb) { m_onReboundMode = std::move(cb); }
     void setOnEraser(std::function<void(bool)> cb) { m_onEraser = std::move(cb); }
     void setImageCenterX(float x) { m_imageCenterX = x; repaint(); }
     void setImageBottomShift(float px) { m_imageVerticalShift = px; repaint(); }
@@ -48,7 +48,7 @@ private:
     uint8_t m_selectedColor = 3;
     int m_hoveredBlob = -1;
     ColorCallback m_onColorSelected;
-    ArcButton m_partyButton;
+    ArcButton m_reboundButton;
     ArcButton m_undoButton;
     ArcButton m_redoButton;
     ArcButton m_fillButton;
@@ -60,7 +60,7 @@ private:
     std::function<void()> m_onClear;
     std::function<void(bool)> m_onFill;
     std::function<void(float)> m_onBrushSize;
-    std::function<void(bool)> m_onPartyMode;
+    std::function<void(bool)> m_onReboundMode;
     std::function<void(bool)> m_onEraser;
     uint8_t m_eraserSavedColor = 3;
     std::array<float, 4> m_brushSizes { 0.75f, 1.5f, 2.5f, 4.0f };

@@ -31,6 +31,7 @@ PedalComponent::PedalComponent(IPedalComponentModel& model,
       m_currentType(initialType),
       m_definition(&PedalDefinitions::get(initialType))
 {
+    setBufferedToImage(true);
     const auto& knobImg = m_resources.getImage(IResourceProvider::ImageId::PedalKnobImage);
     for (int i = 0; i < kKnobCount; ++i)
     {
@@ -214,9 +215,9 @@ void PedalComponent::showTypePopup()
         {"Delay",        {10, 11}},
         {"Distortion",   {1, 8}},
         {"Filter",       {3, 9, 20}},
-        {"Glitch",       {6, 16, 18}},
-        {"Modulation",   {2, 13, 17, 22}},
-        {"Pitch",        {4, 14, 19}},
+        {"Glitch",       {6, 16, 18, 23}},
+        {"Modulation",   {2, 13, 17, 22, 24, 25}},
+        {"Pitch",        {4, 14, 19, 26}},
         {"Resonance",    {15}},
         {"Reverb",       {7, 12, 21}},
     };

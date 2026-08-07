@@ -5,7 +5,6 @@
 MixerStrip::MixerStrip(IMixerStripModel& model, int slotIdx)
     : m_model(model), m_slotIndex(slotIdx)
 {
-    startTimerHz(20);
 }
 
 void MixerStrip::resized()
@@ -111,7 +110,7 @@ void MixerStrip::mouseUp(const juce::MouseEvent&)
     m_dragging = false;
 }
 
-void MixerStrip::timerCallback()
+void MixerStrip::tick()
 {
     float peak = m_model.getPedalPeak(m_slotIndex);
     float gain = m_model.getPedalGain(m_slotIndex);
