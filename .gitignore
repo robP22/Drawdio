@@ -1,2 +1,31 @@
+# Build artifacts
+Build/
 build/
+bin/
+obj/
+*_artefacts/
+
+# JUCE/IDE specific
+*.jucer
+.vscode/
+.idea/
+*.swp
+*.swo
+*.swn
+*.suo
+*.user
+
+# OS specific
 .DS_Store
+Thumbs.db
+.aider*
+.agents_tmp/
+
+# Dev-support files (not part of the release)
+agents.MD
+docs/*
+!docs/DEVELOPMENT-LOG.md
+
+# Node tooling (unused auto-updater stubs)
+node_modules/
+package-lock.json
