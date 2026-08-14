@@ -80,7 +80,7 @@ void ArcButton::paint(juce::Graphics& g)
 {
     auto bodyColour = juce::Colour(0xFF2A2D30);
     if (m_toggleOn)
-        bodyColour = bodyColour.interpolatedWith(m_accent, 0.25f);
+        bodyColour = bodyColour.interpolatedWith(m_accent, 0.50f);
     if (m_hovered)
         bodyColour = bodyColour.brighter(0.06f);
     if (m_pressed)

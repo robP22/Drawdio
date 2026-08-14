@@ -40,8 +40,7 @@ private:
     std::vector<uint8_t> m_manualRouting;
     std::vector<ParameterDescriptor> m_existingParams;
 
-    std::unique_ptr<PedalAssetPayload> m_slot;
-    std::atomic<bool> m_slotFull{false};
+    std::atomic<PedalAssetPayload*> m_slot{nullptr};
 
     mutable std::mutex m_configMutex;
 

@@ -1,5 +1,8 @@
 #include "PedalState.h"
 
+#include <algorithm>
+#include <cmath>
+
 PedalState::PedalState()
 {
     for (auto& g : m_pedalGains)
@@ -29,7 +32,12 @@ float PedalState::getPedalGain(int slot) const
 void PedalState::setPedalGain(int slot, float gain)
 {
     if (slot >= 0 && slot < PedalSlotCount)
-        m_pedalGains[static_cast<size_t>(slot)].store(gain, std::memory_order_relaxed);
+    {
+        const float safeGain = std::isfinite(gain)
+                                   ? std::clamp(gain, PedalGainMin, PedalGainMax)
+                                   : 1.0f;
+        m_pedalGains[static_cast<size_t>(slot)].store(safeGain, std::memory_order_relaxed);
+    }
 }
 
 void PedalState::setKnobLink(int slot, int knob, bool linked, float strength)

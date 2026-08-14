@@ -58,12 +58,13 @@ void PedalboardGrid::resized()
 
 void PedalboardGrid::updateRouting(const std::vector<uint8_t>& routingOrder)
 {
-    if (routingOrder != m_routingManager.getRoutingOrder())
-    {
+    const bool changed = routingOrder != m_routingManager.getRoutingOrder();
+    if (changed)
         m_routingManager.setRoutingOrder(routingOrder);
-        rebuildCableCache();
+
+    rebuildCableCache();
+    if (changed)
         repaint();
-    }
 }
 
 void PedalboardGrid::rebuildCableCache()

@@ -71,59 +71,54 @@ void CableRenderer::drawGrabbedCable(juce::Graphics& g,
 void CableRenderer::drawInputJack(juce::Graphics& g, juce::Point<float> entryPos,
                                   const juce::Path& path) const
 {
-    static constexpr float jackH = 14.0f;
-
-    const auto& tex = m_resources.getTexture(IResourceProvider::TextureId::InputJack);
-    if (tex.isValid())
-    {
-        const float aspect = static_cast<float>(tex.getWidth()) / static_cast<float>(tex.getHeight());
-        const float jackW = jackH * aspect;
-        auto t = juce::AffineTransform::rotation(juce::MathConstants<float>::pi, entryPos.x, entryPos.y)
-                   .followedBy(juce::AffineTransform::scale(jackW / static_cast<float>(tex.getWidth()),
-                                                            jackH / static_cast<float>(tex.getHeight()),
-                                                            entryPos.x, entryPos.y));
-        g.drawImageTransformed(tex, t);
-    }
-
-    g.setColour(juce::Colours::white);
-    g.setFont(juce::Font(juce::FontOptions(14.0f, juce::Font::bold)));
-    g.drawText("IN", entryPos.x + jackH * 0.6f, entryPos.y - 9.0f, 30.0f, 18.0f,
-               juce::Justification::centredLeft, false);
-
-    if (path.isEmpty())
-        return;
-
-    juce::Path empty;
-    renderSegment(g, empty, path,
-                  m_theme.cableColour());
+    drawJack(g, entryPos, path, true);
 }
 
 void CableRenderer::drawOutputJack(juce::Graphics& g, juce::Point<float> exitPos,
-                                   const juce::Path& path) const
+                                    const juce::Path& path) const
+{
+    drawJack(g, exitPos, path, false);
+}
+
+void CableRenderer::drawJack(juce::Graphics& g, juce::Point<float> position,
+                             const juce::Path& path, bool isInput) const
 {
     static constexpr float jackH = 14.0f;
+    float jackW = jackH;
+
+    if (!path.isEmpty())
+    {
+        juce::Path empty;
+        renderSegment(g, isInput ? empty : path,
+                      isInput ? path : empty,
+                      m_theme.cableColour());
+    }
 
     const auto& tex = m_resources.getTexture(IResourceProvider::TextureId::InputJack);
     if (tex.isValid())
     {
         const float aspect = static_cast<float>(tex.getWidth()) / static_cast<float>(tex.getHeight());
-        const float jackW = jackH * aspect;
-        auto t = juce::AffineTransform::rotation(juce::MathConstants<float>::pi, exitPos.x, exitPos.y)
-                   .followedBy(juce::AffineTransform::scale(jackW / static_cast<float>(tex.getWidth()),
-                                                            jackH / static_cast<float>(tex.getHeight()),
-                                                            exitPos.x, exitPos.y));
-        g.drawImageTransformed(tex, t);
+        jackW = jackH * aspect;
+        const float scale = jackH / static_cast<float>(tex.getHeight());
+        const float signedScaleX = isInput ? scale : -scale;
+        const float offsetX = position.x + (isInput ? -jackW : jackW) * 0.5f;
+        const float offsetY = position.y - jackH * 0.5f;
+
+        g.saveState();
+        g.setColour(juce::Colours::white);
+        g.setOpacity(1.0f);
+        g.drawImageTransformed(
+            tex,
+            juce::AffineTransform::scale(signedScaleX, scale).translated(offsetX, offsetY));
+        g.restoreState();
     }
 
     g.setColour(juce::Colours::white);
     g.setFont(juce::Font(juce::FontOptions(14.0f, juce::Font::bold)));
-    g.drawText("OUT", exitPos.x - jackH * 0.6f - 30.0f, exitPos.y - 9.0f, 30.0f, 18.0f,
-               juce::Justification::centredRight, false);
-
-    if (path.isEmpty())
-        return;
-
-    juce::Path empty;
-    renderSegment(g, path, empty,
-                  m_theme.cableColour());
+    g.drawText(isInput ? "IN" : "OUT",
+               position.x + (isInput ? jackW * 0.5f + 4.0f : -jackW * 0.5f - 34.0f),
+               position.y - 9.0f, 30.0f, 18.0f,
+               isInput ? juce::Justification::centredLeft
+                       : juce::Justification::centredRight,
+               false);
 }

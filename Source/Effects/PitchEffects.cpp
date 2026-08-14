@@ -73,7 +73,8 @@ void GlitchStutterEffect::prepare(double sampleRate, int numChannels)
         s.sliceLen = 0;
         s.gateCounter = 0;
         s.gateFadeIn = 0;
-        s.gateFadeOut = 0;
+        s.exitReadPos = 0;
+        s.exitFade = 0;
         s.mode = GlitchState::RECORDING;
     }
 }
@@ -91,7 +92,8 @@ void GlitchStutterEffect::reset()
         s.sliceLen = 0;
         s.gateCounter = 0;
         s.gateFadeIn = 0;
-        s.gateFadeOut = 0;
+        s.exitReadPos = 0;
+        s.exitFade = 0;
         s.mode = GlitchState::RECORDING;
     }
 }
@@ -123,7 +125,9 @@ void GlitchStutterEffect::processSample(float** b, int c, int s, float effectPar
             // Fade-in from silence after GATED ended
             if (gs.gateFadeIn > 0)
             {
-                float fade = 1.0f - static_cast<float>(--gs.gateFadeIn) / static_cast<float>(kXfadeLen);
+                int pos = kXfadeLen - gs.gateFadeIn;
+                float fade = 0.5f * (1.0f - std::cos(3.14159265f * static_cast<float>(pos) / static_cast<float>(kXfadeLen)));
+                --gs.gateFadeIn;
                 b[ch][s] = gs.buf[gs.writePtr] * fade;
             }
             else
@@ -176,23 +180,25 @@ void GlitchStutterEffect::processSample(float** b, int c, int s, float effectPar
 
             if (gs.playCounter >= sliceEnd)
             {
-                gs.playCounter = 0;
+                gs.playCounter = GlitchState::kXfadeLen;
                 gs.repeatCount++;
                 if (gs.repeatCount >= maxRepeats)
                 {
                     gs.mode = GlitchState::GATED;
                     gs.gateCounter = 0;
-                    gs.gateFadeOut = kXfadeLen;
+                    gs.exitReadPos = (gs.sliceStart + static_cast<size_t>(GlitchState::kXfadeLen)) % bufSize;
+                    gs.exitFade = kXfadeLen;
                 }
             }
         }
         else
         {
-            // Fade-out to silence when entering GATED
-            if (gs.gateFadeOut > 0)
+            if (gs.exitFade > 0)
             {
-                float fade = static_cast<float>(--gs.gateFadeOut) / static_cast<float>(kXfadeLen);
-                b[ch][s] *= fade;
+                float played = gs.buf[gs.exitReadPos];
+                gs.exitReadPos = (gs.exitReadPos + 1) % bufSize;
+                float fade = static_cast<float>(--gs.exitFade) / static_cast<float>(kXfadeLen);
+                b[ch][s] = played * fade + in * fade * (1.0f - fade);
                 gs.gateCounter = 0;
             }
             else

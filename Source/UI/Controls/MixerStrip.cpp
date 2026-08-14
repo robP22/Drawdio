@@ -1,5 +1,8 @@
 #include "UI/Controls/MixerStrip.h"
 #include "GridLayout.h"
+#include "Core/DrawdioConstants.h"
+
+#include <cmath>
 
 
 MixerStrip::MixerStrip(IMixerStripModel& model, int slotIdx)
@@ -20,6 +23,7 @@ void MixerStrip::resized()
     float sidePad = std::max(0.0f, (b.getWidth() - blockW) * 0.5f);
     auto block = b.reduced(sidePad, 0.0f);
     m_meterBounds = block.removeFromLeft(meterW).reduced(1.0f);
+    block.removeFromLeft(gap);
     m_sliderBounds = block;
 }
 
@@ -44,7 +48,9 @@ void MixerStrip::paint(juce::Graphics& g)
     g.fillRect(m_meterBounds);
     if (active)
     {
-        float fillH = m_meterBounds.getHeight() * juce::jmap(juce::Decibels::gainToDecibels(m_displayPeak), -32.0f, 6.0f, 0.0f, 1.0f);
+        float fillH = m_meterBounds.getHeight() * juce::jmap(
+            juce::Decibels::gainToDecibels(m_displayPeak),
+            PedalGainMinDb, PedalGainMaxDb, 0.0f, 1.0f);
         auto fillRect = m_meterBounds.withTop(m_meterBounds.getBottom() - fillH);
         juce::ColourGradient grad(
             juce::Colours::green, fillRect.getBottomLeft(),
@@ -68,7 +74,16 @@ void MixerStrip::paint(juce::Graphics& g)
     {
         float thumbW = h * GridLayout::Mixer::ThumbWidthRatio;
         float thumbH = h * GridLayout::Mixer::ThumbHeightRatio;
-        float thumbY = m_sliderBounds.getY() + m_sliderBounds.getHeight() * (1.0f - juce::jmap(juce::Decibels::gainToDecibels(m_displayGain), -32.0f, 6.0f, 0.0f, 1.0f));
+        auto travel = m_sliderBounds.withTrimmedTop(thumbH * 0.5f)
+                                    .withTrimmedBottom(thumbH * 0.5f);
+        const float gain = std::isfinite(m_displayGain)
+                               ? juce::jlimit(PedalGainMin, PedalGainMax, m_displayGain)
+                               : 1.0f;
+        const float level = juce::jlimit(
+            0.0f, 1.0f,
+            juce::jmap(juce::Decibels::gainToDecibels(gain),
+                       PedalGainMinDb, PedalGainMaxDb, 0.0f, 1.0f));
+        float thumbY = travel.getBottom() - travel.getHeight() * level;
         auto thumbRect = juce::Rectangle<float>(m_sliderBounds.getCentreX() - thumbW * 0.5f,
                                                   thumbY - thumbH * 0.5f, thumbW, thumbH);
 
@@ -89,8 +104,13 @@ void MixerStrip::mouseDown(const juce::MouseEvent& e)
     if (m_sliderBounds.expanded(expand).contains(e.position))
     {
         m_dragging = true;
-        float frac = 1.0f - (e.position.y - m_sliderBounds.getY()) / m_sliderBounds.getHeight();
-        m_displayGain = juce::Decibels::decibelsToGain(juce::jmap(frac, 0.0f, 1.0f, -32.0f, 6.0f));
+        const float thumbH = h * GridLayout::Mixer::ThumbHeightRatio;
+        auto travel = m_sliderBounds.withTrimmedTop(thumbH * 0.5f)
+                                    .withTrimmedBottom(thumbH * 0.5f);
+        const float y = juce::jlimit(travel.getY(), travel.getBottom(), e.position.y);
+        const float frac = 1.0f - (y - travel.getY()) / travel.getHeight();
+        m_displayGain = juce::Decibels::decibelsToGain(
+            juce::jmap(frac, 0.0f, 1.0f, PedalGainMinDb, PedalGainMaxDb));
         m_model.setPedalGain(m_slotIndex, m_displayGain);
         repaint();
     }
@@ -99,8 +119,14 @@ void MixerStrip::mouseDown(const juce::MouseEvent& e)
 void MixerStrip::mouseDrag(const juce::MouseEvent& e)
 {
     if (!m_dragging) return;
-    float frac = 1.0f - (e.position.y - m_sliderBounds.getY()) / m_sliderBounds.getHeight();
-    m_displayGain = juce::Decibels::decibelsToGain(juce::jmap(frac, 0.0f, 1.0f, -32.0f, 6.0f));
+    const float h = getHeight();
+    const float thumbH = h * GridLayout::Mixer::ThumbHeightRatio;
+    auto travel = m_sliderBounds.withTrimmedTop(thumbH * 0.5f)
+                                .withTrimmedBottom(thumbH * 0.5f);
+    const float y = juce::jlimit(travel.getY(), travel.getBottom(), e.position.y);
+    const float frac = 1.0f - (y - travel.getY()) / travel.getHeight();
+    m_displayGain = juce::Decibels::decibelsToGain(
+        juce::jmap(frac, 0.0f, 1.0f, PedalGainMinDb, PedalGainMaxDb));
     m_model.setPedalGain(m_slotIndex, m_displayGain);
     repaint();
 }

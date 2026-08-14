@@ -8,8 +8,9 @@ struct FftChannel;
 class ConvolutionSpaceEffect : public DspEffect
 {
 public:
-    static constexpr int kFftOrder = 10;
+    static constexpr int kFftOrder = 11;
     static constexpr int kFftSize = 1 << kFftOrder;
+    static constexpr int kDampGridSize = 16;
 
     ConvolutionSpaceEffect();
     ~ConvolutionSpaceEffect() override;
@@ -21,9 +22,9 @@ public:
     double getTailLength() const override { return 1.5; }
 
 private:
-    void recomputeIrFreq(float damp, size_t chIdx);
+    void precomputeDampGrid(size_t chIdx);
     void processBlockBruteForce(float** b, int c, int n, float damp);
-    void processSubBlock(float** b, int offset, int subN, size_t chIdx);
+    void processSubBlock(float** b, int offset, int subN, size_t chIdx, int gridIdx);
 
     std::vector<std::unique_ptr<FftChannel>> m_channels;
     bool m_hasTail = false;

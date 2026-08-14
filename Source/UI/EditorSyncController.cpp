@@ -37,6 +37,12 @@ void EditorSyncController::tick()
 
 void EditorSyncController::processPendingOperations()
 {
+    auto dropped = m_processor.getReleaseQueueDroppedCount();
+    if (dropped > m_lastReportedDrops)
+    {
+        DBG("[Drawdio] ReleaseQueue overflow: " << dropped << " payload(s) dropped");
+        m_lastReportedDrops = dropped;
+    }
     m_processor.drainReleaseQueue();
     m_processor.tryApplyDeferredConfig();
 }
