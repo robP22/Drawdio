@@ -23,7 +23,8 @@ Thumbs.db
 
 # Dev-support files (not part of the release)
 agents.MD
-docs/
+docs/*
+!docs/DEVELOPMENT-LOG.md
 
 # Node tooling (unused auto-updater stubs)
 node_modules/

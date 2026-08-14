@@ -36,6 +36,10 @@ Download the latest macOS builds from the [GitHub Releases page](https://github.
 
 Build from source for other platforms or the macOS AU target.
 
+## Development Log
+
+Live development notes, ideas, and known issues: [View the Development Log](docs/DEVELOPMENT-LOG.md)
+
 ## Building
 
 Requires CMake 3.24+, C++17, and JUCE 8.0.4 (fetched automatically).
@@ -239,6 +243,10 @@ Binary serialization format (`DRD` magic, version `0x05`):
 ## Security
 
 This plugin does not require network access, does not store sensitive data, processes audio only (no MIDI), and is safe for sandboxed plugin environments.
+
+## Contact
+
+Questions, feedback, or bug reports: [drawdio@proton.me](mailto:drawdio@proton.me)
 
 ## License
 
