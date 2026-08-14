@@ -91,6 +91,7 @@ public:
     void setAutomationValue(float val) override { m_config.setAutomationValue(val); }
     float getKnobLinkStrength(int slot, int knob) const override { return m_config.getKnobLinkStrength(slot, knob); }
     void drainReleaseQueue() override { m_config.drainReleaseQueue(); }
+    uint32_t getReleaseQueueDroppedCount() const override { return m_config.getReleaseQueueDroppedCount(); }
     void tryApplyDeferredConfig() override { m_config.tryApplyDeferredConfig(); }
     float getPlayHeadBpm() const override { return m_config.getPlayHeadBpm(); }
     double getPlayHeadPpq() const override { return m_config.getPlayHeadPpq(); }
@@ -108,7 +109,6 @@ public:
     float getOutputMeterLevel() const { return m_processorState.getOutputMeterLevel(); }
 
 private:
-    bool allEffectsSilent() const;
     UnifiedPedalProcessor m_dspProcessor;
     ConfigManager m_config;
     ProcessorState m_processorState;

@@ -8,7 +8,7 @@ struct ReverbNetworkConfig
 {
     double feedbackBase;
     double feedbackRange;
-    std::array<int, 8> fdnTimesMs;
+    std::array<int, 8> fdnTimes;
 };
 
 struct ReverbNetworkState
@@ -21,6 +21,7 @@ struct ReverbNetworkState
     float decorrR;
     std::vector<float> reflectBuf[2];
     size_t reflectPtr;
+    double sampleRate = 44100.0;
 };
 
 void prepareReverbNetwork(ReverbNetworkState& state, double sampleRate,

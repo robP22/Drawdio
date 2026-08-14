@@ -27,9 +27,6 @@ void UnifiedPedalProcessor::prepareToPlay(double sampleRate, int maxSamplesPerBl
     const size_t maxSamples = static_cast<size_t>(maxSamplesPerBlock);
     const size_t maxCh = static_cast<size_t>(m_maxChannels.load(std::memory_order_relaxed));
 
-    constexpr float kAutoSmoothHz = 12.0f;
-    m_autoSmoothAlpha = 1.0f - std::exp(-2.0f * 3.14159265f * kAutoSmoothHz * static_cast<float>(maxSamplesPerBlock) / static_cast<float>(sampleRate));
-
     constexpr float kParamSmoothHz = 40.0f;
     m_paramSmoothAlpha = 1.0f - std::exp(-2.0f * 3.14159265f * kParamSmoothHz * static_cast<float>(maxSamplesPerBlock) / static_cast<float>(sampleRate));
 
@@ -108,8 +105,6 @@ void UnifiedPedalProcessor::processChainBlock(float** b, int c, int s, const Ped
         int mi = effectPtr->mixKnobIndex();
         bool hasMix = (mi >= 0 && mi < KnobsPerPedal);
 
-        float rawAuto = m_currentAutomationValue.load(std::memory_order_relaxed);
-        m_smoothedAutoValue += (rawAuto - m_smoothedAutoValue) * m_autoSmoothAlpha;
         float autoVal = m_smoothedAutoValue;
         for (int k = 0; k < KnobsPerPedal; ++k)
             if (k != mi && m_pedalState.knobLinked(physSlot, k))
@@ -230,6 +225,13 @@ void UnifiedPedalProcessor::processAudioBlock(float** buffer, int numChannels, i
     if (!current)
         return;
 
+    const float srF = static_cast<float>(m_sampleRate.load(std::memory_order_relaxed));
+    const float autoAlpha = (srF > 0.0f)
+        ? 1.0f - std::exp(-2.0f * 3.14159265f * 12.0f * static_cast<float>(numSamples) / srF)
+        : 0.0f;
+    const float rawAuto = m_currentAutomationValue.load(std::memory_order_relaxed);
+    m_smoothedAutoValue += (rawAuto - m_smoothedAutoValue) * autoAlpha;
+
     float inGain = m_pedalState.getInputGain();
     if (inGain != 1.0f)
     {
@@ -295,6 +297,5 @@ void UnifiedPedalProcessor::processAudioBlock(float** buffer, int numChannels, i
             cfg.releaseQueue.pushSingle(oldCurrent);
 
         m_crossfade.reset();
-        reset(*next);
     }
 }

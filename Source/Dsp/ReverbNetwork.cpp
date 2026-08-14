@@ -11,7 +11,7 @@ void prepareReverbNetwork(ReverbNetworkState& state, double sampleRate,
 {
     for (int i = 0; i < 8; ++i)
     {
-        size_t len = static_cast<size_t>(config.fdnTimesMs[static_cast<size_t>(i)])
+        size_t len = static_cast<size_t>(config.fdnTimes[static_cast<size_t>(i)])
                    * static_cast<size_t>(sampleRate) / 44100;
         if (len == 0) len = 1;
         state.fdnBuf[i].assign(len, 0.0f);
@@ -22,10 +22,11 @@ void prepareReverbNetwork(ReverbNetworkState& state, double sampleRate,
     for (int i = 0; i < 8; ++i)
         state.fdnLfoPhase[i] = static_cast<float>(i) * 0.78539816f;
     for (int i = 0; i < 2; ++i)
-        state.reflectBuf[i].assign(3072, 0.0f);
+        state.reflectBuf[i].assign(static_cast<size_t>(3072.0 * sampleRate / 44100.0 + 0.5), 0.0f);
     state.reflectPtr = 0;
     state.decorrL = 0.0f;
     state.decorrR = 0.0f;
+    state.sampleRate = sampleRate;
 }
 
 void resetReverbNetwork(ReverbNetworkState& state)
@@ -59,6 +60,8 @@ void processReverbNetworkSample(float dryL, float dryR,
     static constexpr size_t kTapOffsets[5] = { 882, 1102, 1411, 1852, 2426 };
     static constexpr float kTapGains[5] = { 0.32f, 0.20f, 0.13f, 0.07f, 0.03f };
 
+    const double srScale = state.sampleRate / 44100.0;
+
     size_t rLen = state.reflectBuf[0].size();
     state.reflectBuf[0][state.reflectPtr] = dryL;
     state.reflectBuf[1][state.reflectPtr] = dryR;
@@ -66,7 +69,8 @@ void processReverbNetworkSample(float dryL, float dryR,
     float erL = 0.0f, erR = 0.0f;
     for (int t = 0; t < 5; ++t)
     {
-        size_t idx = (state.reflectPtr + rLen - kTapOffsets[t]) % rLen;
+        size_t tapOff = static_cast<size_t>(static_cast<double>(kTapOffsets[t]) * srScale + 0.5);
+        size_t idx = (state.reflectPtr + rLen - tapOff) % rLen;
         erL += state.reflectBuf[0][idx] * kTapGains[t];
         erR += state.reflectBuf[1][idx] * kTapGains[t];
     }
@@ -89,7 +93,7 @@ void processReverbNetworkSample(float dryL, float dryR,
             continue;
         }
 
-        state.fdnLfoPhase[i] += kModInc[i];
+        state.fdnLfoPhase[i] += static_cast<float>(kModInc[i] * srScale);
         if (state.fdnLfoPhase[i] > 2.0f * 3.14159265f)
             state.fdnLfoPhase[i] -= 2.0f * 3.14159265f;
 

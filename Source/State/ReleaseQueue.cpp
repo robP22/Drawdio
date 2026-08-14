@@ -23,6 +23,8 @@ void ReleaseQueue::drain()
         delete ptr;
     }
 
+    delete m_overflow.exchange(nullptr, std::memory_order_acq_rel);
+
     int rIdx = m_readIndex.load(std::memory_order_relaxed);
     int wIdx = m_writeIndex.load(std::memory_order_acquire);
     while (rIdx != wIdx)

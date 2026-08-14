@@ -8,11 +8,10 @@ struct FftChannel
 {
     std::unique_ptr<juce::dsp::FFT> fft;
     std::vector<float> fftBuf;
-    std::vector<float> irFreq;
+    std::vector<std::vector<float>> dampGrid;
     std::vector<float> baseIr;
     std::vector<float> overflowBuf;
     std::vector<float> circBuf;
-    float prevDamp = -1.0f;
     size_t irLen = 0;
     size_t writePtr = 0;
 };
@@ -53,19 +52,22 @@ void ConvolutionSpaceEffect::prepare(double sampleRate, int numChannels)
     DspEffect::prepare(sampleRate, numChannels);
     m_channels.resize(static_cast<size_t>(numChannels));
 
-    for (auto& ch : m_channels)
+    for (size_t ci = 0; ci < m_channels.size(); ++ci)
     {
+        auto& ch = m_channels[ci];
         ch = std::make_unique<FftChannel>();
         auto& fc = *ch;
         fc.fft = std::make_unique<juce::dsp::FFT>(kFftOrder);
         fc.fftBuf.assign(static_cast<size_t>(kFftSize) * 2, 0.0f);
-        fc.irFreq.assign(static_cast<size_t>(kFftSize), 0.0f);
+        fc.dampGrid.assign(static_cast<size_t>(kDampGridSize), std::vector<float>());
+        for (auto& spectrum : fc.dampGrid)
+            spectrum.assign(static_cast<size_t>(kFftSize), 0.0f);
         fc.baseIr = generateSyntheticIR(sampleRate, 0.8f);
         fc.irLen = fc.baseIr.size();
         fc.overflowBuf.assign(fc.irLen, 0.0f);
         fc.circBuf.assign(static_cast<size_t>(sampleRate * 1.0), 0.0f);
         fc.writePtr = 0;
-        fc.prevDamp = -1.0f;
+        precomputeDampGrid(ci);
     }
 }
 
@@ -79,29 +81,32 @@ void ConvolutionSpaceEffect::reset()
         std::fill(fc.overflowBuf.begin(), fc.overflowBuf.end(), 0.0f);
         std::fill(fc.circBuf.begin(), fc.circBuf.end(), 0.0f);
         fc.writePtr = 0;
-        fc.prevDamp = -1.0f;
     }
 }
 
-void ConvolutionSpaceEffect::recomputeIrFreq(float damp, size_t chIdx)
+void ConvolutionSpaceEffect::precomputeDampGrid(size_t chIdx)
 {
     auto& fc = *m_channels[chIdx];
-    fc.prevDamp = damp;
 
-    for (size_t i = 0; i < fc.irLen; ++i)
+    for (int k = 0; k < kDampGridSize; ++k)
     {
-        float dampScale = damp * 0.9f / static_cast<float>(fc.irLen);
-        fc.fftBuf[i] = fc.baseIr[i] * (1.0f - dampScale * static_cast<float>(i));
-    }
-    std::fill(fc.fftBuf.begin() + static_cast<ptrdiff_t>(fc.irLen),
-              fc.fftBuf.begin() + kFftSize, 0.0f);
-    std::fill(fc.fftBuf.begin() + kFftSize, fc.fftBuf.end(), 0.0f);
+        float damp = static_cast<float>(k) / static_cast<float>(kDampGridSize - 1);
 
-    fc.fft->performRealOnlyForwardTransform(fc.fftBuf.data());
-    std::copy(fc.fftBuf.begin(), fc.fftBuf.begin() + kFftSize, fc.irFreq.begin());
+        for (size_t i = 0; i < fc.irLen; ++i)
+        {
+            float dampScale = damp * 0.9f / static_cast<float>(fc.irLen);
+            fc.fftBuf[i] = fc.baseIr[i] * (1.0f - dampScale * static_cast<float>(i));
+        }
+        std::fill(fc.fftBuf.begin() + static_cast<ptrdiff_t>(fc.irLen),
+                  fc.fftBuf.begin() + kFftSize, 0.0f);
+        std::fill(fc.fftBuf.begin() + kFftSize, fc.fftBuf.end(), 0.0f);
+
+        fc.fft->performRealOnlyForwardTransform(fc.fftBuf.data());
+        std::copy(fc.fftBuf.begin(), fc.fftBuf.begin() + kFftSize, fc.dampGrid[static_cast<size_t>(k)].begin());
+    }
 }
 
-void ConvolutionSpaceEffect::processSubBlock(float** b, int offset, int subN, size_t chIdx)
+void ConvolutionSpaceEffect::processSubBlock(float** b, int offset, int subN, size_t chIdx, int gridIdx)
 {
     auto& fc = *m_channels[chIdx];
     size_t irLen = fc.irLen;
@@ -113,12 +118,13 @@ void ConvolutionSpaceEffect::processSubBlock(float** b, int offset, int subN, si
 
     fc.fft->performRealOnlyForwardTransform(fc.fftBuf.data());
 
-    fc.fftBuf[0] *= fc.irFreq[0];
-    fc.fftBuf[1] *= fc.irFreq[1];
+    const auto& irFreq = fc.dampGrid[static_cast<size_t>(gridIdx)];
+    fc.fftBuf[0] *= irFreq[0];
+    fc.fftBuf[1] *= irFreq[1];
     for (int i = 2; i < kFftSize; i += 2)
     {
-        float re = fc.fftBuf[i] * fc.irFreq[i] - fc.fftBuf[i + 1] * fc.irFreq[i + 1];
-        float im = fc.fftBuf[i] * fc.irFreq[i + 1] + fc.fftBuf[i + 1] * fc.irFreq[i];
+        float re = fc.fftBuf[i] * irFreq[i] - fc.fftBuf[i + 1] * irFreq[i + 1];
+        float im = fc.fftBuf[i] * irFreq[i + 1] + fc.fftBuf[i + 1] * irFreq[i];
         fc.fftBuf[i] = re;
         fc.fftBuf[i + 1] = im;
     }
@@ -221,13 +227,14 @@ void ConvolutionSpaceEffect::processBlock(float** b, int c, int n, const float* 
     int chCount = std::min(c, static_cast<int>(m_channels.size()));
     if (chCount == 0) return;
 
+    int gridIdx = static_cast<int>(damp * static_cast<float>(kDampGridSize - 1) + 0.5f);
+    gridIdx = juce::jlimit(0, kDampGridSize - 1, gridIdx);
+
     bool useFallback = false;
     for (int ch = 0; ch < chCount; ++ch)
     {
         auto& fc = *m_channels[static_cast<size_t>(ch)];
         if (fc.irLen == 0) { useFallback = true; break; }
-        if (std::abs(damp - fc.prevDamp) > 0.001f)
-            recomputeIrFreq(damp, static_cast<size_t>(ch));
         if (static_cast<size_t>(n) + fc.irLen > static_cast<size_t>(kFftSize))
             useFallback = true;
     }
@@ -252,7 +259,7 @@ void ConvolutionSpaceEffect::processBlock(float** b, int c, int n, const float* 
         while (processed < n)
         {
             int subN = std::min(n - processed, subBlockStep);
-            processSubBlock(b, processed, subN, static_cast<size_t>(ch));
+            processSubBlock(b, processed, subN, static_cast<size_t>(ch), gridIdx);
             processed += subN;
         }
     }

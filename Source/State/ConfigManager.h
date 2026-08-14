@@ -77,6 +77,7 @@ public:
     void setAutomationValue(float val) override { m_dsp.setAutomationValue(val); }
     float getKnobLinkStrength(int slot, int knob) const override { return m_dsp.pedalState().getKnobLinkStrength(slot, knob); }
     void drainReleaseQueue() override { m_releaseQueue.drain(); }
+    uint32_t getReleaseQueueDroppedCount() const override { return m_releaseQueue.droppedCount(); }
     void tryApplyDeferredConfig() override;
     std::vector<ParameterDescriptor> getCurrentParams() const;
 
@@ -114,6 +115,7 @@ private:
     void rePrepareEffects();
     void syncCompilerConfig();
     void restoreKnobValuesFromState(const StateSerializer::SerializedState& state);
+    void syncLastConfig(const PedalAssetPayload* config);
 
     UnifiedPedalProcessor& m_dsp;
     CanvasMessageQueue m_messageQueue;

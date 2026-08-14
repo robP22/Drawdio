@@ -73,7 +73,7 @@ namespace BottomBar {
 namespace Mixer {
     constexpr float NameLabelHeightRatio  = 0.14f;    // 14 / 100
     constexpr float MeterWidthRatio       = 0.12f;    // 12 / 100
-    constexpr float MeterTrackGapRatio    = 0.03f;    //  3 / 100
+    constexpr float MeterTrackGapRatio    = 0.05f;    //  5 / 100
     constexpr float TrackWidthRatio       = 0.08f;    //  8 / 100
     constexpr float ThumbWidthRatio       = 0.16f;    // 16 / 100
     constexpr float ThumbHeightRatio      = 0.10f;    // 10 / 100
@@ -90,6 +90,7 @@ constexpr float KnobFontSizeRatio        = 0.04f;
 constexpr float KnobLabelWidthRatio      = 0.28f;
 
 // ── Cable Drawing ──
+constexpr float CableJackHeight          = 14.0f;
 constexpr float CableJackRadiusRatio     = 0.055f;
 constexpr float CableBaseLiftRatio       = 0.12f;
 constexpr float CableMinCurveRatio       = 0.16f;

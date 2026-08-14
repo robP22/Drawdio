@@ -50,4 +50,5 @@ private:
     bool m_needsRepaint = false;
     bool m_autoEnvelopeDirty = true;
     bool m_didConsumeResult = false;
+    uint32_t m_lastReportedDrops = 0;
 };

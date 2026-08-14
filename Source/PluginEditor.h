@@ -59,4 +59,5 @@ private:
     float m_pedalBottomRatio = 0.0f;
     float m_paletteTopRatio = 0.0f;
     float m_paletteBottomRatio = 0.0f;
+    std::unique_ptr<juce::FileChooser> m_fileChooser;
 };

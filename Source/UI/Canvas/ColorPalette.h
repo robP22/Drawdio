@@ -41,6 +41,7 @@ private:
 
     int hitTestBlob(juce::Point<float> position) const;
     void cycleBrushSize();
+    void setExclusiveToggle(ArcButton& active);
 
     const IResourceProvider& m_resources;
     const IThemeProvider& m_theme;

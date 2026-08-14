@@ -188,6 +188,7 @@ void ConfigManager::loadPedalConfiguration(PedalAssetPayload* config)
         }
         m_nextConfig.store(config, std::memory_order_release);
         m_dsp.crossfadeReset();
+        syncLastConfig(config);
     }
     else
     {
@@ -198,7 +199,16 @@ void ConfigManager::loadPedalConfiguration(PedalAssetPayload* config)
         const auto* oldCurrent = m_currentConfig.exchange(config, std::memory_order_acq_rel);
         if (oldCurrent)
             m_releaseQueue.push(oldCurrent);
+        syncLastConfig(config);
     }
+}
+
+void ConfigManager::syncLastConfig(const PedalAssetPayload* config)
+{
+    m_lastConfigSync.parameters = config->parameters;
+    m_lastConfigSync.routingSlotOrder = config->routingSlotOrder;
+    m_configRevision.fetch_add(1, std::memory_order_acq_rel);
+    triggerUINotification();
 }
 
 bool ConfigManager::consumeCompiledResultIfAvailable()
@@ -210,11 +220,7 @@ bool ConfigManager::consumeCompiledResultIfAvailable()
     if (!payloadPtr)
         return false;
 
-    m_lastConfigSync.parameters = payloadPtr->parameters;
-    m_lastConfigSync.routingSlotOrder = payloadPtr->routingSlotOrder;
     loadPedalConfiguration(payloadPtr);
-    m_configRevision.fetch_add(1, std::memory_order_acq_rel);
-    triggerUINotification();
     return true;
 }
 

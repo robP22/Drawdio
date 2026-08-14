@@ -168,8 +168,16 @@ ColorPalette::ColorPalette(const IResourceProvider& resources, const IThemeProvi
     m_reboundButton.setAccentColour(juce::Colour(0xFF8E44AD));
     m_reboundButton.setClickingTogglesState(true);
     m_reboundButton.onClick = [this]() {
+        if (!m_reboundButton.getToggleState())
+        {
+            m_reboundButton.setAccentColour(juce::Colour(0xFF8E44AD));
+            if (m_onReboundMode) m_onReboundMode(false);
+            return;
+        }
+        setExclusiveToggle(m_reboundButton);
+        m_reboundButton.setAccentColour(juce::Colour(0xFFC06DE0));
         if (m_onReboundMode)
-            m_onReboundMode(m_reboundButton.getToggleState());
+            m_onReboundMode(true);
     };
 
     m_undoButton.setDrawIcon(drawUndoArrow);
@@ -188,8 +196,14 @@ ColorPalette::ColorPalette(const IResourceProvider& resources, const IThemeProvi
     m_fillButton.setAccentColour(juce::Colour(0xFF2ECC40));
     m_fillButton.setClickingTogglesState(true);
     m_fillButton.onClick = [this]() {
+        if (!m_fillButton.getToggleState())
+        {
+            if (m_onFill) m_onFill(false);
+            return;
+        }
+        setExclusiveToggle(m_fillButton);
         if (m_onFill)
-            m_onFill(m_fillButton.getToggleState());
+            m_onFill(true);
     };
 
     m_sizeButton.setDrawIcon([this](juce::Graphics& g, juce::Rectangle<float> r) {
@@ -205,6 +219,7 @@ ColorPalette::ColorPalette(const IResourceProvider& resources, const IThemeProvi
         bool on = m_eraserButton.getToggleState();
         if (on)
         {
+            setExclusiveToggle(m_eraserButton);
             m_eraserSavedColor = m_selectedColor;
             if (m_onEraser) m_onEraser(true);
         }
@@ -398,6 +413,28 @@ void ColorPalette::resized()
     setRing(m_eraserButton, 3);
     setRing(m_fillButton,   4);
     setRing(m_undoButton,   5);
+}
+
+void ColorPalette::setExclusiveToggle(ArcButton& active)
+{
+    auto untoggle = [&active](ArcButton& other, std::function<void(bool)> offCb)
+    {
+        if (&other != &active && other.getToggleState())
+        {
+            other.setToggleState(false, juce::dontSendNotification);
+            other.repaint();
+            if (offCb)
+                offCb(false);
+        }
+    };
+    if (&active != &m_eraserButton && m_eraserButton.getToggleState())
+    {
+        m_selectedColor = m_eraserSavedColor;
+        if (m_onColorSelected) m_onColorSelected(m_selectedColor);
+    }
+    untoggle(m_fillButton, m_onFill);
+    untoggle(m_eraserButton, m_onEraser);
+    untoggle(m_reboundButton, m_onReboundMode);
 }
 
 void ColorPalette::mouseDown(const juce::MouseEvent& event)
