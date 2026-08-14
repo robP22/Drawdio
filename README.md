@@ -40,6 +40,8 @@ Build from source for other platforms or the macOS AU target.
 
 Live development notes, ideas, and known issues: [View the Development Log](docs/DEVELOPMENT-LOG.md)
 
+Currently working on: [Working Notes](docs/working-notes.md)
+
 ## Building
 
 Requires CMake 3.24+, C++17, and JUCE 8.0.4 (fetched automatically).

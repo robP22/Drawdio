@@ -25,6 +25,7 @@ Thumbs.db
 agents.MD
 docs/*
 !docs/DEVELOPMENT-LOG.md
+!docs/working-notes.md
 
 # Node tooling (unused auto-updater stubs)
 node_modules/
