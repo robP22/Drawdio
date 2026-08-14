@@ -45,7 +45,8 @@ private:
         size_t sliceLen = 0;
         int gateCounter = 0;
         int gateFadeIn = 0;
-        int gateFadeOut = 0;
+        size_t exitReadPos = 0;
+        int exitFade = 0;
         int entryXfadePos = kXfadeLen;
         float entryXfadeFrom = 0.0f;
         enum Mode { RECORDING, PLAYING, GATED };

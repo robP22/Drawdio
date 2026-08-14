@@ -54,8 +54,15 @@ public:
     }
 
 private:
-    juce::Point<float> dawEntryPos() const { return {static_cast<float>(getWidth()) * 0.05f, 0.0f}; }
-    juce::Point<float> dawExitPos() const { return {static_cast<float>(getWidth()) * 0.95f, 0.0f}; }
+    juce::Point<float> dawEntryPos() const
+    {
+        return {static_cast<float>(getWidth()) * 0.05f, GridLayout::CableJackHeight * 0.5f};
+    }
+
+    juce::Point<float> dawExitPos() const
+    {
+        return {static_cast<float>(getWidth()) * 0.95f, GridLayout::CableJackHeight * 0.5f};
+    }
 
     void rebuildConnectionCables();
     void buildSameRowCable(int srcIdx, int dstIdx, const juce::Point<float>& p1, const juce::Point<float>& p2);

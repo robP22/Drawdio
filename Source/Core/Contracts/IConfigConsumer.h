@@ -18,6 +18,7 @@ public:
     virtual ~IConfigConsumer() = default;
 
     virtual void drainReleaseQueue() = 0;
+    virtual uint32_t getReleaseQueueDroppedCount() const = 0;
     virtual void tryApplyDeferredConfig() = 0;
     virtual bool consumeUINotification() = 0;
     virtual bool consumeCompiledResultIfAvailable() = 0;

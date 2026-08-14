@@ -6,6 +6,18 @@
 #include <array>
 #include <limits>
 
+namespace
+{
+juce::File getPresetsDir()
+{
+    auto dir = juce::File::getSpecialLocation(juce::File::userDocumentsDirectory)
+                   .getChildFile("Drawdio")
+                   .getChildFile("Presets");
+    dir.createDirectory();
+    return dir;
+}
+}
+
 DrawdioProcessorEditor::DrawdioProcessorEditor(DrawdioProcessor& p)
     : AudioProcessorEditor(p),
       audioProcessor(p),
@@ -238,13 +250,12 @@ void DrawdioProcessorEditor::exitManualMode()
 
 void DrawdioProcessorEditor::savePreset()
 {
-    auto chooser = std::make_shared<juce::FileChooser>(
+    m_fileChooser = std::make_unique<juce::FileChooser>(
         "Save Drawdio Preset",
-        juce::File::getSpecialLocation(juce::File::userDocumentsDirectory)
-            .getChildFile("Untitled.drawdio"),
+        getPresetsDir().getChildFile("Untitled.drawdio"),
         "*.drawdio");
-    chooser->launchAsync(juce::FileBrowserComponent::saveMode,
-        [this, chooser](const juce::FileChooser& fc)
+    m_fileChooser->launchAsync(juce::FileBrowserComponent::saveMode,
+        [this](const juce::FileChooser& fc)
         {
             auto file = fc.getResult();
             if (file == juce::File{})
@@ -266,12 +277,12 @@ void DrawdioProcessorEditor::savePreset()
 
 void DrawdioProcessorEditor::loadPreset()
 {
-    auto chooser = std::make_shared<juce::FileChooser>(
+    m_fileChooser = std::make_unique<juce::FileChooser>(
         "Load Drawdio Preset",
-        juce::File::getSpecialLocation(juce::File::userDocumentsDirectory),
-        "*.drawdio");
-    chooser->launchAsync(juce::FileBrowserComponent::openMode,
-        [this, chooser](const juce::FileChooser& fc)
+        getPresetsDir(),
+        "*");
+    m_fileChooser->launchAsync(juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
+        [this](const juce::FileChooser& fc)
         {
             auto file = fc.getResult();
             if (file == juce::File{})
@@ -294,12 +305,7 @@ void DrawdioProcessorEditor::loadPreset()
                         pedal->setKnobValue(k, knobVals[static_cast<size_t>(s * KnobsPerPedal + k)]);
 
             m_pedalboardGrid.syncPedals();
-
-            if (auto* config = audioProcessor.getCurrentConfig())
-            {
-                m_pedalboardGrid.updateRouting(config->routingSlotOrder);
-                m_pedalboardGrid.repaint();
-            }
+            m_pedalboardGrid.repaint();
         });
 }
 
@@ -350,12 +356,12 @@ uint8_t nearestDrawdioColor(juce::Colour c)
 
 void DrawdioProcessorEditor::importImage()
 {
-    auto chooser = std::make_shared<juce::FileChooser>(
+    m_fileChooser = std::make_unique<juce::FileChooser>(
         "Import Image to Canvas",
-        juce::File::getSpecialLocation(juce::File::userDocumentsDirectory),
-        "*.png;*.jpg;*.jpeg");
-    chooser->launchAsync(juce::FileBrowserComponent::openMode,
-        [this, chooser](const juce::FileChooser& fc)
+        getPresetsDir(),
+        "*");
+    m_fileChooser->launchAsync(juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
+        [this](const juce::FileChooser& fc)
         {
             auto file = fc.getResult();
             if (file == juce::File{})
@@ -378,7 +384,7 @@ void DrawdioProcessorEditor::importImage()
                         grid[static_cast<size_t>(y * GridSize + x)] = nearestDrawdioColor(c);
                 }
 
-            audioProcessor.setGridData(grid);
+            audioProcessor.submitCanvasSnapshot(grid);
             m_pixelCanvas.setGridData(grid);
             m_syncController.setAutoEnvelopeDirty();
         });

@@ -73,7 +73,6 @@ private:
     PedalState m_pedalState;
     std::atomic<float> m_currentAutomationValue{0.0f};
     float m_smoothedAutoValue = 0.0f;
-    float m_autoSmoothAlpha = 0.0f;
     float m_paramSmoothAlpha = 0.0f;
     std::array<std::array<float, KnobsPerPedal>, PedalSlotCount> m_smoothedParams = {
         std::array<float, KnobsPerPedal>{0.5f, 0.5f, 0.5f, 0.5f},

@@ -26,8 +26,7 @@ void CompilerThread::stop()
     m_cv.notify_one();
     if (m_thread.joinable())
         m_thread.join();
-    m_slot.reset();
-    m_slotFull.store(false, std::memory_order_release);
+    delete m_slot.exchange(nullptr, std::memory_order_acq_rel);
 }
 
 void CompilerThread::notify()
@@ -55,16 +54,12 @@ void CompilerThread::setExistingParameters(const std::vector<ParameterDescriptor
 
 bool CompilerThread::hasCompiledResult() const noexcept
 {
-    return m_slotFull.load(std::memory_order_acquire);
+    return m_slot.load(std::memory_order_acquire) != nullptr;
 }
 
 PedalAssetPayload* CompilerThread::getCompiledPayloadPtr() noexcept
 {
-    bool expected = true;
-    if (!m_slotFull.compare_exchange_strong(expected, false, std::memory_order_acq_rel, std::memory_order_acquire))
-        return nullptr;
-
-    return m_slot.release();
+    return m_slot.exchange(nullptr, std::memory_order_acq_rel);
 }
 
 void CompilerThread::threadFunc(CanvasMessageQueue& queue, PenDebouncer& debouncer)
@@ -98,8 +93,8 @@ void CompilerThread::threadFunc(CanvasMessageQueue& queue, PenDebouncer& debounc
             existingParams = m_existingParams;
         }
 
-        m_slot = std::make_unique<PedalAssetPayload>(
-            compileCanvas(*gridSnapshot, slots, manualRouting, existingParams));
-        m_slotFull.store(true, std::memory_order_release);
+        delete m_slot.exchange(new PedalAssetPayload(
+                                   compileCanvas(*gridSnapshot, slots, manualRouting, existingParams)),
+                               std::memory_order_acq_rel);
     }
 }

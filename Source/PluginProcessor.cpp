@@ -83,12 +83,6 @@ void DrawdioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     for (auto ch = totalNumInputChannels; ch < totalNumOutputChannels; ++ch)
         buffer.clear(ch, 0, buffer.getNumSamples());
 
-    if (inputPeak < 1e-6f && allEffectsSilent() && !m_config.hasPendingConfig())
-    {
-        m_processorState.publishMeterLevels(0.0f, 0.0f);
-        return;
-    }
-
     auto& channelBuffer = m_processorState.getChannelBuffer();
     int bufCh = std::min(totalNumOutputChannels, static_cast<int>(channelBuffer.size()));
     for (int ch = 0; ch < bufCh; ++ch)
@@ -134,15 +128,6 @@ bool DrawdioProcessor::silenceInProducesSilenceOut() const
     if (const auto* config = m_config.getCurrentConfig())
         for (const auto& type : config->activeRoutingChain)
             if (type == DspModuleType::RANDOM_MODULATOR || type == DspModuleType::RESAMPLE_BITCRUSH)
-                return false;
-    return true;
-}
-
-bool DrawdioProcessor::allEffectsSilent() const
-{
-    if (const auto* config = m_config.getCurrentConfig())
-        for (const auto& effect : config->effects)
-            if (effect && effect->hasActiveTail())
                 return false;
     return true;
 }
