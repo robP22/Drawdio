@@ -85,6 +85,10 @@ void UnifiedPedalProcessor::processChainBlock(float** b, int c, int s, const Ped
         if (!effectPtr)
             continue;
 
+        effectPtr->setTransport(m_transportBpm.load(std::memory_order_relaxed),
+                                m_transportPpq.load(std::memory_order_relaxed),
+                                m_transportPlaying.load(std::memory_order_relaxed));
+
         uint32_t mask = m_paramCache.readValidMask();
         if (static_cast<size_t>(idx) >= config.routingSlotOrder.size())
             continue;

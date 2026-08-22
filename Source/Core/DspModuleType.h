@@ -14,7 +14,8 @@ enum class DspModuleType : uint8_t
     DIFFUSED_DELAY_NETWORK,
     MATHEMATICAL_WAVEFOLDER,
     FORMANT_VOCAL_SHIFTER,
-    TAPE_STOP_REVERSE_ECHO,
+    // Re-Time reuses the old Tape Stop slot so existing projects migrate.
+    RETIME = 10,
     SIMPLE_DELAY,
     PLATE_REVERB,
     RHYTHM_GATE,
@@ -26,9 +27,11 @@ enum class DspModuleType : uint8_t
     GRAIN_SCRUBBER,
     SPECTRAL_FILTER,
     CONVOLUTION_SPACE,
-    RANDOM_MODULATOR,
-    RESAMPLE_BITCRUSH,
-    TREMOLO,
-    FLANGER,
-    ANALOG_OCTAVER
+    // Numeric slots 22 and 26 are intentionally reserved. They were
+    // Random Modulator and Octaver in older saved projects.
+    RESERVED_REMOVED_RANDOM_MODULATOR = 22,
+    RESAMPLE_BITCRUSH = 23,
+    TREMOLO = 24,
+    FLANGER = 25,
+    RESERVED_REMOVED_OCTAVER = 26
 };

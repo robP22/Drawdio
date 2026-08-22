@@ -9,10 +9,9 @@
 #include "Effects/GrainScrubberEffect.h"
 #include "Effects/SpectralFilterEffect.h"
 #include "Effects/ConvolutionSpaceEffect.h"
-#include "Effects/RandomModulatorEffect.h"
 #include "Effects/ResamplerEffect.h"
 #include "Effects/ModulationEffects.h"
-#include "Effects/OctaverEffect.h"
+#include "Effects/ReTimeEffect.h"
 
 std::unique_ptr<DspEffect> createDspEffect(DspModuleType type)
 {
@@ -27,7 +26,7 @@ std::unique_ptr<DspEffect> createDspEffect(DspModuleType type)
         case DspModuleType::DIFFUSED_DELAY_NETWORK:   return std::make_unique<DiffusedReverbEffect>();
         case DspModuleType::MATHEMATICAL_WAVEFOLDER:  return std::make_unique<WavefolderEffect>();
         case DspModuleType::FORMANT_VOCAL_SHIFTER:    return std::make_unique<DynamicResonantFilter>();
-        case DspModuleType::TAPE_STOP_REVERSE_ECHO:   return std::make_unique<TapeStopEchoEffect>();
+        case DspModuleType::RETIME:                   return std::make_unique<ReTimeEffect>();
         case DspModuleType::SIMPLE_DELAY:             return std::make_unique<SimpleDelayEffect>();
         case DspModuleType::PLATE_REVERB:             return std::make_unique<PlateReverbEffect>();
         case DspModuleType::RHYTHM_GATE:              return std::make_unique<RhythmGateEffect>();
@@ -39,11 +38,9 @@ std::unique_ptr<DspEffect> createDspEffect(DspModuleType type)
         case DspModuleType::GRAIN_SCRUBBER:           return std::make_unique<GrainScrubberEffect>();
         case DspModuleType::SPECTRAL_FILTER:          return std::make_unique<SpectralFilterEffect>();
         case DspModuleType::CONVOLUTION_SPACE:        return std::make_unique<ConvolutionSpaceEffect>();
-        case DspModuleType::RANDOM_MODULATOR:         return std::make_unique<RandomModulatorEffect>();
         case DspModuleType::RESAMPLE_BITCRUSH:        return std::make_unique<ResamplerEffect>();
         case DspModuleType::TREMOLO:                  return std::make_unique<TremoloEffect>();
         case DspModuleType::FLANGER:                  return std::make_unique<FlangerEffect>();
-        case DspModuleType::ANALOG_OCTAVER:           return std::make_unique<OctaverEffect>();
         default:                                      return nullptr;
     }
 }

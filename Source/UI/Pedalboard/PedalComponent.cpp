@@ -93,19 +93,35 @@ void PedalComponent::paint(juce::Graphics& g)
     }
 
     const auto& ledImage = m_resources.getImage(IResourceProvider::ImageId::PedalLedImage);
-    if (ledImage.isValid())
+    const float ledDeviceScale = g.getInternalContext().getPhysicalPixelScaleFactor();
+    if (ledImage.isValid() && ledDeviceScale > 0.0f)
     {
-        const float ledSize = pedalH * GridLayout::LedSizeRatio;
-        const bool isOn = (m_currentType != DspModuleType::BYPASS);
-        const auto& frame = m_resources.getSpriteFrame(
-            isOn ? IResourceProvider::SpriteId::PedalLedOn
-                 : IResourceProvider::SpriteId::PedalLedOff);
-        g.drawImage(ledImage,
-                    pedalW * GridLayout::LedCenterXRatio - ledSize * 0.5f,
-                    pedalH * GridLayout::LedCenterYRatio - ledSize * 0.5f,
-                    ledSize, ledSize,
-                    frame.source.getX(), frame.source.getY(),
-                    frame.source.getWidth(), frame.source.getHeight());
+        g.setImageResamplingQuality(juce::Graphics::highResamplingQuality);
+
+        const float deviceScale = ledDeviceScale;
+        const int ledPx = juce::jmax(1, juce::roundToInt(pedalH * GridLayout::LedSizeRatio * deviceScale));
+
+        if (ledPx != m_ledScaledSize || !m_ledScaled[0].isValid() || !m_ledScaled[1].isValid())
+        {
+            const int frameW = ledImage.getWidth() / 2;
+            const int frameH = ledImage.getHeight();
+            m_ledScaled[0] = ledImage.getClippedImage({ 0, 0, frameW, frameH })
+                                 .rescaled(ledPx, ledPx, juce::Graphics::highResamplingQuality);
+            m_ledScaled[1] = ledImage.getClippedImage({ frameW, 0, frameW, frameH })
+                                 .rescaled(ledPx, ledPx, juce::Graphics::highResamplingQuality);
+            m_ledScaledSize = ledPx;
+        }
+
+        if (m_ledScaledSize > 0 && m_ledScaled[0].isValid() && m_ledScaled[1].isValid())
+        {
+            const float destSize = static_cast<float>(m_ledScaledSize) / deviceScale;
+            const float x = std::round((pedalW * GridLayout::LedCenterXRatio - destSize * 0.5f) * deviceScale) / deviceScale;
+            const float y = std::round((pedalH * GridLayout::LedCenterYRatio - destSize * 0.5f) * deviceScale) / deviceScale;
+
+            const bool isOn = (m_currentType != DspModuleType::BYPASS);
+            g.drawImage(m_ledScaled[isOn ? 1 : 0],
+                        juce::Rectangle<float>(x, y, destSize, destSize));
+        }
     }
 
     const auto labelArea = getLabelArea();
@@ -212,14 +228,16 @@ void PedalComponent::showTypePopup()
     struct Cat { const char* name; std::vector<int> types; };
     Cat cats[] = {
         {"Compression",  {5}},
-        {"Delay",        {10, 11}},
+        {"Delay",        {11}},
         {"Distortion",   {1, 8}},
         {"Filter",       {3, 9, 20}},
-        {"Glitch",       {6, 16, 18, 23}},
-        {"Modulation",   {2, 13, 17, 22, 24, 25}},
-        {"Pitch",        {4, 14, 19, 26}},
+        {"Glitch",       {6, 16, 18}},
+        {"Time",         {10}},
+        {"Modulation",   {2, 13, 17, 24, 25}},
+        {"Pitch",        {4, 14, 19}},
         {"Resonance",    {15}},
         {"Reverb",       {7, 12, 21}},
+        {"Resampling",   {23}},
     };
 
     for (auto& cat : cats)

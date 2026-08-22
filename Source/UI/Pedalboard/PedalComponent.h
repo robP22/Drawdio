@@ -52,6 +52,8 @@ private:
     const PedalDefinition* m_definition = nullptr;
     std::array<juce::Rectangle<float>, kKnobCount> m_knobBounds;
     std::array<std::unique_ptr<SpriteKnob>, kKnobCount> m_knobs;
+    juce::Image m_ledScaled[2];
+    int m_ledScaledSize = 0;
     float m_knobDragStartValues[kKnobCount]{};
     juce::Font m_lcdFont;
     juce::Font m_labelFont;

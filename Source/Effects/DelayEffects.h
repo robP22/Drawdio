@@ -43,32 +43,6 @@ private:
     bool m_hasTail = false;
 };
 
-class TapeStopEchoEffect : public DspEffect
-{
-public:
-    TapeStopEchoEffect() : DspEffect(0) {}
-    void prepare(double sampleRate, int numChannels) override;
-    void reset() override;
-    void processSample(float** b, int c, int s, float effectParam) override;
-    void processBlock(float** b, int c, int n, const float* params) override;
-    bool hasActiveTail() const override { return m_hasTail; }
-    double getTailLength() const override { return 2.5; }
-
-private:
-    struct TapeStopChannel {
-        std::vector<float> buf;
-        size_t writePtr = 0;
-        float readPos = 0.0f;
-        float readSpeed = 1.0f;
-        bool wasBraking = false;
-        int brakeXfadePos = 32;
-        float brakeXfadeOldOutput = 0.0f;
-    };
-    std::vector<TapeStopChannel> m_channels;
-    float m_predelayMs = 100.0f;
-    bool m_hasTail = false;
-};
-
 #include "Effects/GranularBaseEffect.h"
 
 class GranularDelayEffect : public GranularBaseEffect

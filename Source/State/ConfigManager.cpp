@@ -309,4 +309,5 @@ void ConfigManager::setPlayHeadPosition(float bpm, double ppq, bool playing)
     m_playHeadBpm.store(bpm, std::memory_order_release);
     m_playHeadPpq.store(ppq, std::memory_order_release);
     m_playHeadPlaying.store(playing, std::memory_order_release);
+    m_dsp.setTransport(bpm, ppq, playing);
 }

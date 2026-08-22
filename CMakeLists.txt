@@ -1,12 +1,12 @@
 cmake_minimum_required(VERSION 3.24)
-project(Drawdio VERSION 1.0.0 LANGUAGES C CXX)
+project(Drawdio VERSION 0.2.0 LANGUAGES C CXX)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-# Add Assets directory for textures and skins
+# Add Assets directory for textures
 set(ASSETS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/Assets")
 if(EXISTS "${ASSETS_DIR}")
     message(STATUS "Assets directory found: ${ASSETS_DIR}")
@@ -29,10 +29,16 @@ juce_add_binary_data(DrawdioAssets SOURCES ${ASSET_FILES})
 
 juce_add_plugin(Drawdio
     PRODUCT_NAME              "Drawdio"
-    PLUGIN_MANUFACTURER       "robP"
+    PLUGIN_NAME               "Drawdio"
+    VERSION                   "0.2.0"
+    BUILD_VERSION             "0.2.0"
+    COMPANY_NAME              "robP"
+    COMPANY_WEBSITE           "https://github.com/robP22/Drawdio"
+    COMPANY_EMAIL             "drawdio@proton.me"
+    BUNDLE_ID                 "com.robp.drawdio"
     PLUGIN_MANUFACTURER_CODE  DrDd
     PLUGIN_CODE               Draw
-    PLUGIN_DESCRIPTION        "VST effects plugin that routes audio and changes knob parameters of 6 unique guitar pedals based on the image you draw on the rendered canvas."
+    DESCRIPTION               "Visual audio effects pedalboard driven by canvas drawings."
     PLUGIN_IS_A_SYNTH         FALSE
     PLUGIN_WANTS_MIDI_INPUT   FALSE
     PLUGIN_NEEDS_MIDI_OUTPUT  FALSE
@@ -99,10 +105,9 @@ target_sources(Drawdio PRIVATE
     Source/Effects/GrainScrubberEffect.cpp
     Source/Effects/SpectralFilterEffect.cpp
     Source/Effects/ConvolutionSpaceEffect.cpp
-    Source/Effects/RandomModulatorEffect.cpp
     Source/Effects/ResamplerEffect.cpp
     Source/Effects/ModulationEffects.cpp
-    Source/Effects/OctaverEffect.cpp
+    Source/Effects/ReTimeEffect.cpp
 )
 
 target_include_directories(Drawdio PRIVATE Source)
@@ -125,5 +130,5 @@ target_link_libraries(Drawdio PRIVATE
 
 target_compile_definitions(Drawdio PRIVATE
     JucePlugin_EditorWidth=1400
-    JucePlugin_EditorHeight=800
+    JucePlugin_EditorHeight=900
 )
