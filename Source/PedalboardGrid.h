@@ -42,8 +42,6 @@ public:
     void clearEdges() { m_connectionModel.clear(); }
     void restoreFromRouting(const std::vector<uint8_t>& routing);
     void rebuildCableCache();
-    void buildInputCableTo(int pedalSlot);
-    void buildOutputCableFrom(int pedalSlot);
 
     std::array<IComponentBounds*, PedalSlotCount> componentBounds() const
     {
@@ -56,18 +54,17 @@ public:
 private:
     juce::Point<float> dawEntryPos() const
     {
-        return {static_cast<float>(getWidth()) * 0.05f, GridLayout::CableJackHeight * 0.5f};
+        return {static_cast<float>(getWidth()) * 0.05f,
+                static_cast<float>(getHeight()) * GridLayout::CableJackHeightRatio * 0.5f};
     }
 
     juce::Point<float> dawExitPos() const
     {
-        return {static_cast<float>(getWidth()) * 0.95f, GridLayout::CableJackHeight * 0.5f};
+        return {static_cast<float>(getWidth()) * 0.95f,
+                static_cast<float>(getHeight()) * GridLayout::CableJackHeightRatio * 0.5f};
     }
 
     void rebuildConnectionCables();
-    void buildSameRowCable(int srcIdx, int dstIdx, const juce::Point<float>& p1, const juce::Point<float>& p2);
-    void buildAdjacentColumnCable(int srcIdx, int dstIdx, const juce::Point<float>& p1, const juce::Point<float>& p2);
-    void buildDistantColumnCable(int srcIdx, int dstIdx, const juce::Point<float>& p1, const juce::Point<float>& p2);
 
     juce::Path m_cachedInputPath;
     juce::Path m_cachedOutputPath;

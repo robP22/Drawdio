@@ -17,18 +17,23 @@ struct NormalizedControlBounds
 
 struct PedalParameterDefinition
 {
-    uint16_t parameterToken = 0;
+    ParameterDescriptor param;
     const char* label = "Param";
-    float minValue = 0.0f;
-    float maxValue = 1.0f;
-    float defaultValue = 0.5f;
-};
+    // Evenly spaced detent count on [0, 1]; 0 disables snapping.
+    int snapSteps = 0;
+
+    constexpr PedalParameterDefinition(uint16_t token, const char* lbl, float mn, float mx, float dv, int snaps = 0)
+        : param{token, mn, mx, dv, dv, false, 0}, label(lbl), snapSteps(snaps)
+    {
+    }};
+
+std::array<NormalizedControlBounds, 5> knobLayoutForCount(int count);
 
 struct PedalDefinition
 {
     DspModuleType type = DspModuleType::BYPASS;
     const char* displayName = "Unknown";
-    std::array<NormalizedControlBounds, 4> knobLayout;
+    int knobCount = 0;
     std::array<PedalParameterDefinition, 4> parameters;
 };
 
@@ -37,4 +42,6 @@ namespace PedalDefinitions
     const PedalDefinition& get(DspModuleType type);
     const PedalDefinition& fallback();
     juce::String getDisplayName(DspModuleType type);
+    int snapSteps(DspModuleType type, int knobIdx);
+    float snapValue(DspModuleType type, int knobIdx, float value);
 }

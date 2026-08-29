@@ -80,6 +80,17 @@ void CableRenderer::drawOutputJack(juce::Graphics& g, juce::Point<float> exitPos
     drawJack(g, exitPos, path, false);
 }
 
+void CableRenderer::drawJackHighlight(juce::Graphics& g, juce::Point<float> position) const
+{
+    const juce::Colour colour = m_theme.jackHighlightColour();
+    g.saveState();
+    g.setColour(colour.withAlpha(0.22f));
+    g.fillEllipse(position.x - 20.0f, position.y - 20.0f, 40.0f, 40.0f);
+    g.setColour(colour.withAlpha(0.95f));
+    g.drawEllipse(position.x - 15.0f, position.y - 15.0f, 30.0f, 30.0f, 2.5f);
+    g.restoreState();
+}
+
 void CableRenderer::drawJack(juce::Graphics& g, juce::Point<float> position,
                              const juce::Path& path, bool isInput) const
 {

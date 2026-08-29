@@ -4,7 +4,6 @@
 #include <vector>
 
 #include "Core/DrawdioConstants.h"
-#include "Core/ParameterTypes.h"
 
 class CanvasRoutingManager final
 {

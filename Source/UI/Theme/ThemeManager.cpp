@@ -67,3 +67,5 @@ juce::Colour ThemeManager::drawButtonAccent() const { return juce::Colour(0xFF47
 juce::Colour ThemeManager::undoButtonAccent() const { return juce::Colour(0xFFC7B067); }
 juce::Colour ThemeManager::clearButtonAccent() const { return juce::Colour(0xFFD75B4F); }
 juce::Colour ThemeManager::cableColour() const { return juce::Colour(0xFF4A4A4A); }
+
+juce::Colour ThemeManager::jackHighlightColour() const { return juce::Colour(0xFF50F07E); }

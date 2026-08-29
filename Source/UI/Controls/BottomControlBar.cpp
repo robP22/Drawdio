@@ -87,9 +87,10 @@ void BottomControlBar::resized()
     const float pad = h * GridLayout::BottomBar::PadRatio;
     const float usableH = h - pad * 2.0f;
     const float barW = static_cast<float>(getWidth());
+    const float scale = GridLayout::scaleFromHeight(h, GridLayout::BottomBar::HeightRatio);
 
-    float knobSize = std::min(usableH * GridLayout::BottomBar::KnobMaxSizeRatio, usableH);
-    knobSize = std::min(knobSize, 50.0f);
+    float knobSize = GridLayout::scaledCap(usableH, GridLayout::BottomBar::KnobMaxSizeRatio, 50.0f, scale);
+    knobSize = std::min(knobSize, usableH);
     float knobY = pad + (usableH - knobSize) * 0.5f;
 
     // Input knob: far left
@@ -97,10 +98,10 @@ void BottomControlBar::resized()
                            static_cast<int>(knobSize), static_cast<int>(knobSize));
 
     // Button stack: 5 buttons, evenly spaced
-    const float btnW = std::min(usableH * GridLayout::BottomBar::BtnWidthRatio,
-                                GridLayout::BottomBar::BtnMaxWidth);
-    const float btnH = std::min(usableH * GridLayout::BottomBar::BtnHeightRatio,
-                                GridLayout::BottomBar::BtnMaxHeight);
+    const float btnW = GridLayout::scaledCap(usableH, GridLayout::BottomBar::BtnWidthRatio,
+                                             GridLayout::BottomBar::BtnMaxWidth, scale);
+    const float btnH = GridLayout::scaledCap(usableH, GridLayout::BottomBar::BtnHeightRatio,
+                                             GridLayout::BottomBar::BtnMaxHeight, scale);
     const float btnGap = (usableH - btnH * 5.0f) / 4.0f;
     float btnX = pad + knobSize + pad;
 
@@ -122,7 +123,7 @@ void BottomControlBar::resized()
     float stripStartX = outKnobX - pad - stripTotal;
 
     m_automationDisplay.setBounds(static_cast<int>(autoX), static_cast<int>(pad),
-                                   static_cast<int>(stripStartX - autoX - pad),
+                                   juce::jmax(0, static_cast<int>(stripStartX - autoX - pad)),
                                    static_cast<int>(usableH));
 
     for (int i = 0; i < PedalSlotCount; ++i)
@@ -149,7 +150,7 @@ void BottomControlBar::paint(juce::Graphics& g)
     g.fillRect(b);
 
     g.setColour(juce::Colours::white.withAlpha(0.5f));
-    g.setFont(juce::Font(juce::FontOptions(9.0f)));
+    g.setFont(juce::Font(juce::FontOptions(juce::jlimit(7.0f, 12.0f, usableH * 0.09f))));
     if (m_inputKnob)
     {
         auto sb = m_inputKnob->getBounds();

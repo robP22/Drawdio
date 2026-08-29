@@ -2,7 +2,7 @@
 #include <JuceHeader.h>
 #include <functional>
 
-class ArcButton : public juce::Component
+class ArcButton : public juce::Component, public juce::SettableTooltipClient
 {
 public:
     ArcButton();
@@ -26,9 +26,13 @@ public:
     void paint(juce::Graphics& g) override;
     bool hitTest(int x, int y) override;
     void mouseDown(const juce::MouseEvent& e) override;
+    void mouseDrag(const juce::MouseEvent& e) override;
     void mouseUp(const juce::MouseEvent& e) override;
     void mouseEnter(const juce::MouseEvent& e) override;
     void mouseExit(const juce::MouseEvent& e) override;
+    bool keyPressed(const juce::KeyPress& key) override;
+    void focusGained(juce::Component::FocusChangeType) override { repaint(); }
+    void focusLost(juce::Component::FocusChangeType) override { repaint(); }
 
 private:
     juce::Path m_arcPath;
@@ -38,7 +42,10 @@ private:
     bool m_toggleable = false;
     bool m_hovered = false;
     bool m_pressed = false;
+    bool m_clickCancelled = false;
     float m_centreX = 0.0f, m_centreY = 0.0f;
     float m_innerR = 0.0f, m_outerR = 0.0f;
-    float m_startAngle = 0.0f, m_endAngle = 0.0f;
+    float m_innerStartAngle = 0.0f, m_innerEndAngle = 0.0f;
+    float m_outerStartAngle = 0.0f, m_outerEndAngle = 0.0f;
+    juce::Rectangle<float> m_iconBounds;
 };

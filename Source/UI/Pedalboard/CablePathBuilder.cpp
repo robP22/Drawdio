@@ -1,4 +1,8 @@
 #include "CablePathBuilder.h"
+#include "GridLayout.h"
+#include <algorithm>
+#include <cmath>
+#include <functional>
 
 CachedSplitCable CablePathBuilder::splitCubicBezier(
     juce::Point<float> p0, juce::Point<float> p1,
@@ -33,30 +37,87 @@ std::pair<juce::Point<float>, juce::Point<float>> CablePathBuilder::makeSameRowC
     };
 }
 
-juce::Path CablePathBuilder::buildInputCable(juce::Point<float> entryPos, juce::Point<float> jackPos)
+namespace
+{
+struct WaypointSegment
+{
+    juce::Point<float> p0, p1, p2, p3;
+};
+
+void appendWaypointSegments(const std::vector<juce::Point<float>>& waypoints,
+                            juce::Point<float> startTangent,
+                            juce::Point<float> endTangent,
+                            const std::function<void(const WaypointSegment&)>& sink)
+{
+    if (waypoints.size() < 2)
+        return;
+
+    const auto unit = [](juce::Point<float> v)
+    {
+        const float len = v.getDistanceFromOrigin();
+        if (len < 1.0e-6f)
+            return juce::Point<float>(0.0f, -1.0f);
+        return v / len;
+    };
+
+    const float maxCurve = GridLayout::CableWaypointCurvePx;
+
+    for (size_t i = 0; i + 1 < waypoints.size(); ++i)
+    {
+        const auto& a = waypoints[i];
+        const auto& b = waypoints[i + 1];
+        const float segLen = a.getDistanceFrom(b);
+
+        juce::Point<float> dirIn;
+        if (i == 0)
+            dirIn = startTangent;
+        else
+            dirIn = unit(waypoints[i + 1] - waypoints[i - 1]);
+
+        juce::Point<float> dirOut;
+        if (i + 2 == waypoints.size())
+            dirOut = endTangent;
+        else
+            dirOut = unit(waypoints[i + 2] - waypoints[i]);
+
+        const float k1 = std::min(segLen * 0.45f, maxCurve);
+        const float k2 = std::min(segLen * 0.45f, maxCurve);
+
+        sink({ a, a + dirIn * k1, b - dirOut * k2, b });
+    }
+}
+}
+
+CachedSplitCable CablePathBuilder::buildWaypointCable(
+    const std::vector<juce::Point<float>>& waypoints,
+    juce::Point<float> startTangent,
+    juce::Point<float> endTangent)
+{
+    CachedSplitCable result;
+    appendWaypointSegments(waypoints, startTangent, endTangent,
+        [&](const WaypointSegment& seg)
+        {
+            auto split = splitCubicBezier(seg.p0, seg.p1, seg.p2, seg.p3);
+            result.left.addPath(split.left);
+            result.right.addPath(split.right);
+        });
+    return result;
+}
+
+juce::Path CablePathBuilder::buildWaypointPath(
+    const std::vector<juce::Point<float>>& waypoints,
+    juce::Point<float> startTangent,
+    juce::Point<float> endTangent)
 {
     juce::Path path;
-    const float vertDist = jackPos.y - entryPos.y;
-    const float lift = vertDist * 0.4f;
-    const float offsetX = 30.0f;
-
-    path.startNewSubPath(entryPos);
-    path.cubicTo(entryPos.x + offsetX, entryPos.y + lift,
-                 jackPos.x + offsetX, jackPos.y - lift,
-                 jackPos.x, jackPos.y);
+    if (waypoints.size() < 2)
+        return path;
+    path.startNewSubPath(waypoints.front());
+    appendWaypointSegments(waypoints, startTangent, endTangent,
+        [&](const WaypointSegment& seg)
+        {
+            path.cubicTo(seg.p1, seg.p2, seg.p3);
+        });
     return path;
 }
 
-juce::Path CablePathBuilder::buildOutputCable(juce::Point<float> jackPos, juce::Point<float> exitPos)
-{
-    juce::Path path;
-    const float vertDist = jackPos.y - exitPos.y;
-    const float lift = vertDist * 0.4f;
-    const float offsetX = 30.0f;
-
-    path.startNewSubPath(jackPos);
-    path.cubicTo(jackPos.x - offsetX, jackPos.y - lift,
-                 exitPos.x - offsetX, exitPos.y + lift,
-                 exitPos.x, exitPos.y);
-    return path;
-}

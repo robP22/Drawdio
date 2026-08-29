@@ -127,7 +127,7 @@ bool DrawdioProcessor::silenceInProducesSilenceOut() const
 {
     if (const auto* config = m_config.getCurrentConfig())
         for (const auto& type : config->activeRoutingChain)
-            if (type == DspModuleType::RANDOM_MODULATOR || type == DspModuleType::RESAMPLE_BITCRUSH)
+            if (type == DspModuleType::BITCRUSHER)
                 return false;
     return true;
 }

@@ -1,5 +1,8 @@
 # DRAWDIO DEVELOPLOG
 
+> Status: Archived historical backlog. It is not a current project-status
+> document. Current editor behavior is described in `../ui-controls.md`.
+
 ## Canvas
 - Import image not converting accurately; implement more colors? Should blend and choose closest?
 

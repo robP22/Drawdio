@@ -2,8 +2,7 @@
 #include "Core/CanvasAnalysis.h"
 
 AutomationEnvelope AutomationCompiler::compile(
-    const std::array<uint8_t, TotalCells>& gridData,
-    const std::vector<DspModuleType>& /*pedalSlots*/)
+    const std::array<uint8_t, TotalCells>& gridData)
 {
     AutomationEnvelope envelope;
 
