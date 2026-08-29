@@ -1,5 +1,6 @@
 #pragma once
 #include <JuceHeader.h>
+#include <vector>
 
 struct CachedSplitCable
 {
@@ -16,8 +17,14 @@ CachedSplitCable splitCubicBezier(juce::Point<float> p0, juce::Point<float> p1,
 std::pair<juce::Point<float>, juce::Point<float>> makeSameRowControlPoints(
     juce::Point<float> from, juce::Point<float> to);
 
-juce::Path buildInputCable(juce::Point<float> entryPos, juce::Point<float> jackPos);
+CachedSplitCable buildWaypointCable(
+    const std::vector<juce::Point<float>>& waypoints,
+    juce::Point<float> startTangent,
+    juce::Point<float> endTangent);
 
-juce::Path buildOutputCable(juce::Point<float> jackPos, juce::Point<float> exitPos);
+juce::Path buildWaypointPath(
+    const std::vector<juce::Point<float>>& waypoints,
+    juce::Point<float> startTangent,
+    juce::Point<float> endTangent);
 
 }

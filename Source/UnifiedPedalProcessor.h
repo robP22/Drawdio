@@ -53,6 +53,12 @@ public:
     PedalState& pedalState() { return m_pedalState; }
     const PedalState& pedalState() const { return m_pedalState; }
     void setAutomationValue(float val) { m_currentAutomationValue.store(val, std::memory_order_relaxed); }
+    void setTransport(float bpm, double ppqPosition, bool isPlaying)
+    {
+        m_transportBpm.store(bpm, std::memory_order_relaxed);
+        m_transportPpq.store(ppqPosition, std::memory_order_relaxed);
+        m_transportPlaying.store(isPlaying, std::memory_order_relaxed);
+    }
 
     double getSampleRate() const { return m_sampleRate.load(std::memory_order_relaxed); }
     int getMaxChannels() const { return m_maxChannels.load(std::memory_order_relaxed); }
@@ -72,6 +78,9 @@ private:
 
     PedalState m_pedalState;
     std::atomic<float> m_currentAutomationValue{0.0f};
+    std::atomic<float> m_transportBpm{120.0f};
+    std::atomic<double> m_transportPpq{0.0};
+    std::atomic<bool> m_transportPlaying{false};
     float m_smoothedAutoValue = 0.0f;
     float m_paramSmoothAlpha = 0.0f;
     std::array<std::array<float, KnobsPerPedal>, PedalSlotCount> m_smoothedParams = {

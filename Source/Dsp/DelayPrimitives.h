@@ -12,6 +12,10 @@ inline float interpolateDelayRead(const std::vector<float>& buf, float pos)
     if (n == 0)
         return 0.0f;
 
+    pos = std::fmod(pos, static_cast<float>(n));
+    if (pos < 0.0f)
+        pos += static_cast<float>(n);
+
     if (n < 4)
     {
         size_t idx = static_cast<size_t>(pos) % n;

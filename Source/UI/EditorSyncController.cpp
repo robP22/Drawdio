@@ -111,13 +111,15 @@ void EditorSyncController::applyParameterToPedal(
         if (m_processor.isParamOverridden(slotIdx, token))
         {
             float display = m_processor.getKnobDisplayValue(slotIdx, token, param.currentValue);
+            display = pedal->snapValue(token, display);
             pedal->setKnobValue(token, display);
             m_processor.storeParameterValue(slotIdx, token, display);
         }
         else
         {
-            pedal->setKnobValue(token, param.currentValue);
-            m_processor.storeParameterValue(slotIdx, token, param.currentValue);
+            float display = pedal->snapValue(token, param.currentValue);
+            pedal->setKnobValue(token, display);
+            m_processor.storeParameterValue(slotIdx, token, display);
         }
     }
 }
@@ -127,11 +129,7 @@ void EditorSyncController::syncAutomation()
     if (m_autoEnvelopeDirty)
     {
         m_autoEnvelopeDirty = false;
-        std::vector<DspModuleType> slots(PedalSlotCount);
-        for (int i = 0; i < PedalSlotCount; ++i)
-            slots[i] = m_processor.getPedalSlot(i);
-        auto envelope = m_automationCompiler.compile(
-            m_pixelCanvas.getGridData(), slots);
+        auto envelope = m_automationCompiler.compile(m_pixelCanvas.getGridData());
         m_automationPlayer.setEnvelope(envelope);
         m_bottomBar.getAutomationDisplay().setEnvelope(envelope);
     }
@@ -162,6 +160,7 @@ void EditorSyncController::syncKnobAutomation()
             size_t idx = static_cast<size_t>(slot * KnobsPerPedal + k);
             float strength = m_processor.getKnobLinkStrength(slot, k);
             float display = std::max(0.0f, std::min(1.0f, knobVals[idx] * (1.0f - strength) + autoVal * strength));
+            display = pedal->snapValue(k, display);
             pedal->setKnobValue(k, display);
         }
     }

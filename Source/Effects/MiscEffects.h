@@ -5,6 +5,7 @@
 class VcaCompressorEffect : public DspEffect
 {
 public:
+    VcaCompressorEffect() : DspEffect(1) {}
     void prepare(double sampleRate, int numChannels) override;
     void reset() override;
     void processSample(float** b, int c, int s, float effectParam) override;
@@ -17,12 +18,13 @@ private:
     float m_makeupGain = 1.0f;
 };
 
-class RhythmGateEffect : public DspEffect
+class SidechainEffect : public DspEffect
 {
 public:
-    RhythmGateEffect() : DspEffect(3) {}
+    SidechainEffect() : DspEffect(3) {}
     void prepare(double sampleRate, int numChannels) override;
     void reset() override;
+    void setTransport(float bpm, double ppqPosition, bool isPlaying) override;
     void processSample(float** b, int c, int s, float effectParam) override;
     void processBlock(float** b, int c, int n, const float* params) override;
 
@@ -30,4 +32,5 @@ private:
     int m_phase = 0;
     float m_smoothEnv = 1.0f;
     float m_smoothCoeff = 0.0f;
+    float m_bpm = 120.0f;
 };

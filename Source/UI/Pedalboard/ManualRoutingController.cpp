@@ -20,7 +20,7 @@ void ManualRoutingController::mouseDown(juce::Point<float> pos)
     m_grabbedDstSlot = -1;
     m_dragSrcJackIdx = -1;
 
-    const int jackIdx = m_jackMap.findAt(pos, JackHitMap::kRadius);
+    const int jackIdx = m_jackMap.findAt(pos, m_jackMap.radius());
 
     if (jackIdx == -1)
         return;
@@ -133,7 +133,7 @@ void ManualRoutingController::mouseUp(juce::Point<float> pos,
     if (m_dragMode == DragMode::None)
         return;
 
-    const int dstJackIdx = m_jackMap.findAt(pos, JackHitMap::kRadius);
+    const int dstJackIdx = m_jackMap.findAt(pos, m_jackMap.radius());
     const bool wasGrabbing = (m_dragMode == DragMode::GrabCable);
 
     if (wasGrabbing && dstJackIdx != m_dragSrcJackIdx)
@@ -216,6 +216,55 @@ void ManualRoutingController::mouseUp(juce::Point<float> pos,
         commitRouting();
         rebuildCables();
     }
+}
+
+std::vector<int> ManualRoutingController::validTargetJackIndices() const
+{
+    std::vector<int> result;
+    if (m_dragMode == DragMode::None || m_dragSrcJackIdx < 0)
+        return result;
+
+    const bool movingOutput = (m_dragMode == DragMode::NewCable)
+        ? !m_jackMap.get(m_dragSrcJackIdx).isInput
+        : m_grabbingSrcEnd;
+
+    int movingEndPedal = -1;
+    int anchoredPedal = -1;
+    if (m_dragMode == DragMode::NewCable)
+    {
+        movingEndPedal = m_jackMap.get(m_dragSrcJackIdx).pedalIdx;
+    }
+    else
+    {
+        movingEndPedal = m_grabbingSrcEnd ? m_grabbedSrcSlot : m_grabbedDstSlot;
+        anchoredPedal = m_grabbingSrcEnd ? m_grabbedDstSlot : m_grabbedSrcSlot;
+    }
+
+    const auto validPedal = [&](int pedal)
+    {
+        if (pedal < 0 || pedal >= PedalSlotCount)
+            return false;
+        if (pedal == movingEndPedal || pedal == anchoredPedal)
+            return false;
+        if (movingOutput && m_connectionModel.hasDawIn(static_cast<uint8_t>(pedal)))
+            return false;
+        if (!movingOutput && m_connectionModel.hasDawOut(static_cast<uint8_t>(pedal)))
+            return false;
+        return true;
+    };
+
+    for (int p = 0; p < PedalSlotCount; ++p)
+    {
+        if (!validPedal(p))
+            continue;
+        result.push_back(p * 2 + (movingOutput ? 0 : 1));
+    }
+
+    if (m_dragMode == DragMode::NewCable && m_jackMap.get(m_dragSrcJackIdx).pedalIdx >= 0)
+        result.push_back(movingOutput ? JackHitMap::kJackCount - 1
+                                      : JackHitMap::kJackCount - 2);
+
+    return result;
 }
 
 void ManualRoutingController::removeGrabbedEdge()

@@ -1,5 +1,6 @@
 #include "State/ConfigManager.h"
 #include "Dsp/DspEffectFactory.h"
+#include "State/PedalDefinition.h"
 
 ConfigManager::ConfigManager(UnifiedPedalProcessor& dsp)
     : m_dsp(dsp)
@@ -163,6 +164,15 @@ void ConfigManager::loadPedalConfiguration(PedalAssetPayload* config)
 
     for (auto& row : config->paramPtrs)
         row.fill(nullptr);
+    for (auto& row : config->snapSteps)
+        row.fill(0);
+    for (size_t i = 0; i < config->routingSlotOrder.size() && i < config->activeRoutingChain.size(); ++i)
+    {
+        const auto type = config->activeRoutingChain[i];
+        for (int k = 0; k < KnobsPerPedal; ++k)
+            config->snapSteps[i][static_cast<size_t>(k)] =
+                static_cast<uint8_t>(PedalDefinitions::snapSteps(type, k));
+    }
     for (auto& p : config->parameters)
     {
         auto reg = p.targetDspNodeRegister;
@@ -309,4 +319,5 @@ void ConfigManager::setPlayHeadPosition(float bpm, double ppq, bool playing)
     m_playHeadBpm.store(bpm, std::memory_order_release);
     m_playHeadPpq.store(ppq, std::memory_order_release);
     m_playHeadPlaying.store(playing, std::memory_order_release);
+    m_dsp.setTransport(bpm, ppq, playing);
 }

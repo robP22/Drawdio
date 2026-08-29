@@ -117,11 +117,12 @@ bool StateSerializer::deserialize(const uint8_t* data, size_t sizeInBytes, Seria
 
     // Pedal slots
     const int layoutOffset = 4 + TotalCells;
-    constexpr auto maxPedalType = static_cast<uint8_t>(DspModuleType::ANALOG_OCTAVER);
+    constexpr auto maxPedalType = static_cast<uint8_t>(DspModuleType::RESERVED_REMOVED_OCTAVER);
     for (int i = 0; i < PedalSlotCount; ++i)
     {
         uint8_t raw = data[layoutOffset + i];
-        if (raw > maxPedalType)
+        if (raw > maxPedalType ||
+            raw == static_cast<uint8_t>(DspModuleType::RESERVED_REMOVED_OCTAVER))
             raw = 0;
         outState.pedalSlots[i] = static_cast<DspModuleType>(raw);
     }

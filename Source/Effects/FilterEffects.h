@@ -3,24 +3,25 @@
 #include "Dsp/DelayPrimitives.h"
 #include "Effects/DspEffect.h"
 
-class TimeDomainFreezeEffect : public DspEffect
+class SpectralFreezeEffect : public DspEffect
 {
 public:
-    TimeDomainFreezeEffect() : DspEffect(0) {}
+    SpectralFreezeEffect() : DspEffect(0) {}
     void prepare(double sampleRate, int numChannels) override;
     void reset() override;
     void processSample(float** b, int c, int s, float effectParam) override;
     void processBlock(float** b, int c, int n, const float* params) override;
+    bool hasActiveTail() const override { return true; }
+    double getTailLength() const override { return 2.0; }
 
 private:
     struct FreezeChannel {
         std::vector<float> buf;
+        std::vector<float> freezeBuf;
         size_t writePtr = 0;
         float readPos = 0.0f;
         size_t freezeLen = 0;
         bool wasFrozen = false;
-        float xfadePos = 32.0f;
-        float oldReadPos = 0.0f;
         float entryXfadePos = 32.0f;
         float exitXfadePos = 32.0f;
         float exitXfadeFrom = 0.0f;
@@ -29,9 +30,10 @@ private:
     std::vector<FreezeChannel> m_channels;
 };
 
-class DynamicResonantFilter : public DspEffect
+class FormantShifterEffect : public DspEffect
 {
 public:
+    FormantShifterEffect() : DspEffect(0) {}
     void prepare(double sampleRate, int numChannels) override;
     void reset() override;
     void processSample(float** b, int c, int s, float effectParam) override;
@@ -48,6 +50,7 @@ private:
 class MultiModeFilterEffect : public DspEffect
 {
 public:
+    MultiModeFilterEffect() : DspEffect(1) {}
     void prepare(double sampleRate, int numChannels) override;
     void reset() override;
     void processSample(float** b, int c, int s, float effectParam) override;

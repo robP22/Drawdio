@@ -1,5 +1,6 @@
 #include "ColorPalette.h"
 #include "GridLayout.h"
+#include "UI/EditorLayout.h"
 
 
 namespace {
@@ -10,10 +11,20 @@ static void drawTrash(juce::Graphics& g, juce::Rectangle<float> r)
     float s = std::min(r.getWidth(), r.getHeight()) * 0.5f;
 
     juce::Path p;
-    p.addRectangle(cx - s * 0.28f, cy - s * 0.10f, s * 0.56f, s * 0.62f);
-    p.addRectangle(cx - s * 0.38f, cy - s * 0.28f, s * 0.76f, s * 0.16f);
-    p.addRectangle(cx - s * 0.10f, cy - s * 0.48f, s * 0.20f, s * 0.22f);
+    p.addRoundedRectangle(cx - s * 0.28f, cy - s * 0.08f, s * 0.56f, s * 0.60f, s * 0.04f);
+    p.addRoundedRectangle(cx - s * 0.40f, cy - s * 0.27f, s * 0.80f, s * 0.15f, s * 0.04f);
+    p.addRoundedRectangle(cx - s * 0.11f, cy - s * 0.46f, s * 0.22f, s * 0.22f, s * 0.03f);
     g.fillPath(p);
+
+    g.setColour(juce::Colours::black.withAlpha(0.35f));
+    g.drawLine(cx - s * 0.13f, cy - s * 0.01f, cx - s * 0.13f, cy + s * 0.40f, s * 0.06f);
+    g.drawLine(cx, cy - s * 0.01f, cx, cy + s * 0.40f, s * 0.06f);
+    g.drawLine(cx + s * 0.13f, cy - s * 0.01f, cx + s * 0.13f, cy + s * 0.40f, s * 0.06f);
+}
+
+static juce::Point<float> juceArcPoint(float cx, float cy, float radius, float angle)
+{
+    return { cx + radius * std::sin(angle), cy - radius * std::cos(angle) };
 }
 
 static void drawUndoArrow(juce::Graphics& g, juce::Rectangle<float> r)
@@ -24,15 +35,14 @@ static void drawUndoArrow(juce::Graphics& g, juce::Rectangle<float> r)
 
     juce::Path arc;
     arc.addCentredArc(cx, cy, arcR, arcR, 0.0f,
-                      juce::degreesToRadians(210.0f), juce::degreesToRadians(390.0f), true);
+                      juce::degreesToRadians(270.0f), juce::degreesToRadians(450.0f), true);
     g.strokePath(arc, juce::PathStrokeType(s * 0.30f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
 
-    float hx = cx + arcR * std::cos(juce::degreesToRadians(210.0f));
-    float hy = cy + arcR * std::sin(juce::degreesToRadians(210.0f));
+    const auto endpoint = juceArcPoint(cx, cy, arcR, juce::degreesToRadians(270.0f));
     juce::Path tip;
-    tip.addTriangle(hx, hy,
-                    hx + s * 0.26f, hy - s * 0.20f,
-                    hx + s * 0.26f, hy + s * 0.20f);
+    tip.addTriangle(endpoint.x - s * 0.30f, endpoint.y,
+                    endpoint.x + s * 0.08f, endpoint.y - s * 0.22f,
+                    endpoint.x + s * 0.08f, endpoint.y + s * 0.22f);
     g.fillPath(tip);
 }
 
@@ -44,19 +54,18 @@ static void drawRedoArrow(juce::Graphics& g, juce::Rectangle<float> r)
 
     juce::Path arc;
     arc.addCentredArc(cx, cy, arcR, arcR, 0.0f,
-                      juce::degreesToRadians(150.0f), juce::degreesToRadians(330.0f), true);
+                      juce::degreesToRadians(90.0f), juce::degreesToRadians(-90.0f), true);
     g.strokePath(arc, juce::PathStrokeType(s * 0.30f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
 
-    float hx = cx + arcR * std::cos(juce::degreesToRadians(330.0f));
-    float hy = cy + arcR * std::sin(juce::degreesToRadians(330.0f));
+    const auto endpoint = juceArcPoint(cx, cy, arcR, juce::degreesToRadians(90.0f));
     juce::Path tip;
-    tip.addTriangle(hx, hy,
-                    hx - s * 0.26f, hy - s * 0.20f,
-                    hx - s * 0.26f, hy + s * 0.20f);
+    tip.addTriangle(endpoint.x + s * 0.30f, endpoint.y,
+                    endpoint.x - s * 0.08f, endpoint.y - s * 0.22f,
+                    endpoint.x - s * 0.08f, endpoint.y + s * 0.22f);
     g.fillPath(tip);
 }
 
-static void drawBrushCircle(juce::Graphics& g, juce::Rectangle<float> r, int sizeIndex)
+static void drawBrushCircle(juce::Graphics& g, juce::Rectangle<float> r, float brushRadius)
 {
     float cx = r.getCentreX(), cy = r.getCentreY();
     float s = std::min(r.getWidth(), r.getHeight()) * 0.5f;
@@ -65,7 +74,8 @@ static void drawBrushCircle(juce::Graphics& g, juce::Rectangle<float> r, int siz
     ring.addEllipse(cx - s * 0.36f, cy - s * 0.36f, s * 0.72f, s * 0.72f);
     g.strokePath(ring, juce::PathStrokeType(s * 0.10f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
 
-    float dotR = s * (0.12f + 0.04f * static_cast<float>(sizeIndex));
+    const float normalizedRadius = juce::jlimit(0.0f, 1.0f, brushRadius / 4.0f);
+    const float dotR = s * (0.10f + 0.28f * normalizedRadius);
     g.fillEllipse(cx - dotR, cy - dotR, dotR * 2.0f, dotR * 2.0f);
 }
 
@@ -75,19 +85,17 @@ static void drawEraser(juce::Graphics& g, juce::Rectangle<float> r)
     float s = std::min(r.getWidth(), r.getHeight()) * 0.5f;
 
     juce::Path p;
-    p.startNewSubPath(cx - s * 0.34f, cy - s * 0.20f);
-    p.lineTo(cx - s * 0.10f, cy - s * 0.40f);
-    p.lineTo(cx + s * 0.34f, cy - s * 0.40f);
-    p.lineTo(cx + s * 0.34f, cy + s * 0.26f);
-    p.lineTo(cx + s * 0.10f, cy + s * 0.40f);
-    p.lineTo(cx - s * 0.34f, cy + s * 0.26f);
+    p.startNewSubPath(cx - s * 0.38f, cy - s * 0.12f);
+    p.lineTo(cx + s * 0.10f, cy - s * 0.42f);
+    p.lineTo(cx + s * 0.40f, cy + s * 0.15f);
+    p.lineTo(cx - s * 0.08f, cy + s * 0.43f);
     p.closeSubPath();
     g.fillPath(p);
 
-    g.setColour(juce::Colours::white.withAlpha(0.45f));
-    g.drawLine(cx - s * 0.28f, cy + s * 0.32f,
-               cx + s * 0.28f, cy + s * 0.32f,
-               s * 0.08f);
+    g.setColour(juce::Colours::black.withAlpha(0.40f));
+    g.drawLine(cx - s * 0.27f, cy + s * 0.20f,
+               cx + s * 0.22f, cy - s * 0.10f,
+               s * 0.09f);
 }
 
 static void drawFillBucket(juce::Graphics& g, juce::Rectangle<float> r)
@@ -96,17 +104,21 @@ static void drawFillBucket(juce::Graphics& g, juce::Rectangle<float> r)
     float s = std::min(r.getWidth(), r.getHeight()) * 0.5f;
 
     juce::Path p;
-    p.startNewSubPath(cx - s * 0.26f, cy - s * 0.05f);
-    p.lineTo(cx + s * 0.26f, cy - s * 0.05f);
-    p.lineTo(cx + s * 0.40f, cy + s * 0.42f);
-    p.lineTo(cx - s * 0.40f, cy + s * 0.42f);
+    p.startNewSubPath(cx - s * 0.36f, cy - s * 0.10f);
+    p.lineTo(cx + s * 0.12f, cy - s * 0.39f);
+    p.lineTo(cx + s * 0.40f, cy + s * 0.17f);
+    p.lineTo(cx - s * 0.08f, cy + s * 0.43f);
     p.closeSubPath();
     g.fillPath(p);
 
-    juce::Path handle;
-    handle.addArc(cx - s * 0.16f, cy - s * 0.44f, s * 0.32f, s * 0.36f,
-                  juce::degreesToRadians(200.0f), juce::degreesToRadians(340.0f), true);
-    g.strokePath(handle, juce::PathStrokeType(s * 0.13f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+    g.setColour(juce::Colours::black.withAlpha(0.35f));
+    g.drawLine(cx - s * 0.29f, cy - s * 0.08f,
+               cx + s * 0.17f, cy - s * 0.35f,
+               s * 0.09f);
+
+    g.setColour(juce::Colours::white.withAlpha(0.80f));
+    g.fillEllipse(cx + s * 0.27f, cy - s * 0.10f, s * 0.10f, s * 0.10f);
+    g.fillEllipse(cx + s * 0.36f, cy + s * 0.03f, s * 0.07f, s * 0.07f);
 }
 
 static void drawReboundArrow(juce::Graphics& g, juce::Rectangle<float> r)
@@ -114,25 +126,32 @@ static void drawReboundArrow(juce::Graphics& g, juce::Rectangle<float> r)
     float cx = r.getCentreX(), cy = r.getCentreY();
     float s = std::min(r.getWidth(), r.getHeight()) * 0.5f;
 
-    g.drawLine(cx + s * 0.34f, cy - s * 0.38f,
-               cx + s * 0.34f, cy + s * 0.38f,
-               s * 0.12f);
+    g.drawLine(cx - s * 0.36f, cy - s * 0.40f,
+               cx - s * 0.36f, cy + s * 0.40f,
+               s * 0.10f);
+    g.drawLine(cx + s * 0.36f, cy - s * 0.40f,
+               cx + s * 0.36f, cy + s * 0.40f,
+               s * 0.10f);
 
     juce::Path path;
-    path.startNewSubPath(cx - s * 0.32f, cy - s * 0.32f);
-    path.quadraticTo(cx, cy - s * 0.34f,
-                     cx + s * 0.32f, cy);
-    path.quadraticTo(cx, cy + s * 0.34f,
-                     cx - s * 0.32f, cy + s * 0.36f);
+    path.startNewSubPath(cx - s * 0.30f, cy - s * 0.28f);
+    path.quadraticTo(cx + s * 0.18f, cy - s * 0.20f,
+                     cx + s * 0.28f, cy);
+    path.quadraticTo(cx + s * 0.18f, cy + s * 0.20f,
+                     cx - s * 0.30f, cy + s * 0.28f);
     g.strokePath(path, juce::PathStrokeType(s * 0.14f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
 
-    float tipX = cx - s * 0.32f - s * 0.06f;
-    float tipY = cy + s * 0.36f;
-    juce::Path head;
-    head.addTriangle(tipX, tipY,
-                     tipX + s * 0.22f, tipY - s * 0.14f,
-                     tipX + s * 0.22f, tipY + s * 0.14f);
-    g.fillPath(head);
+    juce::Path upperHead;
+    upperHead.addTriangle(cx - s * 0.30f, cy - s * 0.28f,
+                          cx - s * 0.08f, cy - s * 0.40f,
+                          cx - s * 0.08f, cy - s * 0.16f);
+    g.fillPath(upperHead);
+
+    juce::Path lowerHead;
+    lowerHead.addTriangle(cx - s * 0.30f, cy + s * 0.28f,
+                          cx - s * 0.08f, cy + s * 0.16f,
+                          cx - s * 0.08f, cy + s * 0.40f);
+    g.fillPath(lowerHead);
 }
 
 }
@@ -156,6 +175,11 @@ ColorPalette::ColorPalette(const IResourceProvider& resources, const IThemeProvi
       }}
 {
     setBufferedToImage(true);
+
+    const auto& paletteTex = m_resources.getTexture(IResourceProvider::TextureId::ColorPaletteBody);
+    m_paletteTopRatio = EditorLayout::topOpaqueRatio(paletteTex);
+    m_paletteBottomRatio = EditorLayout::bottomOpaqueRatio(paletteTex);
+
     addAndMakeVisible(m_reboundButton);
     addAndMakeVisible(m_undoButton);
     addAndMakeVisible(m_redoButton);
@@ -163,6 +187,19 @@ ColorPalette::ColorPalette(const IResourceProvider& resources, const IThemeProvi
     addAndMakeVisible(m_sizeButton);
     addAndMakeVisible(m_eraserButton);
     addAndMakeVisible(m_clearButton);
+
+    const auto setButtonDescription = [](ArcButton& button, const char* description)
+    {
+        button.setName(description);
+        button.setTooltip(description);
+    };
+    setButtonDescription(m_reboundButton, "Rebound drawing");
+    setButtonDescription(m_undoButton, "Undo");
+    setButtonDescription(m_redoButton, "Redo");
+    setButtonDescription(m_fillButton, "Fill enclosed area");
+    setButtonDescription(m_sizeButton, "Brush size");
+    setButtonDescription(m_eraserButton, "Eraser");
+    setButtonDescription(m_clearButton, "Clear canvas");
 
     m_reboundButton.setDrawIcon(drawReboundArrow);
     m_reboundButton.setAccentColour(juce::Colour(0xFF8E44AD));
@@ -207,7 +244,7 @@ ColorPalette::ColorPalette(const IResourceProvider& resources, const IThemeProvi
     };
 
     m_sizeButton.setDrawIcon([this](juce::Graphics& g, juce::Rectangle<float> r) {
-        drawBrushCircle(g, r, m_currentBrushIndex);
+        drawBrushCircle(g, r, m_brushSizes[static_cast<size_t>(m_currentBrushIndex)]);
     });
     m_sizeButton.setAccentColour(juce::Colour(0xFFF39C12));
     m_sizeButton.onClick = [this]() { cycleBrushSize(); };
@@ -365,6 +402,13 @@ void ColorPalette::resized()
     const float paletteW = bounds.getWidth();
     const float paletteH = bounds.getHeight();
 
+    // The palette texture is drawn above the component's top edge so its
+    // centre lands exactly on the pixel canvas centre (parent coords).
+    m_imageVerticalShift = static_cast<float>(
+        juce::roundToInt(static_cast<float>(getY()) + paletteH * 0.5f - m_canvasCenterY));
+    m_contentCenterOffset = static_cast<float>(
+        juce::roundToInt(0.5f * paletteH * (m_paletteTopRatio - m_paletteBottomRatio)));
+
     const float blobMaxFromRatio = paletteH * GridLayout::BlobMaxSizeRatio;
     const float blobSizeFromRatio = paletteH * GridLayout::PaletteBlobSizeRatio;
     const float blobSize = juce::jmin(blobSizeFromRatio, blobMaxFromRatio);
@@ -477,6 +521,15 @@ void ColorPalette::mouseExit(const juce::MouseEvent&)
 void ColorPalette::setSelectedColor(uint8_t color)
 {
     m_selectedColor = color;
+    repaint();
+}
+
+void ColorPalette::setCanvasCenterY(float centerY)
+{
+    if (m_canvasCenterY == centerY)
+        return;
+    m_canvasCenterY = centerY;
+    resized();
     repaint();
 }
 
