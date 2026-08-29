@@ -6,6 +6,7 @@
 class WaveshaperEffect : public DspEffect
 {
 public:
+    WaveshaperEffect() : DspEffect(0) {}
     void prepare(double, int numChannels) override;
     void reset() override;
     void processSample(float** b, int c, int s, float effectParam) override;
@@ -18,6 +19,7 @@ private:
 class WavefolderEffect : public DspEffect
 {
 public:
+    WavefolderEffect() : DspEffect(0) {}
     void prepare(double, int numChannels) override;
     void reset() override;
     void processSample(float** b, int c, int s, float effectParam) override;
@@ -30,6 +32,7 @@ private:
 class CombResonatorEffect : public DspEffect
 {
 public:
+    CombResonatorEffect() : DspEffect(1) {}
     void prepare(double sampleRate, int numChannels) override;
     void reset() override;
     void processSample(float** b, int c, int s, float effectParam) override;

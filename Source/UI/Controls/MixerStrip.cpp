@@ -34,7 +34,7 @@ void MixerStrip::paint(juce::Graphics& g)
     const float labelH = h * GridLayout::Mixer::NameLabelHeightRatio;
 
     g.setColour(juce::Colours::white.withAlpha(0.6f));
-    g.setFont(juce::Font(juce::FontOptions(9.0f)));
+    g.setFont(juce::Font(juce::FontOptions(juce::jlimit(7.0f, 12.0f, h * 0.09f))));
     g.drawText(m_pedalName, bounds.withHeight(labelH),
                juce::Justification::centred, false);
 

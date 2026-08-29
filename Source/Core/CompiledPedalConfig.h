@@ -8,7 +8,8 @@
 #include "Core/DrawdioConstants.h"
 #include "Core/DspModuleType.h"
 #include "Core/ParameterTypes.h"
-#include "Effects/DspEffect.h"
+
+class DspEffect;
 
 struct PedalAssetPayload
 {
@@ -21,4 +22,7 @@ struct PedalAssetPayload
     // audio thread. Ownership travels with the config through the release queue.
     std::array<std::unique_ptr<DspEffect>, PedalSlotCount> effects;
     std::array<std::array<const float*, KnobsPerPedal>, PedalSlotCount> paramPtrs{};
+    // Per chain position, per knob: detent count (0 = no snap) for the final
+    // param value on the audio thread (covers linked + canvas automation).
+    std::array<std::array<uint8_t, KnobsPerPedal>, PedalSlotCount> snapSteps{};
 };

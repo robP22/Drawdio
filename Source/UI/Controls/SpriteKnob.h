@@ -30,14 +30,20 @@ public:
         auto bounds = getLocalBounds().toFloat();
         if (!m_sprite.isValid() || bounds.isEmpty()) return;
 
+        g.setImageResamplingQuality(juce::Graphics::highResamplingQuality);
+
+        const float deviceScale = g.getInternalContext().getPhysicalPixelScaleFactor();
+        const float diam = diamFor(bounds);
+        rebuildPrescaledCache(diam, deviceScale);
+        if (!m_prescaled.isValid() || m_prescaledSize <= 0) return;
+
         float norm = (m_value - m_min) / (m_max - m_min);
         constexpr float kMaxAngleDegrees = 150.0f;
         float angle = juce::degreesToRadians((norm - 0.5f) * kMaxAngleDegrees * 2.0f);
 
         float c = std::cos(angle);
         float s_ = std::sin(angle);
-        float diam = std::min(bounds.getWidth(), bounds.getHeight());
-        float scale = diam / static_cast<float>(m_sprite.getWidth());
+        float scale = diam / static_cast<float>(m_prescaledSize);
         float cx = bounds.getCentreX();
         float cy = bounds.getCentreY();
         float hw = diam * 0.5f;
@@ -47,7 +53,7 @@ public:
             scale * c,  -scale * s_,  cx - hw * c + hh * s_,
             scale * s_,  scale * c,   cy - hw * s_ - hh * c);
 
-        g.drawImageTransformed(m_sprite, t, false);
+        g.drawImageTransformed(m_prescaled, t, false);
 
         float innerR = diam * 0.48f;
         g.setColour(juce::Colours::white.withAlpha(0.75f));
@@ -90,7 +96,23 @@ public:
     void mouseUp(const juce::MouseEvent&) override { m_dragging = false; }
 
 private:
+    static float diamFor(const juce::Rectangle<float>& bounds)
+    {
+        return std::min(bounds.getWidth(), bounds.getHeight());
+    }
+
+    void rebuildPrescaledCache(float diam, float deviceScale)
+    {
+        if (diam <= 0.0f || deviceScale <= 0.0f) return;
+        const int targetPx = juce::jmax(1, juce::roundToInt(diam * deviceScale));
+        if (targetPx == m_prescaledSize && m_prescaled.isValid()) return;
+        m_prescaled = m_sprite.rescaled(targetPx, targetPx, juce::Graphics::highResamplingQuality);
+        m_prescaledSize = m_prescaled.isValid() ? targetPx : 0;
+    }
+
     const juce::Image& m_sprite;
+    juce::Image m_prescaled;
+    int m_prescaledSize = 0;
     float m_value, m_min, m_max;
     float m_dragStartVal = 0.0f;
     float m_dragStartY = 0.0f;

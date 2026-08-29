@@ -1,6 +1,7 @@
 #pragma once
 #include <JuceHeader.h>
 #include <functional>
+#include <vector>
 #include "Core/DrawdioConstants.h"
 #include "State/ManualConnectionModel.h"
 #include "JackHitMap.h"
@@ -20,9 +21,12 @@ public:
                  std::function<void()> rebuildCables);
 
     bool isDragging() const { return m_dragMode != DragMode::None; }
+    bool isNewCableDrag() const { return m_dragMode == DragMode::NewCable; }
+    bool isGrabDrag() const { return m_dragMode == DragMode::GrabCable; }
     int dragSrcJackIdx() const { return m_dragSrcJackIdx; }
     juce::Point<float> dragStartPos() const { return m_dragStartPos; }
     juce::Point<float> dragCurrentPos() const { return m_dragCurrentPos; }
+    std::vector<int> validTargetJackIndices() const;
 
     int grabbedEdgeIndex() const { return m_grabbedEdgeIndex; }
     bool grabbingSrcEnd() const { return m_grabbingSrcEnd; }

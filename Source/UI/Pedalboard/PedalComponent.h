@@ -28,6 +28,10 @@ public:
     void mouseMove(const juce::MouseEvent&) override;
 
     void setKnobValue(int knobIdx, float value);
+    float snapValue(int knobIdx, float value) const
+    {
+        return PedalDefinitions::snapValue(m_currentType, knobIdx, value);
+    }
     void syncFromProcessor();
     juce::Rectangle<int> getBounds() const override;
     void setBounds(juce::Rectangle<int>) override;
@@ -37,6 +41,7 @@ public:
 private:
     void showTypePopup();
     void updateKnobBounds();
+    void applyKnobLayout();
     void onKnobDragStart(int knobIdx, float value);
     void onKnobValueChanged(int knobIdx, float value);
     void onKnobRightClick(int knobIdx);
@@ -50,8 +55,10 @@ private:
     int m_slotIndex;
     DspModuleType m_currentType;
     const PedalDefinition* m_definition = nullptr;
-    std::array<juce::Rectangle<float>, kKnobCount> m_knobBounds;
+    std::array<juce::Rectangle<float>, kKnobCount> m_knobBounds{};
     std::array<std::unique_ptr<SpriteKnob>, kKnobCount> m_knobs;
+    juce::Image m_ledScaled[2];
+    int m_ledScaledSize = 0;
     float m_knobDragStartValues[kKnobCount]{};
     juce::Font m_lcdFont;
     juce::Font m_labelFont;

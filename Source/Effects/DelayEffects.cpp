@@ -4,84 +4,7 @@
 #include <algorithm>
 #include <cmath>
 
-void MicroPitchChorusEffect::prepare(double sampleRate, int numChannels)
-{
-    DspEffect::prepare(sampleRate, numChannels);
-    m_channels.resize(static_cast<size_t>(numChannels));
-    for (auto& ch : m_channels)
-    {
-        ch.buf.assign(static_cast<size_t>(sampleRate * 0.5), 0.0f);
-        ch.writePtr = 0;
-        ch.readPos1 = 0.0f;
-        ch.readPos2 = 0.0f;
-        ch.lfoPhase = 0.0f;
-    }
-}
-
-void MicroPitchChorusEffect::reset()
-{
-    for (auto& ch : m_channels)
-    {
-        std::fill(ch.buf.begin(), ch.buf.end(), 0.0f);
-        ch.writePtr = 0;
-        ch.readPos1 = 0.0f;
-        ch.readPos2 = 0.0f;
-        ch.lfoPhase = 0.0f;
-    }
-}
-
-void MicroPitchChorusEffect::processSample(float** b, int c, int s, float effectParam)
-{
-    float detuneCents = effectParam * 50.0f;
-    float pitch1 = 1.0f + detuneCents / 1200.0f;
-    float pitch2 = 1.0f - detuneCents / 1200.0f;
-
-    int chCount = std::min(c, static_cast<int>(m_channels.size()));
-    for (int ch = 0; ch < chCount; ++ch)
-    {
-        auto& mc = m_channels[static_cast<size_t>(ch)];
-        size_t bufSize = mc.buf.size();
-        if (bufSize == 0) continue;
-
-        float in = b[ch][s];
-        if (!std::isfinite(in)) in = 0.0f;
-        mc.buf[mc.writePtr] = in;
-
-        mc.lfoPhase += m_lfoRate / static_cast<float>(m_sampleRate);
-        if (mc.lfoPhase >= 1.0f) mc.lfoPhase -= 1.0f;
-        float lfo1 = std::sin(mc.lfoPhase * 2.0f * 3.14159265f);
-        float lfo2 = std::sin((mc.lfoPhase + 0.5f + static_cast<float>(ch) * 0.25f) * 2.0f * 3.14159265f);
-
-        static constexpr float kLfoDepthSamples = 0.002f;
-        float mod1 = lfo1 * kLfoDepthSamples * static_cast<float>(m_sampleRate);
-        float mod2 = lfo2 * kLfoDepthSamples * static_cast<float>(m_sampleRate);
-
-        float depthMod = m_depth * 2.0f;
-        mc.readPos1 += pitch1 + mod1 * depthMod;
-        if (mc.readPos1 >= static_cast<float>(bufSize))
-            mc.readPos1 -= static_cast<float>(bufSize);
-        else if (mc.readPos1 < 0.0f)
-            mc.readPos1 += static_cast<float>(bufSize);
-
-        mc.readPos2 += pitch2 + mod2 * depthMod;
-        if (mc.readPos2 >= static_cast<float>(bufSize))
-            mc.readPos2 -= static_cast<float>(bufSize);
-        else if (mc.readPos2 < 0.0f)
-            mc.readPos2 += static_cast<float>(bufSize);
-
-        auto readTap = [&](float pos) -> float {
-            return interpolateDelayRead(mc.buf, pos);
-        };
-
-        float tap1 = readTap(mc.readPos1);
-        float tap2 = readTap(mc.readPos2);
-        b[ch][s] = tap1 * 0.35f + tap2 * 0.35f;
-
-        mc.writePtr = (mc.writePtr + 1) % bufSize;
-    }
-}
-
-void SimpleDelayEffect::processBlock(float** b, int c, int n, const float* params)
+void DelayEffect::processBlock(float** b, int c, int n, const float* params)
 {
     juce::ScopedNoDenormals noDenorm;
     float delaySec = 0.1f + params[1] * 0.9f;
@@ -90,6 +13,11 @@ void SimpleDelayEffect::processBlock(float** b, int c, int n, const float* param
     float dampCoeff = 1.0f - std::exp(-2.0f * 3.14159265f * (500.0f + damp * 15000.0f) / static_cast<float>(m_sampleRate));
 
     float targetDelay = static_cast<float>(m_sampleRate) * delaySec;
+    if (m_firstBlock)
+    {
+        m_smoothedDelaySamples = targetDelay;
+        m_firstBlock = false;
+    }
     float delayStart = m_smoothedDelaySamples;
     m_smoothedDelaySamples += (targetDelay - m_smoothedDelaySamples) * 0.05f;
     float delayEnd = m_smoothedDelaySamples;
@@ -127,32 +55,25 @@ void SimpleDelayEffect::processBlock(float** b, int c, int n, const float* param
     m_hasTail = (peak > 1e-8f);
 }
 
-void MicroPitchChorusEffect::processBlock(float** b, int c, int n, const float* params)
-{
-    juce::ScopedNoDenormals noDenorm;
-    m_depth = params[1];
-    m_lfoRate = 0.05f + params[3] * 2.95f;
-    for (int s = 0; s < n; ++s)
-        processSample(b, c, s, params[2]);
-}
-
-void SimpleDelayEffect::prepare(double sampleRate, int numChannels)
+void DelayEffect::prepare(double sampleRate, int numChannels)
 {
     DspEffect::prepare(sampleRate, numChannels);
     m_delays.resize(static_cast<size_t>(numChannels));
     for (auto& d : m_delays)
         prepareSimpleDelay(d, sampleRate, 2.0);
     m_fbLpState.assign(static_cast<size_t>(numChannels), 0.0f);
+    m_smoothedDelaySamples = static_cast<float>(sampleRate) * 0.55f;
 }
 
-void SimpleDelayEffect::reset()
+void DelayEffect::reset()
 {
     for (auto& d : m_delays)
         resetSimpleDelay(d);
     std::fill(m_fbLpState.begin(), m_fbLpState.end(), 0.0f);
+    m_firstBlock = true;
 }
 
-void SimpleDelayEffect::processSample(float** b, int c, int s, float effectParam)
+void DelayEffect::processSample(float** b, int c, int s, float effectParam)
 {
     juce::ScopedNoDenormals noDenorm;
     float delaySec = 0.1f + effectParam * 0.9f;
@@ -174,112 +95,20 @@ void SimpleDelayEffect::processSample(float** b, int c, int s, float effectParam
         if (readPos >= static_cast<float>(bufSize)) readPos -= static_cast<float>(bufSize);
         float delayed = interpolateDelayRead(d.buf, readPos);
         float& fbLp = m_fbLpState[static_cast<size_t>(ch)];
-            fbLp = fbLp + 0.2f * (delayed - fbLp);
-            d.buf[d.writePtr] = in + std::tanh(fbLp * feedback);
-            b[ch][s] = delayed;
+        fbLp = fbLp + 0.2f * (delayed - fbLp);
+        d.buf[d.writePtr] = in + std::tanh(fbLp * feedback);
+        b[ch][s] = delayed;
         d.writePtr = (d.writePtr + 1) % bufSize;
     }
 }
 
-void TapeStopEchoEffect::processBlock(float** b, int c, int n, const float* params)
+void GranularDelayEffect::processBlock(float** b, int c, int n, const float* params)
 {
     juce::ScopedNoDenormals noDenorm;
-    float peak = 0.0f;
-    for (int s = 0; s < n; ++s)
-    {
-        processSample(b, c, s, params[1]);
-        for (int ch = 0; ch < c; ++ch)
-            peak = std::max(peak, std::abs(b[ch][s]));
-    }
-    m_hasTail = (peak > 1e-8f);
-}
-
-void TapeStopEchoEffect::prepare(double sampleRate, int numChannels)
-{
-    DspEffect::prepare(sampleRate, numChannels);
-    m_channels.resize(static_cast<size_t>(numChannels));
-    for (auto& ch : m_channels)
-    {
-        ch.buf.assign(static_cast<size_t>(sampleRate * 2.0), 0.0f);
-        ch.writePtr = 0;
-        ch.readSpeed = 1.0f;
-        ch.readPos = static_cast<float>(ch.writePtr);
-        ch.wasBraking = false;
-    }
-}
-
-void TapeStopEchoEffect::reset()
-{
-    for (auto& ch : m_channels)
-    {
-        std::fill(ch.buf.begin(), ch.buf.end(), 0.0f);
-        ch.writePtr = 0;
-        ch.readPos = 0.0f;
-        ch.readSpeed = 1.0f;
-        ch.wasBraking = false;
-    }
-}
-
-void TapeStopEchoEffect::processSample(float** b, int c, int s, float effectParam)
-{
-    float braking = effectParam;
-    float brakeFactor = 0.98f - braking * 0.05f;
-    float predelaySamps = m_predelayMs * 0.001f * static_cast<float>(m_sampleRate);
-
-    int chCount = std::min(c, static_cast<int>(m_channels.size()));
+    const float position = std::max(0.0f, std::min(1.0f, params[3]));
+    const int chCount = std::min(c, static_cast<int>(m_states.size()));
     for (int ch = 0; ch < chCount; ++ch)
-    {
-        auto& chState = m_channels[static_cast<size_t>(ch)];
-        size_t bufSize = chState.buf.size();
-        if (bufSize == 0) continue;
-
-        float in = b[ch][s];
-        if (!std::isfinite(in)) in = 0.0f;
-        chState.buf[chState.writePtr] = std::tanh(in * 1.3f) * 0.77f;
-
-        bool isBraking = (braking > 0.01f);
-        if (isBraking && !chState.wasBraking)
-        {
-            chState.wasBraking = true;
-            chState.brakeXfadeOldOutput = b[ch][s];
-            chState.brakeXfadePos = 0;
-            float pos = static_cast<float>(chState.writePtr) - predelaySamps;
-            if (pos < 0.0f) pos += static_cast<float>(bufSize);
-            chState.readPos = pos;
-        }
-        else if (!isBraking && chState.wasBraking)
-        {
-            chState.wasBraking = false;
-            chState.brakeXfadeOldOutput = b[ch][s];
-            chState.brakeXfadePos = 0;
-            chState.readSpeed = 1.0f;
-            chState.readPos = static_cast<float>(chState.writePtr);
-        }
-
-        if (isBraking)
-            chState.readSpeed = std::fmax(0.001f, chState.readSpeed * brakeFactor + 0.001f);
-        else
-            chState.readSpeed = 1.0f;
-
-        chState.readPos += chState.readSpeed;
-        if (chState.readPos >= static_cast<float>(bufSize))
-            chState.readPos -= static_cast<float>(bufSize);
-
-        float modReadPos = chState.readPos;
-        if (modReadPos >= static_cast<float>(bufSize))
-            modReadPos -= static_cast<float>(bufSize);
-        else if (modReadPos < 0.0f)
-            modReadPos += static_cast<float>(bufSize);
-
-        float newOut = interpolateDelayRead(chState.buf, modReadPos);
-        if (chState.brakeXfadePos < 32)
-        {
-            float w = static_cast<float>(chState.brakeXfadePos) / 32.0f;
-            newOut = chState.brakeXfadeOldOutput * (1.0f - w) + newOut * w;
-            chState.brakeXfadePos++;
-        }
-        b[ch][s] = newOut;
-
-        chState.writePtr = (chState.writePtr + 1) % bufSize;
-    }
+        for (int s = 0; s < n; ++s)
+            b[ch][s] = processGranularSample(b[ch][s], m_states[static_cast<size_t>(ch)],
+                                             1.0f, m_sampleRate, m_grainDurationSec, position);
 }

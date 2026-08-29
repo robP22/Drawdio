@@ -1,5 +1,5 @@
 #include <JuceHeader.h>
-#include "Effects/ConvolutionSpaceEffect.h"
+#include "Effects/ConvolutionReverbEffect.h"
 #include <algorithm>
 #include <cmath>
 #include <random>
@@ -20,8 +20,8 @@ static std::vector<float> generateSyntheticIR(double sampleRate, float decaySec)
 {
     size_t irLen = static_cast<size_t>(sampleRate * decaySec);
     if (irLen < 16) irLen = 16;
-    if (irLen > static_cast<size_t>(ConvolutionSpaceEffect::kFftSize / 2))
-        irLen = static_cast<size_t>(ConvolutionSpaceEffect::kFftSize / 2);
+    if (irLen > static_cast<size_t>(ConvolutionReverbEffect::kFftSize / 2))
+        irLen = static_cast<size_t>(ConvolutionReverbEffect::kFftSize / 2);
 
     std::vector<float> ir(irLen, 0.0f);
     std::mt19937 rng(42);
@@ -44,10 +44,10 @@ static std::vector<float> generateSyntheticIR(double sampleRate, float decaySec)
     return ir;
 }
 
-ConvolutionSpaceEffect::ConvolutionSpaceEffect() : DspEffect(0) {}
-ConvolutionSpaceEffect::~ConvolutionSpaceEffect() = default;
+ConvolutionReverbEffect::ConvolutionReverbEffect() : DspEffect(0) {}
+ConvolutionReverbEffect::~ConvolutionReverbEffect() = default;
 
-void ConvolutionSpaceEffect::prepare(double sampleRate, int numChannels)
+void ConvolutionReverbEffect::prepare(double sampleRate, int numChannels)
 {
     DspEffect::prepare(sampleRate, numChannels);
     m_channels.resize(static_cast<size_t>(numChannels));
@@ -71,7 +71,7 @@ void ConvolutionSpaceEffect::prepare(double sampleRate, int numChannels)
     }
 }
 
-void ConvolutionSpaceEffect::reset()
+void ConvolutionReverbEffect::reset()
 {
     for (auto& ch : m_channels)
     {
@@ -84,7 +84,7 @@ void ConvolutionSpaceEffect::reset()
     }
 }
 
-void ConvolutionSpaceEffect::precomputeDampGrid(size_t chIdx)
+void ConvolutionReverbEffect::precomputeDampGrid(size_t chIdx)
 {
     auto& fc = *m_channels[chIdx];
 
@@ -106,7 +106,7 @@ void ConvolutionSpaceEffect::precomputeDampGrid(size_t chIdx)
     }
 }
 
-void ConvolutionSpaceEffect::processSubBlock(float** b, int offset, int subN, size_t chIdx, int gridIdx)
+void ConvolutionReverbEffect::processSubBlock(float** b, int offset, int subN, size_t chIdx, int gridIdx)
 {
     auto& fc = *m_channels[chIdx];
     size_t irLen = fc.irLen;
@@ -160,7 +160,7 @@ void ConvolutionSpaceEffect::processSubBlock(float** b, int offset, int subN, si
     }
 }
 
-void ConvolutionSpaceEffect::processBlockBruteForce(float** b, int c, int n, float damp)
+void ConvolutionReverbEffect::processBlockBruteForce(float** b, int c, int n, float damp)
 {
     for (int ch = 0; ch < c; ++ch)
     {
@@ -193,7 +193,7 @@ void ConvolutionSpaceEffect::processBlockBruteForce(float** b, int c, int n, flo
     }
 }
 
-void ConvolutionSpaceEffect::processSample(float** b, int c, int s, float effectParam)
+void ConvolutionReverbEffect::processSample(float** b, int c, int s, float effectParam)
 {
     juce::ScopedNoDenormals noDenorm;
     float damp = effectParam;
@@ -220,7 +220,7 @@ void ConvolutionSpaceEffect::processSample(float** b, int c, int s, float effect
     }
 }
 
-void ConvolutionSpaceEffect::processBlock(float** b, int c, int n, const float* params)
+void ConvolutionReverbEffect::processBlock(float** b, int c, int n, const float* params)
 {
     juce::ScopedNoDenormals noDenorm;
     float damp = params[3];

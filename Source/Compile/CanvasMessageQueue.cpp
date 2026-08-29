@@ -13,7 +13,12 @@ void CanvasMessageQueue::pushSnapshot(const uint8_t* gridData) noexcept
     int nextWrite = (writeIdx + 1) % QueueCapacity;
 
     if (nextWrite == m_readIndex.load(std::memory_order_acquire))
+    {
+        const int newestIdx = (writeIdx + QueueCapacity - 1) % QueueCapacity;
+        std::memcpy(m_queue[newestIdx].gridSnapshot.data(), gridData, PayloadSize);
+        m_writeIndex.store(writeIdx, std::memory_order_release);
         return;
+    }
 
     std::memcpy(m_queue[writeIdx].gridSnapshot.data(), gridData, PayloadSize);
 

@@ -5,6 +5,7 @@
 
 #include <array>
 #include <limits>
+#include <vector>
 
 namespace
 {
@@ -126,15 +127,6 @@ DrawdioProcessorEditor::DrawdioProcessorEditor(DrawdioProcessor& p)
     setSize(GridLayout::DesignResolution::Width, GridLayout::DesignResolution::Height);
     startTimerHz(20);
 
-    {
-        const auto& pedalImg = m_resourceManager.getImage(ResourceManager::ImageId::PedalboardSprite);
-        const auto& paletteImg = m_resourceManager.getImage(ResourceManager::ImageId::ColorPaletteBody);
-        m_pedalTopRatio = EditorLayout::topOpaqueRatio(pedalImg);
-        m_pedalBottomRatio = EditorLayout::bottomOpaqueRatio(pedalImg);
-        m_paletteTopRatio = EditorLayout::topOpaqueRatio(paletteImg);
-        m_paletteBottomRatio = EditorLayout::bottomOpaqueRatio(paletteImg);
-    }
-
     juce::MessageManager::callAsync([self = juce::Component::SafePointer<DrawdioProcessorEditor>(this)]()
     {
         if (self != nullptr)
@@ -170,17 +162,7 @@ void DrawdioProcessorEditor::resized()
     m_pedalboardBackground.setBounds(pedalboardArea);
     m_pedalboardGrid.setBounds(pedalboardArea);
 
-    const auto& pedalImg = m_resourceManager.getImage(ResourceManager::ImageId::PedalboardSprite);
-    const auto& paletteImg = m_resourceManager.getImage(ResourceManager::ImageId::ColorPaletteBody);
-    int pedalH = pedalboardArea.getHeight();
-    float pedalTopR = m_pedalTopRatio;
-    float pedalBotR = m_pedalBottomRatio;
-    float paletteTopR = m_paletteTopRatio;
-    float paletteBotR = m_paletteBottomRatio;
     int paletteH = juce::roundToInt(canvasArea.getHeight() * GridLayout::PaletteHeightRatio);
-    int canvasTopPx = juce::roundToInt(pedalH * pedalTopR);
-    int paletteShiftPx = juce::roundToInt(pedalH * pedalBotR) - juce::roundToInt(paletteH * paletteBotR);
-    int paletteCenterPx = juce::roundToInt(0.5f * paletteH * (paletteTopR - paletteBotR));
 
     auto paletteBounds = canvasArea.withTrimmedTop(canvasArea.getHeight() - paletteH);
     auto pxCanvasBounds = canvasArea.withTrimmedBottom(paletteH);
@@ -188,18 +170,9 @@ void DrawdioProcessorEditor::resized()
     const int squareSize = pxCanvasBounds.getHeight();
     const auto pixelCanvasBounds = pxCanvasBounds.withSizeKeepingCentre(squareSize, squareSize);
     m_pixelCanvas.setBounds(pixelCanvasBounds);
-    m_pixelCanvas.setCanvasTopOffset(canvasTopPx);
     m_palette.setBounds(paletteBounds);
-    m_palette.setImageBottomShift(static_cast<float>(paletteShiftPx));
-    m_palette.setContentCenterOffset(static_cast<float>(paletteCenterPx));
-
-    const float canvasScale = GridLayout::CanvasScaleRatio;
-    const float scaledCanvasW = pixelCanvasBounds.getWidth() * canvasScale;
-    const float canvasCX = pixelCanvasBounds.getX()
-        + (pixelCanvasBounds.getWidth() - scaledCanvasW) * 0.5f
-        + pixelCanvasBounds.getWidth() * GridLayout::CanvasCenterXShiftRatio
-        + scaledCanvasW * 0.5f;
-    m_palette.setImageCenterX(canvasCX - paletteBounds.getX());
+    m_palette.setCanvasCenterY(pixelCanvasBounds.getCentreY());
+    m_palette.setImageCenterX(pixelCanvasBounds.getCentreX() - paletteBounds.getX());
 }
 
 void DrawdioProcessorEditor::triggerRecompile()
@@ -332,25 +305,91 @@ const std::array<PaletteEntry, 12>& drawdioPalette()
     return palette;
 }
 
-uint8_t nearestDrawdioColor(juce::Colour c)
+const PaletteEntry& findNearestPaletteEntry(float r, float g, float b)
 {
     const auto& palette = drawdioPalette();
     float bestDist = std::numeric_limits<float>::max();
-    uint8_t best = 0;
-    const int r = c.getRed(), g = c.getGreen(), b = c.getBlue();
+    const PaletteEntry* best = &palette[0];
     for (const auto& entry : palette)
     {
-        const int dr = r - entry.colour.getRed();
-        const int dg = g - entry.colour.getGreen();
-        const int db = b - entry.colour.getBlue();
-        const float dist = static_cast<float>(2 * dr * dr + 4 * dg * dg + 3 * db * db);
+        const float dr = r - static_cast<float>(entry.colour.getRed());
+        const float dg = g - static_cast<float>(entry.colour.getGreen());
+        const float db = b - static_cast<float>(entry.colour.getBlue());
+        const float dist = 2.0f * dr * dr + 4.0f * dg * dg + 3.0f * db * db;
         if (dist < bestDist)
         {
             bestDist = dist;
-            best = entry.value;
+            best = &entry;
         }
     }
-    return best;
+    return *best;
+}
+
+void ditherImageToGrid(const juce::Image& source, std::array<uint8_t, TotalCells>& grid)
+{
+    std::vector<float> buf(static_cast<size_t>(TotalCells) * 3, 0.0f);
+    std::vector<uint8_t> opaque(static_cast<size_t>(TotalCells), 0);
+
+    for (int y = 0; y < GridSize; ++y)
+        for (int x = 0; x < GridSize; ++x)
+        {
+            const auto c = source.getPixelAt(x, y);
+            if (c.getAlpha() < 128) continue;
+            const size_t cellIdx = static_cast<size_t>(y) * GridSize + x;
+            auto* cell = &buf[cellIdx * 3];
+            cell[0] = static_cast<float>(c.getRed());
+            cell[1] = static_cast<float>(c.getGreen());
+            cell[2] = static_cast<float>(c.getBlue());
+            opaque[cellIdx] = 1;
+        }
+
+    auto addError = [&buf](int x, int y, float er, float eg, float eb, float factor)
+    {
+        if (x < 0 || x >= GridSize || y < 0 || y >= GridSize) return;
+        auto* cell = &buf[(static_cast<size_t>(y) * GridSize + x) * 3];
+        cell[0] += er * factor;
+        cell[1] += eg * factor;
+        cell[2] += eb * factor;
+    };
+
+    constexpr float kForward = 7.0f / 16.0f;
+    constexpr float kBackDown = 3.0f / 16.0f;
+    constexpr float kDown = 5.0f / 16.0f;
+    constexpr float kAheadDown = 1.0f / 16.0f;
+
+    for (int y = 0; y < GridSize; ++y)
+    {
+        const bool leftToRight = (y % 2 == 0);
+        for (int i = 0; i < GridSize; ++i)
+        {
+            const int x = leftToRight ? i : (GridSize - 1 - i);
+            const int dx = leftToRight ? 1 : -1;
+            const size_t cellIdx = static_cast<size_t>(y) * GridSize + x;
+
+            if (!opaque[cellIdx])
+            {
+                grid[cellIdx] = 0;
+                continue;
+            }
+
+            auto* cell = &buf[cellIdx * 3];
+            const float r = juce::jlimit(0.0f, 255.0f, cell[0]);
+            const float g = juce::jlimit(0.0f, 255.0f, cell[1]);
+            const float b = juce::jlimit(0.0f, 255.0f, cell[2]);
+
+            const auto& entry = findNearestPaletteEntry(r, g, b);
+            grid[cellIdx] = entry.value;
+
+            const float er = r - static_cast<float>(entry.colour.getRed());
+            const float eg = g - static_cast<float>(entry.colour.getGreen());
+            const float eb = b - static_cast<float>(entry.colour.getBlue());
+
+            addError(x + dx, y,     er, eg, eb, kForward);
+            addError(x - dx, y + 1, er, eg, eb, kBackDown);
+            addError(x,      y + 1, er, eg, eb, kDown);
+            addError(x + dx, y + 1, er, eg, eb, kAheadDown);
+        }
+    }
 }
 }
 
@@ -374,15 +413,7 @@ void DrawdioProcessorEditor::importImage()
             auto scaled = image.rescaled(GridSize, GridSize, juce::Graphics::highResamplingQuality);
 
             std::array<uint8_t, TotalCells> grid{};
-            for (int y = 0; y < GridSize; ++y)
-                for (int x = 0; x < GridSize; ++x)
-                {
-                    auto c = scaled.getPixelAt(x, y);
-                    if (c.getAlpha() < 128)
-                        grid[static_cast<size_t>(y * GridSize + x)] = 0;
-                    else
-                        grid[static_cast<size_t>(y * GridSize + x)] = nearestDrawdioColor(c);
-                }
+            ditherImageToGrid(scaled, grid);
 
             audioProcessor.submitCanvasSnapshot(grid);
             m_pixelCanvas.setGridData(grid);

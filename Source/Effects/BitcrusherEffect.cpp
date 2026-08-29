@@ -1,5 +1,5 @@
 #include <JuceHeader.h>
-#include "Effects/ResamplerEffect.h"
+#include "Effects/BitcrusherEffect.h"
 
 #include <algorithm>
 #include <cmath>
@@ -13,19 +13,19 @@ inline float resamplerNoise(uint32_t& state)
 }
 }
 
-void ResamplerEffect::prepare(double sampleRate, int numChannels)
+void BitcrusherEffect::prepare(double sampleRate, int numChannels)
 {
     DspEffect::prepare(sampleRate, numChannels);
     m_channels.resize(static_cast<size_t>(numChannels));
     for (size_t i = 0; i < m_channels.size(); ++i)
     {
-        m_channels[i] = ResamplerChannel{};
+        m_channels[i] = BitcrusherChannel{};
         m_channels[i].rngState = static_cast<uint32_t>(0x9E3779B9u + i * 0x85EBCA6Bu);
     }
     m_prevCutoff = -1.0f;
 }
 
-void ResamplerEffect::reset()
+void BitcrusherEffect::reset()
 {
     for (auto& ch : m_channels)
     {
@@ -39,20 +39,19 @@ void ResamplerEffect::reset()
     }
 }
 
-void ResamplerEffect::processSample(float** b, int c, int s, float effectParam)
+void BitcrusherEffect::processSample(float** b, int c, int s, float effectParam)
 {
     juce::ScopedNoDenormals noDenorm;
-    float params[4] = {0.85f, effectParam, 0.3f, 0.5f};
+    float params[4] = {1.0f, effectParam, 0.3f, 0.5f};
     float* sub[2] = { b[0] + s, (c > 1) ? b[1] + s : nullptr };
     processBlock(sub, c, 1, params);
 }
 
-void ResamplerEffect::processBlock(float** b, int c, int n, const float* params)
+void BitcrusherEffect::processBlock(float** b, int c, int n, const float* params)
 {
     juce::ScopedNoDenormals noDenorm;
-    const float rateParam = std::max(0.0f, std::min(1.0f, params[0]));
-    const float bitsParam = std::max(0.0f, std::min(1.0f, params[1]));
-    const float ditherParam = std::max(0.0f, std::min(1.0f, params[2]));
+    const float rateParam = std::max(0.0f, std::min(1.0f, params[1]));
+    const float bitsParam = std::max(0.0f, std::min(1.0f, params[2]));
     const float filterParam = std::max(0.0f, std::min(1.0f, params[3]));
 
     const float sr = static_cast<float>(m_sampleRate);
@@ -105,10 +104,10 @@ void ResamplerEffect::processBlock(float** b, int c, int n, const float* params)
             mc.prevInput = in;
 
             float out = mc.hold;
-            if (ditherParam > 0.0f)
             {
                 const float step = 1.0f / levels;
-                out += (resamplerNoise(mc.rngState) + resamplerNoise(mc.rngState)) * step * 0.5f * ditherParam;
+                const float ditherScale = std::min(1.0f, std::abs(mc.hold) * 10.0f);
+                out += (resamplerNoise(mc.rngState) + resamplerNoise(mc.rngState)) * step * 0.5f * ditherScale;
             }
             out = std::round(out * levels) / levels;
 

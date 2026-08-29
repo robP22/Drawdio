@@ -30,6 +30,8 @@ public:
     void drawOutputJack(juce::Graphics& g, juce::Point<float> exitPos,
                         const juce::Path& path) const;
 
+    void drawJackHighlight(juce::Graphics& g, juce::Point<float> position) const;
+
 private:
     void drawJack(juce::Graphics& g, juce::Point<float> position,
                   const juce::Path& path, bool isInput) const;

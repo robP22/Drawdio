@@ -4,44 +4,44 @@
 #include <algorithm>
 #include <cmath>
 
-void TimeDomainFreezeEffect::processBlock(float** b, int c, int n, const float* params)
+void SpectralFreezeEffect::processBlock(float** b, int c, int n, const float* params)
 {
     juce::ScopedNoDenormals noDenorm;
     for (int s = 0; s < n; ++s)
         processSample(b, c, s, params[1]);
 }
 
-void TimeDomainFreezeEffect::prepare(double sampleRate, int numChannels)
+void SpectralFreezeEffect::prepare(double sampleRate, int numChannels)
 {
     DspEffect::prepare(sampleRate, numChannels);
     m_channels.resize(static_cast<size_t>(numChannels));
     for (auto& ch : m_channels)
     {
         ch.buf.assign(static_cast<size_t>(sampleRate * 1.5), 0.0f);
+        ch.freezeLen = static_cast<size_t>(sampleRate * 1.0);
+        ch.freezeBuf.assign(ch.freezeLen, 0.0f);
         ch.writePtr = 0;
         ch.readPos = 0.0f;
-        ch.freezeLen = static_cast<size_t>(sampleRate * 1.0);
         ch.wasFrozen = false;
     }
 }
 
-void TimeDomainFreezeEffect::reset()
+void SpectralFreezeEffect::reset()
 {
     for (auto& ch : m_channels)
     {
         std::fill(ch.buf.begin(), ch.buf.end(), 0.0f);
+        std::fill(ch.freezeBuf.begin(), ch.freezeBuf.end(), 0.0f);
         ch.writePtr = 0;
         ch.readPos = 0.0f;
         ch.wasFrozen = false;
-        ch.xfadePos = FreezeChannel::kXfadeLen;
-        ch.oldReadPos = 0.0f;
         ch.entryXfadePos = FreezeChannel::kXfadeLen;
         ch.exitXfadePos = FreezeChannel::kXfadeLen;
         ch.exitXfadeFrom = 0.0f;
     }
 }
 
-void TimeDomainFreezeEffect::processSample(float** b, int c, int s, float effectParam)
+void SpectralFreezeEffect::processSample(float** b, int c, int s, float effectParam)
 {
     bool frozen = (effectParam >= 0.05f);
     float pitchRatio = 0.25f + effectParam * 1.75f;
@@ -59,7 +59,6 @@ void TimeDomainFreezeEffect::processSample(float** b, int c, int s, float effect
 
         if (!frozen)
         {
-            fc.readPos = static_cast<float>(fc.writePtr);
             float live = fc.buf[fc.writePtr];
             if (fc.wasFrozen)
             {
@@ -81,48 +80,27 @@ void TimeDomainFreezeEffect::processSample(float** b, int c, int s, float effect
         {
             if (!fc.wasFrozen)
             {
-                fc.readPos = static_cast<float>((fc.writePtr + bufSize - fc.freezeLen) % bufSize);
                 fc.wasFrozen = true;
                 fc.entryXfadePos = 0.0f;
+                for (size_t i = 0; i < fc.freezeLen; ++i)
+                    fc.freezeBuf[i] = fc.buf[(fc.writePtr + bufSize - fc.freezeLen + i) % bufSize];
             }
 
             float step = pitchRatio;
             fc.readPos += step;
             if (fc.readPos >= static_cast<float>(fc.freezeLen))
-            {
                 fc.readPos -= static_cast<float>(fc.freezeLen);
-                fc.xfadePos = 0.0f;
-                fc.oldReadPos = fc.readPos + static_cast<float>(fc.freezeLen);
-            }
 
-            size_t base = (fc.writePtr + bufSize - fc.freezeLen) % bufSize;
-
-            if (fc.xfadePos < FreezeChannel::kXfadeLen)
+            float out = interpolateDelayRead(fc.freezeBuf, fc.readPos);
+            float wrapStart = fc.readPos - (static_cast<float>(fc.freezeLen) - FreezeChannel::kXfadeLen);
+            if (wrapStart >= 0.0f)
             {
-                fc.oldReadPos += step;
-                if (fc.oldReadPos >= static_cast<float>(fc.freezeLen) * 2.0f)
-                    fc.oldReadPos -= static_cast<float>(fc.freezeLen);
-
-                float absOld = base + fc.oldReadPos;
-                if (absOld >= static_cast<float>(bufSize))
-                    absOld -= static_cast<float>(bufSize);
-                float absNew = base + fc.readPos;
-                if (absNew >= static_cast<float>(bufSize))
-                    absNew -= static_cast<float>(bufSize);
-
-                float a = fc.xfadePos / FreezeChannel::kXfadeLen;
+                float a = wrapStart / FreezeChannel::kXfadeLen;
                 float w = 0.5f * (1.0f - std::cos(3.14159265f * a));
-                b[ch][s] = interpolateDelayRead(fc.buf, absOld) * (1.0f - w)
-                           + interpolateDelayRead(fc.buf, absNew) * w;
-                fc.xfadePos += 1.0f;
+                out = out * (1.0f - w)
+                    + interpolateDelayRead(fc.freezeBuf, wrapStart) * w;
             }
-            else
-            {
-                float absPos = base + fc.readPos;
-                if (absPos >= static_cast<float>(bufSize))
-                    absPos -= static_cast<float>(bufSize);
-                b[ch][s] = interpolateDelayRead(fc.buf, absPos);
-            }
+            b[ch][s] = out;
 
             if (fc.entryXfadePos < FreezeChannel::kXfadeLen)
             {
@@ -138,7 +116,7 @@ void TimeDomainFreezeEffect::processSample(float** b, int c, int s, float effect
     }
 }
 
-void DynamicResonantFilter::prepare(double sampleRate, int numChannels)
+void FormantShifterEffect::prepare(double sampleRate, int numChannels)
 {
     DspEffect::prepare(sampleRate, numChannels);
     m_lp1.assign(static_cast<size_t>(numChannels), 0.0f);
@@ -148,14 +126,14 @@ void DynamicResonantFilter::prepare(double sampleRate, int numChannels)
     m_releaseCoeff = static_cast<float>(std::exp(-1.0 / (m_sampleRate * 0.1)));
 }
 
-void DynamicResonantFilter::reset()
+void FormantShifterEffect::reset()
 {
     std::fill(m_lp1.begin(), m_lp1.end(), 0.0f);
     std::fill(m_lp2.begin(), m_lp2.end(), 0.0f);
     m_envState = 0.0f;
 }
 
-void DynamicResonantFilter::processSample(float** b, int c, int s, float effectParam)
+void FormantShifterEffect::processSample(float** b, int c, int s, float effectParam)
 {
     juce::ScopedNoDenormals noDenorm;
     float formantFreq = effectParam;
@@ -206,6 +184,8 @@ void MultiModeFilterEffect::processBlock(float** b, int c, int n, const float* p
     juce::ScopedNoDenormals noDenorm;
     float cutoffParam = params[2];
     float cutoffEnd = 20.0f + (20000.0f - 20.0f) * cutoffParam * cutoffParam;
+    float maxCut = static_cast<float>(m_sampleRate) * 0.45f;
+    if (cutoffEnd > maxCut) cutoffEnd = maxCut;
     float cutoffStart = m_prevCutoffHz;
     m_prevCutoffHz = cutoffEnd;
 
@@ -232,6 +212,13 @@ void MultiModeFilterEffect::processBlock(float** b, int c, int n, const float* p
             float hp = (x - (twoRg + g) * st.bp - st.lp) * invScale;
             st.bp = g * hp + st.bp;
             st.lp = g * st.bp + st.lp;
+            if (!std::isfinite(hp) || !std::isfinite(st.bp) || !std::isfinite(st.lp))
+            {
+                st = {};
+                hp = 0.0f;
+                st.bp = 0.0f;
+                st.lp = 0.0f;
+            }
             if (std::abs(st.lp) > 8.0f) st.lp = (st.lp >= 0.0f) ? 8.0f : -8.0f;
             if (std::abs(st.bp) > 8.0f) st.bp = (st.bp >= 0.0f) ? 8.0f : -8.0f;
 
@@ -264,6 +251,8 @@ void MultiModeFilterEffect::processSample(float** b, int c, int s, float effectP
 {
     juce::ScopedNoDenormals noDenorm;
     float fcHz = 20.0f + (20000.0f - 20.0f) * effectParam * effectParam;
+    float maxCut = static_cast<float>(m_sampleRate) * 0.45f;
+    if (fcHz > maxCut) fcHz = maxCut;
     float g = std::tan(3.14159265f * fcHz / static_cast<float>(m_sampleRate));
     float R = 1.0f;
     float invScale = 1.0f / (1.0f + 2.0f * R * g + g * g);
@@ -276,16 +265,25 @@ void MultiModeFilterEffect::processSample(float** b, int c, int s, float effectP
         float hp = (x - (2.0f * R + g) * st.bp - st.lp) * invScale;
         st.bp = g * hp + st.bp;
         st.lp = g * st.bp + st.lp;
+        if (!std::isfinite(hp) || !std::isfinite(st.bp) || !std::isfinite(st.lp))
+        {
+            st = {};
+            hp = 0.0f;
+            st.bp = 0.0f;
+            st.lp = 0.0f;
+        }
         if (std::abs(st.lp) > 8.0f) st.lp = (st.lp >= 0.0f) ? 8.0f : -8.0f;
         if (std::abs(st.bp) > 8.0f) st.bp = (st.bp >= 0.0f) ? 8.0f : -8.0f;
         b[ch][s] = st.lp;
     }
 }
 
-void DynamicResonantFilter::processBlock(float** b, int c, int n, const float* params)
+void FormantShifterEffect::processBlock(float** b, int c, int n, const float* params)
 {
     juce::ScopedNoDenormals noDenorm;
     float formantFreq = params[2];
+    float shiftHz = juce::jlimit(0.0f, 1.0f, params[1]) * 2400.0f;
+    float qFactor = 0.5f + juce::jlimit(0.0f, 1.0f, params[3]) * 9.5f;
 
     float b0 = 0.5f, a1 = 0.0f, a2 = 0.0f;
 
@@ -303,10 +301,11 @@ void DynamicResonantFilter::processBlock(float** b, int c, int n, const float* p
         {
             float envMod = std::min(1.0f, m_envState / 0.5f);
             float modFreq = formantFreq * (0.3f + envMod * 0.7f);
-            float centerHz = 200.0f + modFreq * 1800.0f;
+            float centerHz = 200.0f + modFreq * 1800.0f + shiftHz;
             float fc = centerHz / static_cast<float>(m_sampleRate);
-            float bwHz = std::max(50.0f, centerHz / 5.0f);
+            float bwHz = std::max(50.0f, centerHz / 5.0f) / qFactor;
             float R = std::exp(-3.14159265f * bwHz / static_cast<float>(m_sampleRate));
+            if (R > 0.995f) R = 0.995f;
             float cosTheta = std::cos(2.0f * 3.14159265f * fc);
             b0 = 0.5f * (1.0f - R * R);
             a1 = -2.0f * R * cosTheta;
