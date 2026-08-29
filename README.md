@@ -91,6 +91,11 @@ cmake --build build --config Release --target Drawdio_VST3 --parallel
 Available targets are `Drawdio_VST3`, `Drawdio_AU` on macOS, and
 `Drawdio_Standalone`.
 
+For a Release VST3 build and installation, use `./updater.sh` on macOS, Linux,
+or Windows Git Bash, `updater.ps1` from PowerShell, or `updater.cmd` from
+Command Prompt. See [`docs/build.md`](docs/build.md#release-updater) for
+installation paths and permission behavior.
+
 ## Source Layout
 
 ```text

@@ -101,13 +101,14 @@ target_sources(Drawdio PRIVATE
     Source/Effects/ReverbEffects.cpp
     Source/Effects/PitchEffects.cpp
     Source/Effects/MiscEffects.cpp
-    Source/Effects/ReverseBufferEffect.cpp
+    Source/Effects/ReverseEffect.cpp
     Source/Effects/GrainScrubberEffect.cpp
     Source/Effects/SpectralFilterEffect.cpp
-    Source/Effects/ConvolutionSpaceEffect.cpp
-    Source/Effects/ResamplerEffect.cpp
+    Source/Effects/ConvolutionReverbEffect.cpp
+    Source/Effects/BitcrusherEffect.cpp
     Source/Effects/ModulationEffects.cpp
     Source/Effects/ReTimeEffect.cpp
+    Source/Effects/HpLpFilterEffect.cpp
 )
 
 target_include_directories(Drawdio PRIVATE Source)
@@ -132,3 +133,57 @@ target_compile_definitions(Drawdio PRIVATE
     JucePlugin_EditorWidth=1400
     JucePlugin_EditorHeight=900
 )
+
+# ---------------------------------------------------------------------------
+# Headless unit tests (vertical slice). Compiles only the Effect sources plus
+# Catch2 + the required JUCE modules. Does NOT build the plugin/editor/host.
+# ---------------------------------------------------------------------------
+option(DRAWDIO_BUILD_TESTS "Build the headless Catch2 unit-test target" ON)
+
+if(DRAWDIO_BUILD_TESTS)
+    include(FetchContent)
+    FetchContent_Declare(Catch2
+        GIT_REPOSITORY https://github.com/catchorg/Catch2.git
+        GIT_TAG        v3.5.2
+        GIT_SHALLOW    TRUE
+    )
+    FetchContent_MakeAvailable(Catch2)
+
+    file(GLOB DRAWDIO_TEST_EFFECT_SOURCES CONFIGURE_DEPENDS
+        "${CMAKE_CURRENT_SOURCE_DIR}/Source/Effects/*.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/Source/Dsp/DspEffectFactory.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/Source/Dsp/ReverbNetwork.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/Source/State/EffectConfigRegistry.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/Source/State/PedalDefinition.cpp"
+    )
+
+    add_executable(drawdio_tests
+        tests/main.cpp
+        tests/test_DspEffectFactory.cpp
+        tests/test_FilterEffects.cpp
+        tests/test_DelayEffects.cpp
+        tests/test_ExpandedEffects.cpp
+        tests/test_SnapUtils.cpp
+        ${DRAWDIO_TEST_EFFECT_SOURCES}
+    )
+
+    target_include_directories(drawdio_tests PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/Source"
+        "${CMAKE_CURRENT_SOURCE_DIR}/tests"
+    )
+
+    target_link_libraries(drawdio_tests PRIVATE
+        juce::juce_audio_basics
+        juce::juce_dsp
+        juce::juce_core
+        Catch2::Catch2
+    )
+
+    target_compile_definitions(drawdio_tests PRIVATE
+        JUCE_WEB_BROWSER=0
+        JUCE_USE_CURL=0
+    )
+
+    enable_testing()
+    add_test(NAME drawdio_tests COMMAND drawdio_tests)
+endif()

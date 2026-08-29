@@ -36,10 +36,12 @@ PedalComponent::PedalComponent(IPedalComponentModel& model,
     for (int i = 0; i < kKnobCount; ++i)
     {
         m_knobs[i] = std::make_unique<SpriteKnob>(knobImg, 0.0f, 1.0f);
-        m_knobs[i]->setValue(m_definition->parameters[static_cast<size_t>(i)].defaultValue);
+        m_knobs[i]->setValue(m_definition->parameters[static_cast<size_t>(i)].param.defaultValue);
         m_knobs[i]->onDragStart = [this, i](float v) { onKnobDragStart(i, v); };
         m_knobs[i]->onValueChanged = [this, i](float v) { onKnobValueChanged(i, v); };
         m_knobs[i]->onRightClick = [this, i]() { onKnobRightClick(i); };
+        const auto& param = m_definition->parameters[static_cast<size_t>(i)];
+        m_knobs[i]->setVisible(param.label != nullptr && param.label[0] != '\0');
         addAndMakeVisible(m_knobs[i].get());
     }
 }
@@ -146,6 +148,12 @@ void PedalComponent::paint(juce::Graphics& g)
     
     for (int i = 0; i < kKnobCount; ++i)
     {
+        if (m_definition != nullptr)
+        {
+            const auto& param = m_definition->parameters[static_cast<size_t>(i)];
+            if (param.label == nullptr || param.label[0] == '\0')
+                continue;
+        }
         if (m_model.isKnobLinked(m_slotIndex, i))
         {
             float ringD = m_knobBounds[i].getWidth() * GridLayout::KnobLinkRingRatio;
@@ -172,6 +180,8 @@ void PedalComponent::paint(juce::Graphics& g)
     {
         const auto& knobBounds = m_knobBounds[static_cast<size_t>(i)];
         const auto& param = m_definition->parameters[static_cast<size_t>(i)];
+        if (param.label == nullptr || param.label[0] == '\0')
+            continue;
 
         g.drawText(param.label,
                    (knobBounds.getCentreX() - labelWidth * 0.5f),
@@ -188,6 +198,11 @@ void PedalComponent::resized()
     m_lcdFont.setTypefaceName(juce::Font::getDefaultMonospacedFontName());
     m_labelFont = juce::Font(juce::FontOptions(std::max(6.0f, pedalH * GridLayout::KnobFontSizeRatio)));
 
+    applyKnobLayout();
+}
+
+void PedalComponent::applyKnobLayout()
+{
     updateKnobBounds();
     for (int i = 0; i < kKnobCount; ++i)
         if (m_knobs[i])
@@ -230,7 +245,7 @@ void PedalComponent::showTypePopup()
         {"Compression",  {5}},
         {"Delay",        {11}},
         {"Distortion",   {1, 8}},
-        {"Filter",       {3, 9, 20}},
+        {"Filter",       {3, 9, 20, 22}},
         {"Glitch",       {6, 16, 18}},
         {"Time",         {10}},
         {"Modulation",   {2, 13, 17, 24, 25}},
@@ -265,6 +280,7 @@ void PedalComponent::showTypePopup()
                 auto type = static_cast<DspModuleType>(result - 1);
                 safeThis->m_currentType = type;
                 safeThis->m_definition = &PedalDefinitions::get(type);
+                safeThis->applyKnobLayout();
                 safeThis->repaint();
                 safeThis->m_model.setPedalSlot(safeThis->m_slotIndex, type);
             }
@@ -278,6 +294,7 @@ void PedalComponent::syncFromProcessor()
     {
         m_currentType = type;
         m_definition = &PedalDefinitions::get(type);
+        applyKnobLayout();
         repaint();
     }
 }
@@ -295,7 +312,10 @@ void PedalComponent::onKnobDragStart(int knobIdx, float value)
 
 void PedalComponent::onKnobValueChanged(int knobIdx, float value)
 {
-    m_model.setKnobParameter(m_slotIndex, knobIdx, m_knobDragStartValues[knobIdx], value);
+    const float snapped = PedalDefinitions::snapValue(m_currentType, knobIdx, value);
+    if (snapped != value)
+        m_knobs[static_cast<size_t>(knobIdx)]->setValue(snapped);
+    m_model.setKnobParameter(m_slotIndex, knobIdx, m_knobDragStartValues[knobIdx], snapped);
 }
 
 void PedalComponent::onKnobRightClick(int knobIdx)
@@ -321,23 +341,46 @@ void PedalComponent::updateKnobBounds()
     const float knobSize = pedalHeight * GridLayout::KnobSizeRatio;
     const float halfKnob = knobSize * 0.5f;
 
+    const auto layout = knobLayoutForCount(m_definition->knobCount);
     float minCentreX = 1.0f, maxCentreX = 0.0f;
+    int slot = 0;
     for (int i = 0; i < kKnobCount; ++i)
     {
-        minCentreX = juce::jmin(minCentreX, m_definition->knobLayout[static_cast<size_t>(i)].centreX);
-        maxCentreX = juce::jmax(maxCentreX, m_definition->knobLayout[static_cast<size_t>(i)].centreX);
+        const auto& param = m_definition->parameters[static_cast<size_t>(i)];
+        if (param.label == nullptr || param.label[0] == '\0')
+            continue;
+        minCentreX = juce::jmin(minCentreX, layout[static_cast<size_t>(slot)].centreX);
+        maxCentreX = juce::jmax(maxCentreX, layout[static_cast<size_t>(slot)].centreX);
+        ++slot;
     }
-    const float currentSpreadX = (maxCentreX - minCentreX) * pedalWidth;
-    if (currentSpreadX < 0.001f)
+    if (slot == 0)
+    {
+        m_knobBounds = {};
+        for (int i = 0; i < kKnobCount; ++i)
+            if (m_knobs[static_cast<size_t>(i)])
+                m_knobs[static_cast<size_t>(i)]->setVisible(false);
         return;
-    const float groupCenterX = pedalBounds.getX() + pedalWidth * (minCentreX + maxCentreX) / 2.0f;
-    const float targetSpreadX = pedalWidth * GridLayout::KnobSpreadRatio;
-    const float scaleX = targetSpreadX / currentSpreadX;
+    }
 
+    const float currentSpreadX = (maxCentreX - minCentreX) * pedalWidth;
+    const float groupCenterX = pedalBounds.getX() + pedalWidth * (minCentreX + maxCentreX) / 2.0f;
+    float scaleX = 1.0f;
+    if (currentSpreadX >= 0.001f)
+        scaleX = (pedalWidth * GridLayout::KnobSpreadRatio) / currentSpreadX;
+
+    slot = 0;
     for (int i = 0; i < kKnobCount; ++i)
     {
-        const auto& normBounds = m_definition->knobLayout[static_cast<size_t>(i)];
+        const auto& param = m_definition->parameters[static_cast<size_t>(i)];
+        if (param.label == nullptr || param.label[0] == '\0')
+        {
+            m_knobBounds[static_cast<size_t>(i)] = {};
+            if (m_knobs[static_cast<size_t>(i)])
+                m_knobs[static_cast<size_t>(i)]->setVisible(false);
+            continue;
+        }
 
+        const auto& normBounds = layout[static_cast<size_t>(slot)];
         const float centerX = groupCenterX + (normBounds.centreX - (minCentreX + maxCentreX) / 2.0f) * scaleX * pedalWidth;
         const float centerY = pedalBounds.getY() + (normBounds.centreY + GridLayout::KnobCenterYShiftRatio) * pedalHeight;
 
@@ -346,6 +389,9 @@ void PedalComponent::updateKnobBounds()
             centerY - halfKnob,
             knobSize,
             knobSize);
+        if (m_knobs[static_cast<size_t>(i)])
+            m_knobs[static_cast<size_t>(i)]->setVisible(true);
+        ++slot;
     }
 }
 

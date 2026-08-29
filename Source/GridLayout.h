@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <cstdint>
 
 namespace GridLayout
@@ -13,12 +14,29 @@ namespace DesignResolution
     constexpr int Height = 900;
 }
 
+// Window scale factor derived from a component whose height at design size is
+// designRatio * DesignResolution::Height (e.g. the bottom bar: h / 120).
+inline float scaleFromHeight(float componentHeight, float designRatio)
+{
+    return componentHeight / (designRatio * static_cast<float>(DesignResolution::Height));
+}
+
+// Pixel-value caps that must shrink with the window:
+// min(usable * ratio, designPx * scale) keeps the design-size look while
+// preventing oversized controls on large windows.
+inline float scaledCap(float usable, float ratio, float designPx, float scale)
+{
+    return std::min(usable * ratio, designPx * scale);
+}
+
 constexpr float GridSidePaddingRatio = 0.01f;
 constexpr float GridTopPaddingRatio = 0.0365f;
 
 constexpr float PedalShrinkRatio = 0.95f;
-constexpr float ColumnGapRatio = 0.005f;
+constexpr float ColumnGapRatio = 0.015f;
 constexpr float RowGapRatio = 0.0475f;
+// Extra downward push of the pedal group; compensates the pedal sprite's
+// taller bottom padding so the group reads vertically centered on the body.
 constexpr float VerticalGroupOffsetRatio = 0.025f;
 
 constexpr float PedalWidthMinRatio = 0.18f;
@@ -28,12 +46,15 @@ constexpr float PedalHeightMaxRatio = 0.39f;
 
 constexpr float PaletteHeightRatio = 0.26f;
 
-constexpr float CanvasCenterXShiftRatio = 0.017f;
-constexpr float CanvasCenterYShiftRatio = 0.051f;
+// Small rightward nudge that keeps the canvas visually centered on the
+// texture's content rather than its raw edges.
 constexpr float CanvasScaleRatio = 0.90f;
 
 constexpr float KnobSizeRatio = 0.16f;
 constexpr float KnobSpreadRatio = 0.35f;
+// Compensates the schema's centred-on-body rows for the sprite's top padding;
+// knobs sit slightly above their nominal rows so they read centred on the
+// visible pedal body mask.
 constexpr float KnobCenterYShiftRatio = -0.02f;
 constexpr float KnobLinkRingRatio = 0.92f;
 constexpr float JackInsetXRatio = 0.26f;
@@ -51,7 +72,6 @@ constexpr float LedCenterYRatio = 0.185f;
 constexpr float LedSizeRatio = 0.06f;
 
 constexpr float BlobMaxSizeRatio = 0.40f;
-constexpr float ButtonSquareSizeRatio = 0.2176f;
 
 constexpr float CellOverdrawRatio = 1.02f;
 
@@ -90,14 +110,14 @@ constexpr float KnobFontSizeRatio        = 0.04f;
 constexpr float KnobLabelWidthRatio      = 0.28f;
 
 // ── Cable Drawing ──
-constexpr float CableJackHeight          = 14.0f;
-constexpr float CableJackRadiusRatio     = 0.055f;
-constexpr float CableBaseLiftRatio       = 0.12f;
-constexpr float CableMinCurveRatio       = 0.16f;
-constexpr float CableLabelFontSizeRatio  = 0.048f;
+// DAW jack vertical position as a fraction of the pedalboard grid height
+// (14 px at the 780 px design grid height).
+constexpr float CableJackHeightRatio      = 0.01795f;
+constexpr float CableLaneSpacingPx       = 6.0f;
+constexpr float CableWaypointCurvePx     = 60.0f;
+constexpr float CableArcLiftPx           = 40.0f;
 
 // ── Palette ──
-constexpr float PaletteButtonGapRatio    = 0.02375f;
 constexpr float PaletteBlob0CenterX      = 0.135f;
 constexpr float PaletteBlobSpacingRatio  = 0.05415f;
 constexpr float PaletteBlobSizeRatio     = 0.242f;

@@ -30,11 +30,7 @@ public:
     virtual bool hasActiveTail() const { return false; }
     virtual double getTailLength() const { return 0.0; }
 
-    virtual void processBlock(float** buffer, int numChannels, int numSamples, const float* params)
-    {
-        for (int s = 0; s < numSamples; ++s)
-            processSample(buffer, numChannels, s, params[0]);
-    }
+    virtual void processBlock(float** buffer, int numChannels, int numSamples, const float* params) = 0;
 
 protected:
     const int m_mixKnobIndex;

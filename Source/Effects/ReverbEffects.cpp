@@ -34,11 +34,21 @@ void ReverbNetworkEffect::processSample(float** b, int c, int s, float effectPar
 void ReverbNetworkEffect::processBlock(float** b, int c, int n, const float* params)
 {
     juce::ScopedNoDenormals noDenorm;
+    float decay = params[m_decayKnobIndex];
+    prepareReverbNetworkBlock(m_state, m_config, decay);
+
     float peak = 0.0f;
     for (int s = 0; s < n; ++s)
     {
-        processSample(b, c, s, params[m_decayKnobIndex]);
-        peak = std::max(peak, std::max(std::abs(b[0][s]), (c > 1) ? std::abs(b[1][s]) : 0.0f));
+        processSample(b, c, s, decay);
+        float x = std::max(std::abs(b[0][s]), (c > 1) ? std::abs(b[1][s]) : 0.0f);
+        if (!std::isfinite(x))
+        {
+            if (c > 0) b[0][s] = 0.0f;
+            if (c > 1) b[1][s] = 0.0f;
+            x = 0.0f;
+        }
+        peak = std::max(peak, x);
     }
     m_hasTail = (peak > 1e-8f);
 }

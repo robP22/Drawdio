@@ -5,6 +5,8 @@
 ArcButton::ArcButton()
 {
     setInterceptsMouseClicks(true, false);
+    setWantsKeyboardFocus(true);
+    setMouseClickGrabsKeyboardFocus(true);
 }
 
 void ArcButton::setArc(float cx, float cy, float innerR, float outerR,
@@ -21,8 +23,10 @@ void ArcButton::setArc(float cx, float cy, float innerR, float outerR,
     m_centreY = cy;
     m_innerR = innerR;
     m_outerR = outerR;
-    m_startAngle = innerStart;
-    m_endAngle = innerEnd;
+    m_innerStartAngle = innerStart;
+    m_innerEndAngle = innerEnd;
+    m_outerStartAngle = outerStart;
+    m_outerEndAngle = outerEnd;
 
     auto pt = [cx, cy](float r, float a) {
         return juce::Point<float>(cx + r * std::cos(a), cy + r * std::sin(a));
@@ -30,13 +34,20 @@ void ArcButton::setArc(float cx, float cy, float innerR, float outerR,
 
     juce::Path path;
 
-    if (innerR == 0.0f && (innerEnd - innerStart) >= juce::MathConstants<float>::twoPi - 0.01f)
+    const float innerSpan = innerEnd - innerStart;
+    const float outerSpan = outerEnd - outerStart;
+    const bool fullCircle = innerR <= 0.0f
+        && std::abs(innerSpan) >= juce::MathConstants<float>::twoPi - 0.01f
+        && std::abs(outerSpan) >= juce::MathConstants<float>::twoPi - 0.01f;
+
+    if (fullCircle)
     {
         path.addEllipse(cx - outerR, cy - outerR, outerR * 2.0f, outerR * 2.0f);
     }
     else
     {
-        static constexpr int segments = 12;
+        const float maxSpan = juce::jmax(std::abs(innerSpan), std::abs(outerSpan));
+        const int segments = juce::jmax(4, static_cast<int>(std::ceil(maxSpan / 0.12f)));
         // Outer arc
         path.startNewSubPath(pt(outerR, outerStart));
         for (int i = 1; i <= segments; ++i)
@@ -56,24 +67,37 @@ void ArcButton::setArc(float cx, float cy, float innerR, float outerR,
         path.closeSubPath();
     }
 
-    auto bounds = path.getBounds();
+    auto bounds = path.getBounds().expanded(2.5f);
     int bx = static_cast<int>(std::floor(bounds.getX()));
     int by = static_cast<int>(std::floor(bounds.getY()));
     int bw = static_cast<int>(std::ceil(bounds.getRight())) - bx;
     int bh = static_cast<int>(std::ceil(bounds.getBottom())) - by;
-    setBounds(bx, by, bw, bh);
-
+    path.applyTransform(juce::AffineTransform::translation(-static_cast<float>(bx), -static_cast<float>(by)));
     m_arcPath = std::move(path);
-    m_arcPath.applyTransform(juce::AffineTransform::translation(-static_cast<float>(bx), -static_cast<float>(by)));
+
+    const float iconRadius = fullCircle ? outerR * 0.56f : (innerR + outerR) * 0.5f;
+    const float iconAngle = fullCircle ? 0.0f : (innerStart + innerEnd) * 0.5f;
+    const auto iconCentre = fullCircle ? juce::Point<float>(cx, cy) : pt(iconRadius, iconAngle);
+    const float iconSize = fullCircle
+        ? juce::jmax(0.0f, outerR * 1.15f)
+        : juce::jmax(0.0f, juce::jmin(
+            outerR - innerR - 4.0f,
+            2.0f * iconRadius * std::sin(juce::jmin(std::abs(innerSpan), std::abs(outerSpan)) * 0.5f) - 4.0f));
+    m_iconBounds = juce::Rectangle<float>(iconCentre.x - iconSize * 0.5f - static_cast<float>(bx),
+                                          iconCentre.y - iconSize * 0.5f - static_cast<float>(by),
+                                          iconSize, iconSize);
+
+    setBounds(bx, by, bw, bh);
+    repaint();
 }
 
 void ArcButton::setToggleState(bool on, juce::NotificationType n)
 {
+    juce::ignoreUnused(n);
     if (m_toggleOn == on)
         return;
     m_toggleOn = on;
-    if (n != juce::dontSendNotification)
-        repaint();
+    repaint();
 }
 
 void ArcButton::paint(juce::Graphics& g)
@@ -131,11 +155,21 @@ void ArcButton::paint(juce::Graphics& g)
     g.setColour(bodyColour.brighter(0.04f));
     g.strokePath(m_arcPath, juce::PathStrokeType(1.0f));
 
-    // 7 — Icon
+    // 7 — Focus ring
+    if (hasKeyboardFocus(true))
+    {
+        g.setColour(juce::Colours::white.withAlpha(0.55f));
+        g.strokePath(m_arcPath, juce::PathStrokeType(1.5f));
+    }
+
+    // 8 — Icon
     if (m_drawIcon)
     {
-        g.setColour(juce::Colours::white);
-        m_drawIcon(g, getLocalBounds().toFloat().reduced(4));
+        g.saveState();
+        g.reduceClipRegion(m_arcPath);
+        g.setColour(m_toggleOn ? m_accent.brighter(0.20f) : m_accent);
+        m_drawIcon(g, m_iconBounds);
+        g.restoreState();
     }
 }
 
@@ -144,24 +178,46 @@ bool ArcButton::hitTest(int x, int y)
     return m_arcPath.contains(static_cast<float>(x), static_cast<float>(y));
 }
 
-void ArcButton::mouseDown(const juce::MouseEvent&)
+void ArcButton::mouseDown(const juce::MouseEvent& e)
 {
-    m_pressed = true;
-    repaint();
+    if (!e.mods.isLeftButtonDown())
+        return;
 
-    if (m_toggleable)
-    {
-        m_toggleOn = !m_toggleOn;
-        repaint();
-    }
-    if (onClick)
-        onClick();
+    m_pressed = true;
+    m_clickCancelled = false;
+    repaint();
 }
 
-void ArcButton::mouseUp(const juce::MouseEvent&)
+void ArcButton::mouseDrag(const juce::MouseEvent& e)
 {
+    if (!m_pressed && !m_clickCancelled)
+        return;
+
+    if (!m_arcPath.contains(e.position))
+        m_clickCancelled = true;
+
+    const bool pressed = m_pressed && !m_clickCancelled;
+    if (pressed != m_pressed)
+    {
+        m_pressed = pressed;
+        repaint();
+    }
+}
+
+void ArcButton::mouseUp(const juce::MouseEvent& e)
+{
+    const bool activate = m_pressed && !m_clickCancelled && m_arcPath.contains(e.position);
     m_pressed = false;
+    m_clickCancelled = false;
     repaint();
+
+    if (!activate)
+        return;
+
+    if (m_toggleable)
+        setToggleState(!m_toggleOn);
+    if (onClick)
+        onClick();
 }
 
 void ArcButton::mouseEnter(const juce::MouseEvent&)
@@ -173,5 +229,23 @@ void ArcButton::mouseEnter(const juce::MouseEvent&)
 void ArcButton::mouseExit(const juce::MouseEvent&)
 {
     m_hovered = false;
+    if (m_pressed)
+    {
+        m_pressed = false;
+        m_clickCancelled = true;
+    }
     repaint();
+}
+
+bool ArcButton::keyPressed(const juce::KeyPress& key)
+{
+    if (key.getKeyCode() != juce::KeyPress::spaceKey
+        && key.getKeyCode() != juce::KeyPress::returnKey)
+        return false;
+
+    if (m_toggleable)
+        setToggleState(!m_toggleOn);
+    if (onClick)
+        onClick();
+    return true;
 }

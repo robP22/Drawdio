@@ -1,7 +1,9 @@
 #include "Compile/CompilerEngine.h"
 #include "State/PedalDefinition.h"
 #include "Core/CanvasAnalysis.h"
+#include "Effects/DspEffect.h"
 #include <algorithm>
+#include <cstring>
 #include <numeric>
 
 PedalAssetPayload compileCanvas(const std::array<uint8_t, TotalCells>& gridData,
@@ -94,11 +96,11 @@ PedalAssetPayload compileCanvas(const std::array<uint8_t, TotalCells>& gridData,
         for (const auto& parameter : definition.parameters)
         {
             ParameterDescriptor p;
-            p.parameterToken = parameter.parameterToken;
-            p.minValue = parameter.minValue;
-            p.maxValue = parameter.maxValue;
-            p.defaultValue = parameter.defaultValue;
-            p.currentValue = parameter.defaultValue;
+            p.parameterToken = parameter.param.parameterToken;
+            p.minValue = parameter.param.minValue;
+            p.maxValue = parameter.param.maxValue;
+            p.defaultValue = parameter.param.defaultValue;
+            p.currentValue = parameter.param.defaultValue;
             p.targetDspNodeRegister = static_cast<uint8_t>(i);
             paramDescriptors.push_back(p);
         }
@@ -134,7 +136,7 @@ PedalAssetPayload compileCanvas(const std::array<uint8_t, TotalCells>& gridData,
             int paramIdx = paramCount;
             for (int i = 0; i < paramCount; ++i)
             {
-                if (definition.parameters[static_cast<size_t>(i)].parameterToken == param.parameterToken)
+                if (definition.parameters[static_cast<size_t>(i)].param.parameterToken == param.parameterToken)
                 {
                     paramIdx = i;
                     break;
@@ -144,10 +146,25 @@ PedalAssetPayload compileCanvas(const std::array<uint8_t, TotalCells>& gridData,
             if (paramIdx >= paramCount)
                 continue;
 
-            float normalized = calculatePixelAccumulation(gridData,
-                                   sortedRanges[static_cast<size_t>(chainPos)],
-                                   paramIdx, paramCount);
-            compiledParam.currentValue = param.minValue + (normalized * (param.maxValue - param.minValue));
+            const auto& paramDef = definition.parameters[static_cast<size_t>(paramIdx)];
+            const bool isMix = (paramDef.label != nullptr && std::strcmp(paramDef.label, "Mix") == 0);
+            const bool isFreeze = (paramDef.label != nullptr && std::strcmp(paramDef.label, "Freeze") == 0);
+            if (isMix)
+            {
+                compiledParam.currentValue = 1.0f;
+            }
+            else if (isFreeze)
+            {
+                compiledParam.currentValue = 0.0f;
+            }
+            else
+            {
+                float normalized = calculatePixelAccumulation(gridData,
+                                       sortedRanges[static_cast<size_t>(chainPos)],
+                                       paramIdx, paramCount);
+                normalized = 0.5f + (normalized - 0.5f) * 0.5f;
+                compiledParam.currentValue = param.minValue + (normalized * (param.maxValue - param.minValue));
+            }
         }
 
         result.parameters.push_back(compiledParam);

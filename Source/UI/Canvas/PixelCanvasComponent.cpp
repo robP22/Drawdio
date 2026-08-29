@@ -1,5 +1,6 @@
 #include "PixelCanvasComponent.h"
 #include "GridLayout.h"
+#include "UI/EditorLayout.h"
 #include <cmath>
 
 
@@ -27,6 +28,12 @@ PixelCanvasComponent::PixelCanvasComponent(const IResourceProvider& resources, c
     m_activeStroke.reserve(512);
     m_undoStack.reserve(MaxUndoLevels);
     m_fillChanges.reserve(TotalCells);
+
+    const auto& tex = m_resources.getTexture(IResourceProvider::TextureId::CanvasTexture);
+    m_textureTopR = EditorLayout::topOpaqueRatio(tex);
+    m_textureBottomR = EditorLayout::bottomOpaqueRatio(tex);
+    m_textureLeftR = EditorLayout::leftOpaqueRatio(tex);
+    m_textureRightR = EditorLayout::rightOpaqueRatio(tex);
 
     rebuildGridCache();
 }
@@ -66,10 +73,17 @@ PixelCanvasComponent::CanvasLayout PixelCanvasComponent::computeCanvasLayout() c
     cl.canvasH = getHeight() * GridLayout::CanvasScaleRatio;
     cl.cw = juce::jmax(1, static_cast<int>(cl.canvasW));
     cl.ch = juce::jmax(1, static_cast<int>(cl.canvasH));
-    cl.offsetX = (getWidth() - cl.canvasW) / 2.0f + getWidth() * GridLayout::CanvasCenterXShiftRatio;
-    cl.offsetY = (m_canvasTopOffset > 0)
-        ? static_cast<float>(m_canvasTopOffset)
-        : (getHeight() - cl.canvasH) / 2.0f + getHeight() * GridLayout::CanvasCenterYShiftRatio;
+
+    const float opaqueLeft = cl.canvasW * m_textureLeftR;
+    const float opaqueRight = cl.canvasW * m_textureRightR;
+    const float opaqueTop = cl.canvasH * m_textureTopR;
+    const float opaqueBottom = cl.canvasH * m_textureBottomR;
+    const float opaqueW = cl.canvasW - opaqueLeft - opaqueRight;
+    const float opaqueH = cl.canvasH - opaqueTop - opaqueBottom;
+
+    cl.offsetX = (getWidth() - opaqueW) * 0.5f - opaqueLeft;
+    cl.offsetY = (getHeight() - opaqueH) * 0.5f - opaqueTop;
+
     cl.cellW = cl.canvasW / GridSize;
     cl.cellH = cl.canvasH / GridSize;
     return cl;
@@ -263,12 +277,6 @@ void PixelCanvasComponent::setPixel(int gridX, int gridY, PixelColor color)
 
 void PixelCanvasComponent::applyPixelValue(int index, PixelColor color, bool doOverlay)
 {
-    const auto previous = pixels[static_cast<size_t>(index)];
-    if (previous == PixelColor::Transparent && color != PixelColor::Transparent)
-        ++m_changedCellCount;
-    else if (previous != PixelColor::Transparent && color == PixelColor::Transparent)
-        --m_changedCellCount;
-
     pixels[static_cast<size_t>(index)] = color;
     m_gridCache[static_cast<size_t>(index)] = pixelToGridValue(color);
     if (doOverlay)
@@ -359,7 +367,6 @@ void PixelCanvasComponent::clearCanvas()
 
     if (!m_activeStroke.empty())
     {
-        m_changedCellCount = 0;
         commitStroke();
         rebuildOverlay();
         notifySnapshot();
@@ -504,13 +511,8 @@ void PixelCanvasComponent::setGridData(const std::array<uint8_t, TotalCells>& da
 
 void PixelCanvasComponent::rebuildGridCache()
 {
-    m_changedCellCount = 0;
     for (size_t i = 0; i < pixels.size(); ++i)
-    {
         m_gridCache[i] = pixelToGridValue(pixels[i]);
-        if (pixels[i] != PixelColor::Transparent)
-            ++m_changedCellCount;
-    }
 }
 
 void PixelCanvasComponent::rebuildOverlay()
@@ -574,7 +576,10 @@ void PixelCanvasComponent::updateOverlayPixel(int index)
     }
 
     if (m_pendingOverlayIndices.size() >= 4096)
+    {
         m_pendingOverlayIndices.clear();
+        m_overlayDirty = true;
+    }
     m_pendingOverlayIndices.push_back(index);
 }
 

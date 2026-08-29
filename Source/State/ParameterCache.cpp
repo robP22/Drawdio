@@ -1,4 +1,5 @@
 #include "ParameterCache.h"
+#include <algorithm>
 #include <cmath>
 
 ParameterCache::ParameterCache()
@@ -11,6 +12,7 @@ void ParameterCache::update(int physicalSlot, int knobIdx, float newValue)
 {
     if (!std::isfinite(newValue))
         newValue = 0.0f;
+    newValue = std::clamp(newValue, 0.0f, 1.0f);
 
     if (physicalSlot >= 0 && physicalSlot < PedalSlotCount && knobIdx >= 0 && knobIdx < KnobsPerPedal)
     {
@@ -25,6 +27,9 @@ void ParameterCache::update(int physicalSlot, int knobIdx, float newValue)
 
 void ParameterCache::store(int physicalSlot, int knobIdx, float value)
 {
+    if (!std::isfinite(value))
+        value = 0.0f;
+    value = std::clamp(value, 0.0f, 1.0f);
     if (physicalSlot >= 0 && physicalSlot < PedalSlotCount && knobIdx >= 0 && knobIdx < KnobsPerPedal)
     {
         size_t idx = index(physicalSlot, knobIdx);
@@ -35,6 +40,7 @@ void ParameterCache::store(int physicalSlot, int knobIdx, float value)
 
 void ParameterCache::applyOffset(int physicalSlot, int knobIdx, float dragStartValue, float newValue)
 {
+    newValue = std::clamp(newValue, 0.0f, 1.0f);
     if (physicalSlot >= 0 && physicalSlot < PedalSlotCount && knobIdx >= 0 && knobIdx < KnobsPerPedal)
     {
         size_t idx = index(physicalSlot, knobIdx);

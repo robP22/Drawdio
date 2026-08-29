@@ -2,15 +2,16 @@
 #include "Effects/DspEffect.h"
 #include "Effects/GranularBaseEffect.h"
 
-class GranularPitchEffect : public GranularBaseEffect
+class PitchShifterEffect : public GranularBaseEffect
 {
 public:
-    GranularPitchEffect() : GranularBaseEffect(0.11f, 1.0) {}
+    PitchShifterEffect() : GranularBaseEffect(0.11f, 1.0, 0, 2) {}
 };
 
 class FrequencyShifterEffect : public DspEffect
 {
 public:
+    FrequencyShifterEffect() : DspEffect(1) {}
     void prepare(double sampleRate, int numChannels) override;
     void reset() override;
     void processSample(float** b, int c, int s, float effectParam) override;
@@ -28,6 +29,7 @@ private:
 class GlitchStutterEffect : public DspEffect
 {
 public:
+    GlitchStutterEffect() : DspEffect(1) {}
     void prepare(double sampleRate, int numChannels) override;
     void reset() override;
     void processSample(float** b, int c, int s, float effectParam) override;

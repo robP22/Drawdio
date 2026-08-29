@@ -79,7 +79,8 @@ void UnifiedPedalProcessor::processChainBlock(float** b, int c, int s, const Ped
     juce::ScopedNoDenormals noDenorm;
     int chCount = std::min(c, m_maxChannels.load(std::memory_order_relaxed));
 
-    for (int idx = 0; idx < static_cast<int>(config.activeRoutingChain.size()); ++idx)
+    for (int idx = 0; idx < static_cast<int>(config.activeRoutingChain.size()) &&
+                    static_cast<size_t>(idx) < config.effects.size(); ++idx)
     {
         auto* effectPtr = config.effects[static_cast<size_t>(idx)].get();
         if (!effectPtr)
@@ -159,6 +160,18 @@ void UnifiedPedalProcessor::processChainBlock(float** b, int c, int s, const Ped
                 params[k] += mod;
                 if (params[k] < 0.0f) params[k] = 0.0f;
                 else if (params[k] > 1.0f) params[k] = 1.0f;
+            }
+        }
+
+        for (int k = 0; k < KnobsPerPedal; ++k)
+        {
+            if (k == mi)
+                continue;
+            const uint8_t steps = config.snapSteps[static_cast<size_t>(idx)][static_cast<size_t>(k)];
+            if (steps > 1)
+            {
+                const float scaled = params[k] * static_cast<float>(steps - 1);
+                params[k] = std::round(scaled) / static_cast<float>(steps - 1);
             }
         }
 

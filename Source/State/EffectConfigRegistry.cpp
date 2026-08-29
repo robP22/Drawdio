@@ -3,17 +3,17 @@
 ReverbNetworkConfig EffectConfigRegistry::getDiffusedReverbConfig()
 {
     return ReverbNetworkConfig{
-        .feedbackBase = 0.80,
-        .feedbackRange = 0.14,
-        .fdnTimes = { 1627, 1669, 1753, 1811, 1913, 1999, 2053, 2141 }
+        .feedbackBase = 0.85,
+        .feedbackRange = 0.12,
+        .fdnTimes = { 1759, 2029, 2311, 2609, 2917, 3221, 3571, 3929 }
     };
 }
 
 ReverbNetworkConfig EffectConfigRegistry::getPlateReverbConfig()
 {
     return ReverbNetworkConfig{
-        .feedbackBase = 0.83,
-        .feedbackRange = 0.11,
-        .fdnTimes = { 1291, 1327, 1361, 1429, 1481, 1531, 1571, 1613 }
+        .feedbackBase = 0.88,
+        .feedbackRange = 0.08,
+        .fdnTimes = { 1321, 1427, 1543, 1657, 1783, 1907, 2039, 2161 }
     };
 }

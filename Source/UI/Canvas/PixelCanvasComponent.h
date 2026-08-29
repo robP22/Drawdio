@@ -14,7 +14,7 @@
 class PixelCanvasComponent : public juce::Component
 {
 public:
-    static constexpr int MaxUndoLevels = 32;
+    static constexpr int MaxUndoLevels = 64;
     static constexpr size_t MaxUndoBytes = 8u * 1024u * 1024u; // 8 MB across undo+redo
 
     enum class PixelColor : uint8_t
@@ -72,7 +72,6 @@ public:
     void setFillMode(bool active);
 
     void setBrushRadius(float radius) { m_brushRadius = radius; }
-    void setCanvasTopOffset(int px) { m_canvasTopOffset = px; repaint(); }
 
     void setOnCanvasSnapshot(CanvasSnapshotCallback cb) { m_onCanvasSnapshot = std::move(cb); }
     void setOnPenDown(CanvasPenCallback cb) { m_onPenDown = std::move(cb); }
@@ -131,7 +130,10 @@ private:
     juce::Point<int> m_lastDrawPos;
     PixelColor m_currentColor = PixelColor::Red;
     float m_brushRadius = 0.75f;
-    int m_canvasTopOffset = 0;
+    float m_textureTopR = 0.0f;
+    float m_textureBottomR = 0.0f;
+    float m_textureLeftR = 0.0f;
+    float m_textureRightR = 0.0f;
 
     bool m_reboundModeEnabled = false;
     mutable bool m_bounceActive = false;
@@ -147,7 +149,6 @@ private:
     std::vector<PixelChange> m_fillChanges;
     juce::Image m_pixelOverlay;
     bool m_overlayDirty = true;
-    int m_changedCellCount = 0;
     std::vector<int> m_pendingOverlayIndices;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PixelCanvasComponent)

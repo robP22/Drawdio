@@ -5,15 +5,15 @@
 
 struct FftChannel;
 
-class ConvolutionSpaceEffect : public DspEffect
+class ConvolutionReverbEffect : public DspEffect
 {
 public:
     static constexpr int kFftOrder = 11;
     static constexpr int kFftSize = 1 << kFftOrder;
     static constexpr int kDampGridSize = 16;
 
-    ConvolutionSpaceEffect();
-    ~ConvolutionSpaceEffect() override;
+    ConvolutionReverbEffect();
+    ~ConvolutionReverbEffect() override;
     void prepare(double sampleRate, int numChannels) override;
     void reset() override;
     void processSample(float** b, int c, int s, float effectParam) override;

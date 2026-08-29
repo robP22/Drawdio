@@ -1,5 +1,6 @@
 #include "CompilerThread.h"
 #include "Compile/CompilerEngine.h"
+#include "Effects/DspEffect.h"
 #include <chrono>
 
 

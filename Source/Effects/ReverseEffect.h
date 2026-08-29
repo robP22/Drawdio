@@ -3,10 +3,10 @@
 #include "Effects/DspEffect.h"
 #include "Dsp/DelayPrimitives.h"
 
-class ReverseBufferEffect : public DspEffect
+class ReverseEffect : public DspEffect
 {
 public:
-    ReverseBufferEffect() : DspEffect(0) {}
+    ReverseEffect() : DspEffect(0) {}
     void prepare(double sampleRate, int numChannels) override;
     void reset() override;
     void processSample(float** b, int c, int s, float effectParam) override;
@@ -17,6 +17,7 @@ private:
 
     struct RevChannel {
         std::vector<float> buf;
+        std::vector<float> freeze;
         size_t writePtr = 0;
         RevState mode = RevState::RECORDING;
         size_t sliceStart = 0;
@@ -26,6 +27,8 @@ private:
         int repeatCount = 0;
         int xfadePos = 32;
         float xfadeFrom = 0.0f;
+        int exitFadePos = 32;
+        float exitFadeFrom = 0.0f;
         static constexpr int kXfadeLen = 32;
     };
     std::vector<RevChannel> m_channels;

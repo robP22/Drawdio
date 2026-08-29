@@ -122,7 +122,6 @@ bool StateSerializer::deserialize(const uint8_t* data, size_t sizeInBytes, Seria
     {
         uint8_t raw = data[layoutOffset + i];
         if (raw > maxPedalType ||
-            raw == static_cast<uint8_t>(DspModuleType::RESERVED_REMOVED_RANDOM_MODULATOR) ||
             raw == static_cast<uint8_t>(DspModuleType::RESERVED_REMOVED_OCTAVER))
             raw = 0;
         outState.pedalSlots[i] = static_cast<DspModuleType>(raw);

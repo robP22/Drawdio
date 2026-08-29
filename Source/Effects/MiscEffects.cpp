@@ -61,7 +61,7 @@ void VcaCompressorEffect::processBlock(float** b, int c, int n, const float* par
 {
     juce::ScopedNoDenormals noDenorm;
     float attackMs = 0.5f + params[0] * 49.5f;
-    float releaseMs = 10.0f + params[1] * 490.0f;
+    const float releaseMs = 120.0f;
     m_makeupGain = 0.5f + params[3] * 1.5f;
 
     double sr = m_sampleRate == 0.0 ? 44100.0 : m_sampleRate;
@@ -105,37 +105,47 @@ void VcaCompressorEffect::processBlock(float** b, int c, int n, const float* par
     }
 }
 
-void RhythmGateEffect::prepare(double sampleRate, int numChannels)
+void SidechainEffect::prepare(double sampleRate, int numChannels)
 {
     DspEffect::prepare(sampleRate, numChannels);
     m_phase = 0;
     m_smoothEnv = 1.0f;
     m_smoothCoeff = 1.0f - std::exp(-1.0f / (static_cast<float>(sampleRate) * 0.001f));
+    m_bpm = 120.0f;
 }
 
-void RhythmGateEffect::reset()
+void SidechainEffect::reset()
 {
     m_phase = 0;
     m_smoothEnv = 1.0f;
 }
 
-void RhythmGateEffect::processSample(float** b, int c, int s, float)
+void SidechainEffect::setTransport(float bpm, double ppqPosition, bool isPlaying)
+{
+    juce::ignoreUnused(ppqPosition, isPlaying);
+    if (std::isfinite(bpm) && bpm > 1.0f)
+        m_bpm = bpm;
+}
+
+void SidechainEffect::processSample(float** b, int c, int s, float)
 {
     juce::ScopedNoDenormals noDenorm;
     for (int ch = 0; ch < c; ++ch)
         b[ch][s] *= m_smoothEnv;
 }
 
-void RhythmGateEffect::processBlock(float** b, int c, int n, const float* params)
+void SidechainEffect::processBlock(float** b, int c, int n, const float* params)
 {
     juce::ScopedNoDenormals noDenorm;
 
-    const float rateParam = params[0];
+    static constexpr float kDivisions[5] = {1.0f / 6.0f, 1.0f / 4.0f, 1.0f / 3.0f, 0.5f, 1.0f};
+    const float rateParam = std::max(0.0f, std::min(1.0f, params[0]));
     const float shapeParam = params[1];
     const float depth = std::max(0.0f, std::min(1.0f, params[2]));
 
+    const int divIdx = juce::jlimit(0, 4, static_cast<int>(std::lround(rateParam * 4.0f)));
     const float sr = static_cast<float>(m_sampleRate);
-    const float cycleSec = 0.05f + rateParam * 9.95f;
+    const float cycleSec = std::max(0.0015f, 60.0f / m_bpm * kDivisions[divIdx]);
     int cycleSamples = static_cast<int>(sr * cycleSec);
     if (cycleSamples < 2) cycleSamples = 2;
 
