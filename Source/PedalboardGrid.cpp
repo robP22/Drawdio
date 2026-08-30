@@ -98,6 +98,11 @@ void PedalboardGrid::rebuildConnectionCables()
     m_cachedInputPath.clear();
     m_cachedOutputPath.clear();
 
+    // Cable corner fillet control arm; scales with the window so bends stay
+    // smooth (~palette blob size) at any layout.
+    const float maxCurve = juce::jmax(
+        20.0f, static_cast<float>(getHeight()) * GridLayout::CableCurveBlobRatio);
+
     constexpr int kRowGaps = GridLayout::ColCount - 1;
     constexpr int kVertChannels = kRowGaps;
 
@@ -176,14 +181,9 @@ void PedalboardGrid::rebuildConnectionCables()
         if (srcRow == dstRow)
         {
             if (srcRow == 0)
-            {
                 route.kind = Route::Kind::SameRowTop;
-                route.vA = std::min(srcCol, dstCol);
-            }
             else
-            {
                 route.kind = Route::Kind::SameRowBottom;
-            }
         }
         else if (srcRow == 0)
         {
@@ -207,16 +207,12 @@ void PedalboardGrid::rebuildConnectionCables()
             return;
 
         const int row = pedalSlot / GridLayout::ColCount;
-        const int col = pedalSlot % GridLayout::ColCount;
-        const int gap = isInput ? std::min(col, kRowGaps - 1)
-                                : std::max(col - (kRowGaps - 1), 0);
 
         Route route;
         route.p1 = isInput ? dawEntryPos()
                            : m_pedalComponents[static_cast<size_t>(pedalSlot)]->getOutputJackPos();
         route.p2 = isInput ? m_pedalComponents[static_cast<size_t>(pedalSlot)]->getInputJackPos()
                            : dawExitPos();
-        route.vA = gap;
         route.lift = GridLayout::CableArcLiftPx;
 
         if (isInput)
@@ -294,10 +290,9 @@ void PedalboardGrid::rebuildConnectionCables()
         routes[static_cast<size_t>(routeIdx)].laneH = offset;
     });
 
-    const auto splitForCables = [&](const std::vector<juce::Point<float>>& waypoints,
-                                    juce::Point<float> startTangent, juce::Point<float> endTangent)
+    const auto splitForCables = [&](const std::vector<juce::Point<float>>& waypoints)
     {
-        auto split = CablePathBuilder::buildWaypointCable(waypoints, startTangent, endTangent);
+        auto split = CablePathBuilder::buildWaypointCable(waypoints, maxCurve);
         m_cachedConnectionPaths.push_back(std::move(split));
     };
 
@@ -307,74 +302,69 @@ void PedalboardGrid::rebuildConnectionCables()
         {
             case Route::Kind::SameRowTop:
             {
-                const float gapX = vChannels[static_cast<size_t>(route.vA)].pos + route.laneA;
                 splitForCables(
-                    { route.p1, { gapX, route.p1.y - route.lift }, route.p2 },
-                    {0.0f, -1.0f}, {0.0f, 1.0f});
+                    { route.p1, { route.p1.x, route.p1.y - route.lift },
+                      { route.p2.x, route.p1.y - route.lift }, route.p2 });
                 break;
             }
             case Route::Kind::SameRowBottom:
             {
-                const float midX = (route.p1.x + route.p2.x) * 0.5f;
+                const float hY = hChannel.pos;
                 splitForCables(
-                    { route.p1, { midX, route.p1.y - route.lift }, route.p2 },
-                    {0.0f, -1.0f}, {0.0f, 1.0f});
+                    { route.p1, { route.p1.x, hY },
+                      { route.p2.x, hY }, route.p2 });
                 break;
             }
             case Route::Kind::CrossRowTopDown:
             {
                 const float gapX = vChannels[static_cast<size_t>(route.vA)].pos + route.laneA;
                 const float hY = hChannel.pos + route.laneH;
+                const float bandY = route.p1.y - route.lift;
                 splitForCables(
-                    { route.p1, { gapX, hY }, { route.p2.x, hY }, route.p2 },
-                    {0.0f, -1.0f}, {0.0f, 1.0f});
+                    { route.p1, { route.p1.x, bandY }, { gapX, bandY },
+                      { gapX, hY }, { route.p2.x, hY }, route.p2 });
                 break;
             }
             case Route::Kind::CrossRowBottomUp:
             {
                 const float gapX = vChannels[static_cast<size_t>(route.vA)].pos + route.laneA;
                 const float hY = hChannel.pos + route.laneH;
+                const float bandY = route.p2.y - route.lift;
                 splitForCables(
                     { route.p1, { route.p1.x, hY }, { gapX, hY },
-                      { gapX, route.p2.y - route.lift }, route.p2 },
-                    {0.0f, -1.0f}, {0.0f, 1.0f});
+                      { gapX, bandY }, { route.p2.x, bandY }, route.p2 });
                 break;
             }
             case Route::Kind::DawInTop:
             {
-                const float gapX = vChannels[static_cast<size_t>(route.vA)].pos + route.laneA;
+                const float bandY = route.p1.y + route.lift;
                 m_cachedInputPath = CablePathBuilder::buildWaypointPath(
-                    { route.p1, { gapX, route.p1.y + route.lift },
-                      { gapX, route.p2.y - route.lift }, route.p2 },
-                    {0.0f, 1.0f}, {0.0f, 1.0f});
+                    { route.p1, { route.p1.x, bandY },
+                      { route.p2.x, bandY }, route.p2 }, maxCurve);
                 break;
             }
             case Route::Kind::DawInBottom:
             {
-                const float gapX = vChannels[static_cast<size_t>(route.vA)].pos + route.laneA;
                 const float hY = hChannel.pos + route.laneH;
                 m_cachedInputPath = CablePathBuilder::buildWaypointPath(
-                    { route.p1, { gapX, hY }, { route.p2.x, hY }, route.p2 },
-                    {0.0f, 1.0f}, {0.0f, 1.0f});
+                    { route.p1, { route.p1.x, hY },
+                      { route.p2.x, hY }, route.p2 }, maxCurve);
                 break;
             }
             case Route::Kind::DawOutTop:
             {
-                const float gapX = vChannels[static_cast<size_t>(route.vA)].pos + route.laneA;
+                const float bandY = route.p2.y + route.lift;
                 m_cachedOutputPath = CablePathBuilder::buildWaypointPath(
-                    { route.p1, { gapX, route.p1.y - route.lift },
-                      { gapX, route.p2.y + route.lift }, route.p2 },
-                    {0.0f, -1.0f}, {0.0f, -1.0f});
+                    { route.p1, { route.p1.x, bandY },
+                      { route.p2.x, bandY }, route.p2 }, maxCurve);
                 break;
             }
             case Route::Kind::DawOutBottom:
             {
-                const float gapX = vChannels[static_cast<size_t>(route.vA)].pos + route.laneA;
                 const float hY = hChannel.pos + route.laneH;
                 m_cachedOutputPath = CablePathBuilder::buildWaypointPath(
-                    { route.p1, { route.p1.x, hY }, { gapX, hY },
-                      { gapX, route.p2.y + route.lift }, route.p2 },
-                    {0.0f, -1.0f}, {0.0f, -1.0f});
+                    { route.p1, { route.p1.x, hY },
+                      { route.p2.x, hY }, route.p2 }, maxCurve);
                 break;
             }
         }

@@ -163,15 +163,18 @@ void DrawdioProcessorEditor::resized()
     m_pedalboardGrid.setBounds(pedalboardArea);
 
     int paletteH = juce::roundToInt(canvasArea.getHeight() * GridLayout::PaletteHeightRatio);
+    const int paletteInset = juce::roundToInt(canvasArea.getWidth() * GridLayout::PaletteColumnInsetRatio);
 
-    auto paletteBounds = canvasArea.withTrimmedTop(canvasArea.getHeight() - paletteH);
+    auto paletteBounds = canvasArea
+                             .withTrimmedTop(canvasArea.getHeight() - paletteH)
+                             .withTrimmedLeft(paletteInset)
+                             .withTrimmedRight(paletteInset);
     auto pxCanvasBounds = canvasArea.withTrimmedBottom(paletteH);
 
     const int squareSize = pxCanvasBounds.getHeight();
     const auto pixelCanvasBounds = pxCanvasBounds.withSizeKeepingCentre(squareSize, squareSize);
     m_pixelCanvas.setBounds(pixelCanvasBounds);
     m_palette.setBounds(paletteBounds);
-    m_palette.setCanvasCenterY(pixelCanvasBounds.getCentreY());
     m_palette.setImageCenterX(pixelCanvasBounds.getCentreX() - paletteBounds.getX());
 }
 

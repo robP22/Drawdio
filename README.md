@@ -30,17 +30,35 @@ to Bypass; they are not active catalog entries.
 
 ## Product Version
 
-The product is labeled **Drawdio v0.2.0**. The preset format is independently
+The product is labeled **Drawdio v0.2.2**. The preset format is independently
 identified as `DRD` version `0x05`.
 
 ## Releases
 
-Download macOS builds from the [GitHub Releases page](https://github.com/robP22/Drawdio/releases/latest):
+Download builds from the [GitHub Releases page](https://github.com/robP22/Drawdio/releases/latest):
 
-- [Drawdio VST3](https://github.com/robP22/Drawdio/releases/latest/download/Drawdio-macOS-VST3.zip)
-- [Drawdio Standalone](https://github.com/robP22/Drawdio/releases/latest/download/Drawdio-macOS-Standalone.zip)
+- [Drawdio VST3 (macOS)](https://github.com/robP22/Drawdio/releases/latest/download/Drawdio-macOS-VST3.zip)
+- [Drawdio Standalone (macOS)](https://github.com/robP22/Drawdio/releases/latest/download/Drawdio-macOS-Standalone.zip)
 
-See [`docs/build.md`](docs/build.md) for source builds and platform details.
+### Installing
+
+**macOS VST3:** unzip and copy `Drawdio.vst3` into
+`~/Library/Audio/Plug-Ins/VST3` (create the folder if needed). The AU build
+installs the same way into `~/Library/Audio/Plug-Ins/Components`, and the
+Standalone app can be copied to `Applications`. Downloaded builds are unsigned,
+so macOS Gatekeeper may block the first launch: right-click (or
+Control-click) the app or plugin and choose Open. Restart or rescan the DAW
+after installation.
+
+**Windows VST3:** unzip and copy `Drawdio.vst3` into
+`C:\Program Files\Common Files\VST3` (requires Administrator rights) or the
+per-user directory `%LOCALAPPDATA%\Programs\Common\VST3`. Restart or rescan the
+DAW.
+
+**Linux VST3:** copy `Drawdio.vst3` into `~/.vst3`.
+
+See [`docs/build.md`](docs/build.md) for source builds, platform details, and
+the `updater.sh` / `updater.ps1` release helpers.
 
 ## Documentation
 

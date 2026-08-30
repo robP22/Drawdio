@@ -19,12 +19,10 @@ std::pair<juce::Point<float>, juce::Point<float>> makeSameRowControlPoints(
 
 CachedSplitCable buildWaypointCable(
     const std::vector<juce::Point<float>>& waypoints,
-    juce::Point<float> startTangent,
-    juce::Point<float> endTangent);
+    float maxCurve);
 
 juce::Path buildWaypointPath(
     const std::vector<juce::Point<float>>& waypoints,
-    juce::Point<float> startTangent,
-    juce::Point<float> endTangent);
+    float maxCurve);
 
 }

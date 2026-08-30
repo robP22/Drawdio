@@ -1,5 +1,4 @@
 #include "CablePathBuilder.h"
-#include "GridLayout.h"
 #include <algorithm>
 #include <cmath>
 #include <functional>
@@ -45,8 +44,7 @@ struct WaypointSegment
 };
 
 void appendWaypointSegments(const std::vector<juce::Point<float>>& waypoints,
-                            juce::Point<float> startTangent,
-                            juce::Point<float> endTangent,
+                            float maxCurve,
                             const std::function<void(const WaypointSegment&)>& sink)
 {
     if (waypoints.size() < 2)
@@ -60,23 +58,23 @@ void appendWaypointSegments(const std::vector<juce::Point<float>>& waypoints,
         return v / len;
     };
 
-    const float maxCurve = GridLayout::CableWaypointCurvePx;
-
     for (size_t i = 0; i + 1 < waypoints.size(); ++i)
     {
         const auto& a = waypoints[i];
         const auto& b = waypoints[i + 1];
         const float segLen = a.getDistanceFrom(b);
 
+        // Tangents are derived from the waypoint segments so the cable leaves
+        // and enters every jack parallel to its first/last run (no hooks).
         juce::Point<float> dirIn;
         if (i == 0)
-            dirIn = startTangent;
+            dirIn = unit(b - a);
         else
             dirIn = unit(waypoints[i + 1] - waypoints[i - 1]);
 
         juce::Point<float> dirOut;
         if (i + 2 == waypoints.size())
-            dirOut = endTangent;
+            dirOut = unit(b - a);
         else
             dirOut = unit(waypoints[i + 2] - waypoints[i]);
 
@@ -90,11 +88,10 @@ void appendWaypointSegments(const std::vector<juce::Point<float>>& waypoints,
 
 CachedSplitCable CablePathBuilder::buildWaypointCable(
     const std::vector<juce::Point<float>>& waypoints,
-    juce::Point<float> startTangent,
-    juce::Point<float> endTangent)
+    float maxCurve)
 {
     CachedSplitCable result;
-    appendWaypointSegments(waypoints, startTangent, endTangent,
+    appendWaypointSegments(waypoints, maxCurve,
         [&](const WaypointSegment& seg)
         {
             auto split = splitCubicBezier(seg.p0, seg.p1, seg.p2, seg.p3);
@@ -106,14 +103,13 @@ CachedSplitCable CablePathBuilder::buildWaypointCable(
 
 juce::Path CablePathBuilder::buildWaypointPath(
     const std::vector<juce::Point<float>>& waypoints,
-    juce::Point<float> startTangent,
-    juce::Point<float> endTangent)
+    float maxCurve)
 {
     juce::Path path;
     if (waypoints.size() < 2)
         return path;
     path.startNewSubPath(waypoints.front());
-    appendWaypointSegments(waypoints, startTangent, endTangent,
+    appendWaypointSegments(waypoints, maxCurve,
         [&](const WaypointSegment& seg)
         {
             path.cubicTo(seg.p1, seg.p2, seg.p3);

@@ -28,10 +28,9 @@ public:
     void setOnBrushSize(std::function<void(float)> cb) { m_onBrushSize = std::move(cb); }
     void setOnReboundMode(std::function<void(bool)> cb) { m_onReboundMode = std::move(cb); }
     void setOnEraser(std::function<void(bool)> cb) { m_onEraser = std::move(cb); }
-    // Vertical position (parent coords) that the palette texture's center
+    // Horizontal position (parent coords) that the palette texture's center
     // should align with; the editor passes the pixel canvas component's
-    // centre so the white palette panel centres on the canvas.
-    void setCanvasCenterY(float centerY);
+    // centre so the palette panel and the canvas share an x-centered position.
     void setImageCenterX(float x) { m_imageCenterX = x; repaint(); }
 
 private:
@@ -69,8 +68,6 @@ private:
     std::array<float, 4> m_brushSizes { 0.75f, 1.5f, 2.5f, 4.0f };
     int m_currentBrushIndex = 0;
     float m_imageCenterX = 0.0f;
-    float m_canvasCenterY = 0.0f;
-    float m_imageVerticalShift = 0.0f;
     float m_contentCenterOffset = 0.0f;
     float m_paletteTopRatio = 0.0f;
     float m_paletteBottomRatio = 0.0f;

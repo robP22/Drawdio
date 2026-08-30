@@ -10,7 +10,7 @@
 JUCE is fetched by CMake through `FetchContent` when it is not already
 available. Initial configuration therefore requires network access.
 
-The product and plugin version are Drawdio v0.2.0. The installed CMake tool
+The product and plugin version are Drawdio v0.2.2. The installed CMake tool
 version is independent; `cmake_minimum_required(VERSION 3.24)` specifies only
 the oldest supported CMake release. Any current CMake 4.x release, including
 CMake 4.4.2, satisfies this requirement.
@@ -155,6 +155,16 @@ plugin rescan after installation.
 
 ## Verification
 
-The repository currently has no automated test or CI configuration. At minimum,
-verify a Release build of the intended target and launch the Standalone target
-or scan the generated plugin with the host's plugin validator.
+The repository ships a headless Catch2 test suite. Configure with
+`DRAWDIO_BUILD_TESTS=ON` (the default), build the `drawdio_tests` target, and run
+it with `ctest`:
+
+```bash
+cmake -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --target drawdio_tests --parallel
+ctest --test-dir build --output-on-failure
+```
+
+At minimum, verify a Release build of the intended target and launch the
+Standalone target or scan the generated plugin with the host's plugin
+validator. There is no CI configuration yet.

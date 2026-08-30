@@ -1,12 +1,30 @@
 # Changelog
 
-## Unreleased
+## v0.2.2 - Canvas Mapping Rework and DSP Stability
 
-- Documentation consolidation and correction for the current v0.2.0 source tree.
-- CMake and JUCE plugin metadata now report version `0.2.0` and company `robP`.
-- Re-Time is the active replacement for the former Tape Stop Echo slot.
-- Random Modulator and Analog Octaver are retained only as reserved legacy IDs
-  that migrate to Bypass.
+### Added
+
+- VintageVerb-style FDN reverb network with improved diffuse tail.
+- Knob snapping grids for step-quantized parameters (Re-Time, Sidechain, Bitcrusher, Convolution Damp, Tremolo Shape).
+- Per-sample coefficient interpolation in MultiMode Filter, Spectral Filter, and HP/LP Filter.
+
+### Changed
+
+- Canvas-to-pedal mapping rework with unified positioning conventions.
+- Chorus replaces Micro-Pitch Chorus (same slot, presets migrate); fixed free-running detuned taps drifting through the write head.
+- Granular engine rewrite: two independent click-free grain heads; grain base clamped to a safe write-head invariant.
+- Sidechain envelope shaper replaces the former Rhythm Gate (same slot, presets migrate); cycle length follows the transport BPM.
+- Reverse effect keeps a per-channel freeze buffer and exits play mode with a short crossfade.
+- Cable rendering uses magnetic routing with cached bezier paths.
+- Effect naming unification (ReverseBufferEffect -> ReverseEffect and similar).
+- HP/LP Filter fixed to the canonical TDF-II form with a bounded Q range.
+- Bitcrusher dither gates to zero at digital silence.
+
+### Fixed
+
+- Cross-platform warnings surfaced on clang that MSVC hides by default (deprecated `Font` construction, constructor reorder, dead variable).
+- Zero-delay and write-head artifacts in delay and granular paths.
+- Various DSP anomalies in filter, pitch, and modulation paths.
 
 ## v0.2.0 - Hip-Hop FX Expansion and Stability Audit
 
