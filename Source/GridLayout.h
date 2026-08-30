@@ -46,8 +46,12 @@ constexpr float PedalHeightMaxRatio = 0.39f;
 
 constexpr float PaletteHeightRatio = 0.26f;
 
-// Small rightward nudge that keeps the canvas visually centered on the
-// texture's content rather than its raw edges.
+// Horizontal inset of the palette panel within the canvas column so the
+// full-bleed sprite never touches the window/column edges.
+constexpr float PaletteColumnInsetRatio = 0.05f;
+
+// The canvas texture is drawn at 90% of the canvas component's size, leaving
+// a 5% margin around it so it never touches the window or palette edges.
 constexpr float CanvasScaleRatio = 0.90f;
 
 constexpr float KnobSizeRatio = 0.16f;
@@ -114,8 +118,13 @@ constexpr float KnobLabelWidthRatio      = 0.28f;
 // (14 px at the 780 px design grid height).
 constexpr float CableJackHeightRatio      = 0.01795f;
 constexpr float CableLaneSpacingPx       = 6.0f;
-constexpr float CableWaypointCurvePx     = 60.0f;
-constexpr float CableArcLiftPx           = 40.0f;
+// Cable corner fillet control arm, scaled so the bend is about the size of
+// a palette color blob at any window size (0.242 * 0.26 * gridH ~ 49px at
+// the 780px design grid height).
+constexpr float CableCurveBlobRatio      = 0.0629f;
+// Top-row DAW band offset above the DAW jack line; sized so the entry/exit
+// corner fillets stay smooth (~27px at design, scaling with the layout).
+constexpr float CableArcLiftPx           = 60.0f;
 
 // ── Palette ──
 constexpr float PaletteBlob0CenterX      = 0.135f;
