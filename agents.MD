@@ -27,6 +27,9 @@
 ### 2. Multi-Threaded State Hand-Offs (`CompilerThread`, `CanvasMessageQueue`)
 - Keep `CanvasMessageQueue` purely single-producer single-consumer (SPSC) using explicit memory fences (`std::memory_order_release` / `std::memory_order_acquire`).
 
+## Build & Install Rule
+- **To build and install the Release VST3 into the correct location, ALWAYS run `./updater.sh`** (project root) — it configures, builds the `Drawdio_VST3` target, validates the bundle, and installs to the platform default (`~/Library/Audio/Plug-Ins/VST3` on macOS). On Windows use `updater.cmd`/`updater.ps1`. Do not hand-copy build artifacts.
+
 <!-- ANCHORED_SUMMARY -->
 ## Goal
 - Complete sprite canvas refactoring and address all identified architectural/audio thread safety issues in priority order.

@@ -103,7 +103,6 @@ bool StateSerializer::deserialize(const uint8_t* data, size_t sizeInBytes, Seria
         return false;
 
     const size_t v2Size = 4 + TotalCells + PedalSlotCount + PedalSlotCount + 1;
-    const size_t v3Size = v2Size + TotalKnobs * sizeof(float);
     if (sizeInBytes < v2Size)
         return false;
 

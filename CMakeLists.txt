@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(Drawdio VERSION 0.2.0 LANGUAGES C CXX)
+project(Drawdio VERSION 0.2.2 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -30,8 +30,8 @@ juce_add_binary_data(DrawdioAssets SOURCES ${ASSET_FILES})
 juce_add_plugin(Drawdio
     PRODUCT_NAME              "Drawdio"
     PLUGIN_NAME               "Drawdio"
-    VERSION                   "0.2.0"
-    BUILD_VERSION             "0.2.0"
+    VERSION                   "0.2.2"
+    BUILD_VERSION             "0.2.2"
     COMPANY_NAME              "robP"
     COMPANY_WEBSITE           "https://github.com/robP22/Drawdio"
     COMPANY_EMAIL             "drawdio@proton.me"
