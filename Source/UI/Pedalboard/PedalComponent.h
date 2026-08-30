@@ -60,6 +60,6 @@ private:
     juce::Image m_ledScaled[2];
     int m_ledScaledSize = 0;
     float m_knobDragStartValues[kKnobCount]{};
-    juce::Font m_lcdFont;
-    juce::Font m_labelFont;
+    juce::Font m_lcdFont { juce::FontOptions(10.0f) };
+    juce::Font m_labelFont { juce::FontOptions(8.0f) };
 };

@@ -284,7 +284,7 @@ void ColorPalette::paint(juce::Graphics& g)
     {
         const float offsetX = m_imageCenterX - bounds.getWidth() * 0.5f;
         g.drawImage(texture,
-                   bounds.getX() + offsetX, bounds.getY() - m_imageVerticalShift,
+                   bounds.getX() + offsetX, bounds.getY(),
                    bounds.getWidth(), bounds.getHeight(),
                    0, 0, texture.getWidth(), texture.getHeight());
     }
@@ -402,10 +402,6 @@ void ColorPalette::resized()
     const float paletteW = bounds.getWidth();
     const float paletteH = bounds.getHeight();
 
-    // The palette texture is drawn above the component's top edge so its
-    // centre lands exactly on the pixel canvas centre (parent coords).
-    m_imageVerticalShift = static_cast<float>(
-        juce::roundToInt(static_cast<float>(getY()) + paletteH * 0.5f - m_canvasCenterY));
     m_contentCenterOffset = static_cast<float>(
         juce::roundToInt(0.5f * paletteH * (m_paletteTopRatio - m_paletteBottomRatio)));
 
@@ -420,7 +416,6 @@ void ColorPalette::resized()
                       static_cast<float>(i) * GridLayout::PaletteBlobSpacingRatio);
         const float centerY = paletteH * ((i % 2 == 0) ? GridLayout::PaletteBlobCenterY0
                                                         : GridLayout::PaletteBlobCenterY1)
-                              - m_imageVerticalShift
                               + m_contentCenterOffset;
         m_blobs[static_cast<size_t>(i)].bounds = juce::Rectangle<float>(
             centerX - halfBlob, centerY - halfBlob, blobSize, blobSize);
@@ -430,11 +425,23 @@ void ColorPalette::resized()
     float lastBlobRight = paletteW * (GridLayout::PaletteBlob0CenterX +
         11.0f * GridLayout::PaletteBlobSpacingRatio) + halfBlob;
     float cx = lastBlobRight + (paletteW - lastBlobRight) * 0.5f;
-    float cy = paletteH * 0.5f - m_imageVerticalShift + m_contentCenterOffset;
+    float cy = paletteH * 0.5f + m_contentCenterOffset;
     float centreR = paletteH * 0.09f;
     float wheelGap = 5.0f;
     float ringInnerR = centreR + wheelGap;
     float ringOuterR = paletteH * 0.23f;
+
+    // Shift the whole content group (blobs + wheel) left so its center
+    // matches the palette panel center.
+    const float groupLeft = m_blobs.front().bounds.getX();
+    const float groupRight = cx + ringOuterR;
+    const float groupShift = paletteW * 0.5f - (groupLeft + groupRight) * 0.5f;
+    if (groupShift != 0.0f)
+    {
+        for (auto& blob : m_blobs)
+            blob.bounds.translate(groupShift, 0.0f);
+        cx += groupShift;
+    }
 
     m_clearButton.setArc(cx, cy, 0, centreR, 0, juce::MathConstants<float>::twoPi);
 
@@ -521,15 +528,6 @@ void ColorPalette::mouseExit(const juce::MouseEvent&)
 void ColorPalette::setSelectedColor(uint8_t color)
 {
     m_selectedColor = color;
-    repaint();
-}
-
-void ColorPalette::setCanvasCenterY(float centerY)
-{
-    if (m_canvasCenterY == centerY)
-        return;
-    m_canvasCenterY = centerY;
-    resized();
     repaint();
 }
 

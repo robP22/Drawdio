@@ -8,7 +8,7 @@ class SpriteKnob : public juce::Component
 {
 public:
     SpriteKnob(const juce::Image& sprite, float minV = 0.0f, float maxV = 1.0f)
-        : m_sprite(sprite), m_min(minV), m_max(maxV), m_value((minV + maxV) * 0.5f)
+        : m_sprite(sprite), m_value((minV + maxV) * 0.5f), m_min(minV), m_max(maxV)
     {
         setMouseCursor(juce::MouseCursor::PointingHandCursor);
     }
