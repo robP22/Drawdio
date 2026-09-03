@@ -15,6 +15,9 @@ public:
     virtual void setKnobParameter(int slot, int knob, float dragStartValue, float newValue) = 0;
     virtual bool isKnobLinked(int slot, int knob) const = 0;
     virtual void setKnobLink(int slot, int knob, bool linked) = 0;
+    virtual void setKnobLinkRange(int /*slot*/, int /*knob*/, float /*rangeMin*/, float /*rangeMax*/) {}
+    virtual float getKnobLinkRangeMin(int /*slot*/, int /*knob*/) const { return 0.0f; }
+    virtual float getKnobLinkRangeMax(int /*slot*/, int /*knob*/) const { return 1.0f; }
 };
 
 class IPedalboardModel : public IPedalComponentModel

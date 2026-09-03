@@ -57,12 +57,14 @@ void BitcrusherEffect::processBlock(float** b, int c, int n, const float* params
     const float sr = static_cast<float>(m_sampleRate);
     const float targetRate = std::max(50.0f, sr * std::pow(500.0f / sr, rateParam));
     const float delta = targetRate / sr;
-    const float levels = std::pow(2.0f, 2.0f + bitsParam * 14.0f - 1.0f);
+    const float levels = std::pow(2.0f, 2.0f + bitsParam * 14.0f);
 
     float cutoff = targetRate * 0.45f * (0.1f + 0.9f * filterParam);
     cutoff = std::max(20.0f, std::min(cutoff, sr * 0.49f));
     if (std::abs(cutoff - m_prevCutoff) > std::abs(m_prevCutoff) * 0.05f || m_prevCutoff < 0.0f)
     {
+        m_lpB0Prev = m_lpB0; m_lpB1Prev = m_lpB1; m_lpB2Prev = m_lpB2;
+        m_lpA1Prev = m_lpA1; m_lpA2Prev = m_lpA2;
         const float w0 = 6.2831853f * cutoff / sr;
         const float cosw = std::cos(w0);
         const float alpha = std::sin(w0) * 0.70710678f;
@@ -79,6 +81,7 @@ void BitcrusherEffect::processBlock(float** b, int c, int n, const float* params
     for (int ch = 0; ch < chCount; ++ch)
     {
         auto& mc = m_channels[static_cast<size_t>(ch)];
+        bool firstSample = true;
         for (int s = 0; s < n; ++s)
         {
             float in = b[ch][s];
@@ -89,18 +92,28 @@ void BitcrusherEffect::processBlock(float** b, int c, int n, const float* params
             mc.dcPrevIn = in;
             in = dc;
 
-            const float lp = m_lpB0 * in + mc.lpZ1;
-            mc.lpZ1 = m_lpB1 * in - m_lpA1 * lp + mc.lpZ2;
-            mc.lpZ2 = m_lpB2 * in - m_lpA2 * lp;
+            const float it = static_cast<float>(s) / static_cast<float>(n);
+            const float b0 = m_lpB0Prev + (m_lpB0 - m_lpB0Prev) * it;
+            const float b1 = m_lpB1Prev + (m_lpB1 - m_lpB1Prev) * it;
+            const float b2 = m_lpB2Prev + (m_lpB2 - m_lpB2Prev) * it;
+            const float a1 = m_lpA1Prev + (m_lpA1 - m_lpA1Prev) * it;
+            const float a2 = m_lpA2Prev + (m_lpA2 - m_lpA2Prev) * it;
+
+            const float lp = b0 * in + mc.lpZ1;
+            mc.lpZ1 = b1 * in - a1 * lp + mc.lpZ2;
+            mc.lpZ2 = b2 * in - a2 * lp;
             in = lp;
 
             mc.phase += delta;
             if (mc.phase >= 1.0)
             {
                 mc.phase -= 1.0;
-                const float t = 1.0f - static_cast<float>(mc.phase) / delta;
-                mc.hold = mc.prevInput + (in - mc.prevInput) * t;
+                const float t2 = 1.0f - static_cast<float>(mc.phase) / delta;
+                mc.hold = mc.prevInput + (in - mc.prevInput) * t2;
             }
+            if (firstSample && mc.hold == 0.0f && in != 0.0f)
+                mc.hold = in;
+            firstSample = false;
             mc.prevInput = in;
 
             float out = mc.hold;

@@ -4,6 +4,7 @@
 #include <functional>
 #include "UI/Theme/IThemeProvider.h"
 #include "Core/Contracts/IResourceProvider.h"
+#include "Resources/ScaledAssetProvider.h"
 #include "UI/Canvas/ArcButton.h"
 
 class ColorPalette : public juce::Component
@@ -11,7 +12,9 @@ class ColorPalette : public juce::Component
 public:
     using ColorCallback = std::function<void(uint8_t)>;
 
-    ColorPalette(const IResourceProvider& resources, const IThemeProvider& theme);
+    ColorPalette(const IResourceProvider& resources,
+                 const ScaledAssetProvider& assets,
+                 const IThemeProvider& theme);
 
     void paint(juce::Graphics& g) override;
     void resized() override;
@@ -20,6 +23,7 @@ public:
     void mouseExit(const juce::MouseEvent& event) override;
 
     void setSelectedColor(uint8_t color);
+    bool isEraserActive() const { return m_eraserButton.getToggleState(); }
     void setOnColorSelected(ColorCallback cb) { m_onColorSelected = std::move(cb); }
     void setOnUndo(std::function<void()> cb) { m_onUndo = std::move(cb); }
     void setOnRedo(std::function<void()> cb) { m_onRedo = std::move(cb); }
@@ -28,6 +32,9 @@ public:
     void setOnBrushSize(std::function<void(float)> cb) { m_onBrushSize = std::move(cb); }
     void setOnReboundMode(std::function<void(bool)> cb) { m_onReboundMode = std::move(cb); }
     void setOnEraser(std::function<void(bool)> cb) { m_onEraser = std::move(cb); }
+    uint8_t getBrushSizeIndex() const { return static_cast<uint8_t>(m_currentBrushIndex); }
+    void setBrushSizeIndex(uint8_t index);
+    float getBrushRadius() const { return m_brushSizes[static_cast<size_t>(m_currentBrushIndex)]; }
     // Horizontal position (parent coords) that the palette texture's center
     // should align with; the editor passes the pixel canvas component's
     // centre so the palette panel and the canvas share an x-centered position.
@@ -45,6 +52,7 @@ private:
     void setExclusiveToggle(ArcButton& active);
 
     const IResourceProvider& m_resources;
+    const ScaledAssetProvider& m_assets;
     const IThemeProvider& m_theme;
     std::array<PaintBlob, 12> m_blobs;
     uint8_t m_selectedColor = 3;

@@ -1,179 +1,278 @@
 #include "StateSerializer.h"
+
+#include <algorithm>
+#include <cmath>
 #include <cstring>
+#include <limits>
 
-size_t StateSerializer::calculateSize(const SerializedState& state)
+namespace
 {
-    // Header: 3 bytes (magic) + 1 byte (version) = 4 bytes
-    // Grid data: TotalCells bytes
-    // Pedal slots: PedalSlotCount bytes
-    // Routing: PedalSlotCount bytes
-    // Flag: 1 byte
-    // Knob values: TotalKnobs * sizeof(float) bytes
-    // Override mask: sizeof(uint32_t) bytes (v4+)
-    return 4 + TotalCells + PedalSlotCount + PedalSlotCount + 1
-         + static_cast<int>(TotalKnobs * sizeof(float))
-         + static_cast<int>(sizeof(uint32_t))
-         + 3;
+const juce::Identifier kRoot("DrawdioState");
+const juce::Identifier kType("type");
+const juce::Identifier kVersion("version");
+const juce::Identifier kPreset("preset");
+const juce::Identifier kSession("session");
+const juce::Identifier kGrid("grid");
+const juce::Identifier kPedals("pedals");
+const juce::Identifier kRouting("routing");
+const juce::Identifier kKnobs("knobs");
+const juce::Identifier kOverrideMask("overrideMask");
+const juce::Identifier kBarCount("barCount");
+const juce::Identifier kSectionStart("sectionStart");
+const juce::Identifier kManualMode("manualMode");
+const juce::Identifier kInputGain("inputGain");
+const juce::Identifier kOutputGain("outputGain");
+const juce::Identifier kPedalGains("pedalGains");
+const juce::Identifier kLinkFlags("linkFlags");
+const juce::Identifier kLinkRangeMins("linkRangeMins");
+const juce::Identifier kLinkRangeMaxs("linkRangeMaxs");
+const juce::Identifier kSelectedColour("selectedColour");
+const juce::Identifier kSelectedTool("selectedTool");
+const juce::Identifier kSelectedPedal("selectedPedal");
+const juce::Identifier kBrushSizeIndex("brushSizeIndex");
+
+juce::MemoryBlock makeBytes(const void* data, size_t size)
+{
+    juce::MemoryBlock result;
+    result.append(data, size);
+    return result;
 }
 
-StateSerializer::SerializedState StateSerializer::createState(
-    const std::array<uint8_t, TotalCells>& gridData,
-    const std::array<DspModuleType, PedalSlotCount>& pedalSlots,
-    const std::vector<uint8_t>& manualRouting,
-    const std::array<float, TotalKnobs>& knobValues,
-    uint32_t overrideMask,
-    uint8_t barCount, uint8_t sectionStart, uint8_t manualMode)
+template <typename T, size_t N>
+juce::MemoryBlock makeArrayBytes(const std::array<T, N>& values)
 {
-    SerializedState state;
-    state.gridData = gridData;
-    for (int i = 0; i < PedalSlotCount; ++i)
-        state.pedalSlots[i] = pedalSlots[i];
-    state.manualRouting = manualRouting;
-    state.knobValues = knobValues;
-    state.overrideMask = overrideMask;
-    state.barCount = barCount;
-    state.sectionStartBar = sectionStart;
-    state.manualMode = manualMode;
-    return state;
+    return makeBytes(values.data(), sizeof(T) * N);
 }
 
-void StateSerializer::serialize(const SerializedState& state, juce::MemoryBlock& outBlob)
+template <typename T, size_t N>
+bool readArrayBytes(const juce::var& value, std::array<T, N>& output)
 {
-    const size_t totalSize = calculateSize(state);
-    outBlob.setSize(totalSize, true);
-    auto* data = static_cast<uint8_t*>(outBlob.getData());
+    const auto* block = value.getBinaryData();
+    if (block == nullptr || block->getSize() != sizeof(T) * N)
+        return false;
 
-    // Header
-    data[0] = MagicBytes[0];
-    data[1] = MagicBytes[1];
-    data[2] = MagicBytes[2];
-    data[3] = Version;
+    std::memcpy(output.data(), block->getData(), block->getSize());
+    return true;
+}
 
-    // Grid data
-    std::memcpy(data + 4, state.gridData.data(), TotalCells);
+bool finiteArray(const std::array<float, TotalKnobs>& values)
+{
+    for (const auto value : values)
+        if (!std::isfinite(value))
+            return false;
+    return true;
+}
 
-    // Pedal slots
-    const int layoutOffset = 4 + TotalCells;
+bool finiteArray(const std::array<float, PedalSlotCount>& values)
+{
+    for (const auto value : values)
+        if (!std::isfinite(value))
+            return false;
+    return true;
+}
+
+juce::ValueTree makePresetTree(const PresetState& state)
+{
+    juce::ValueTree tree(kPreset);
+    tree.setProperty(kGrid, juce::var(makeArrayBytes(state.gridData)), nullptr);
+
+    std::array<uint8_t, PedalSlotCount> pedals{};
     for (int i = 0; i < PedalSlotCount; ++i)
-        data[layoutOffset + i] = static_cast<uint8_t>(state.pedalSlots[i]);
+        pedals[static_cast<size_t>(i)] = static_cast<uint8_t>(state.pedalSlots[static_cast<size_t>(i)]);
 
-    // Manual routing
-    const int routingOffset = layoutOffset + PedalSlotCount;
+    tree.setProperty(kPedals, juce::var(makeArrayBytes(pedals)), nullptr);
+    tree.setProperty(kRouting, juce::var(makeBytes(state.manualRouting.data(), state.manualRoutingSize)), nullptr);
+    tree.setProperty(kKnobs, juce::var(makeArrayBytes(state.knobValues)), nullptr);
+    tree.setProperty(kOverrideMask, static_cast<int64_t>(state.overrideMask), nullptr);
+    tree.setProperty(kBarCount, static_cast<int>(state.barCount), nullptr);
+    tree.setProperty(kSectionStart, static_cast<int>(state.sectionStartBar), nullptr);
+    tree.setProperty(kManualMode, static_cast<int>(state.manualMode), nullptr);
+    tree.setProperty(kInputGain, state.inputGain, nullptr);
+    tree.setProperty(kOutputGain, state.outputGain, nullptr);
+    tree.setProperty(kPedalGains, juce::var(makeArrayBytes(state.pedalGains)), nullptr);
+    tree.setProperty(kLinkFlags, static_cast<int64_t>(state.linkFlags), nullptr);
+    tree.setProperty(kLinkRangeMins, juce::var(makeArrayBytes(state.linkRangeMins)), nullptr);
+    tree.setProperty(kLinkRangeMaxs, juce::var(makeArrayBytes(state.linkRangeMaxs)), nullptr);
+    return tree;
+}
+
+bool readPresetTree(const juce::ValueTree& tree, PresetState& state)
+{
+    if (!tree.isValid()
+        || !readArrayBytes(tree[kGrid], state.gridData)
+        || !readArrayBytes(tree[kKnobs], state.knobValues)
+        || !readArrayBytes(tree[kPedalGains], state.pedalGains)
+        || !tree.hasProperty(kRouting)
+        || !tree.hasProperty(kOverrideMask)
+        || !tree.hasProperty(kBarCount)
+        || !tree.hasProperty(kSectionStart)
+        || !tree.hasProperty(kManualMode)
+        || !tree.hasProperty(kInputGain)
+        || !tree.hasProperty(kOutputGain)
+        || !tree.hasProperty(kLinkFlags))
+        return false;
+    state.linkRangeMins.fill(0.0f);
+    state.linkRangeMaxs.fill(1.0f);
+    if (tree.hasProperty(kLinkRangeMins))
+    {
+        if (!readArrayBytes(tree[kLinkRangeMins], state.linkRangeMins))
+            return false;
+    }
+    if (tree.hasProperty(kLinkRangeMaxs))
+    {
+        if (!readArrayBytes(tree[kLinkRangeMaxs], state.linkRangeMaxs))
+            return false;
+    }
+
+    std::array<uint8_t, PedalSlotCount> pedals{};
+    if (!readArrayBytes(tree[kPedals], pedals))
+        return false;
+
     for (int i = 0; i < PedalSlotCount; ++i)
     {
-        if (i < static_cast<int>(state.manualRouting.size()))
-            data[routingOffset + i] = state.manualRouting[static_cast<size_t>(i)];
+        const auto raw = pedals[static_cast<size_t>(i)];
+        if (raw > static_cast<uint8_t>(DspModuleType::RESERVED_REMOVED_OCTAVER)
+            && raw != static_cast<uint8_t>(DspModuleType::RESERVED_REMOVED_OCTAVER))
+            return false;
+        if (raw == static_cast<uint8_t>(DspModuleType::RESERVED_REMOVED_OCTAVER))
+            state.pedalSlots[static_cast<size_t>(i)] = DspModuleType::BYPASS;
         else
-            data[routingOffset + i] = 0xFF;
+            state.pedalSlots[static_cast<size_t>(i)] = static_cast<DspModuleType>(raw);
     }
 
-    // Flag
-    const int flagOffset = routingOffset + PedalSlotCount;
-    data[flagOffset] = Version;
+    const auto* routing = tree[kRouting].getBinaryData();
+    if (routing == nullptr || routing->getSize() > PedalSlotCount)
+        return false;
+    state.manualRouting.fill(0);
+    state.manualRoutingSize = static_cast<uint8_t>(routing->getSize());
+    if (state.manualRoutingSize > 0)
+        std::memcpy(state.manualRouting.data(), routing->getData(), routing->getSize());
 
-    // Knob values (24 floats = 96 bytes)
-    const int knobOffset = flagOffset + 1;
-    std::memcpy(data + knobOffset, state.knobValues.data(),
-                TotalKnobs * sizeof(float));
+    std::array<bool, PedalSlotCount> routingSeen{};
+    for (int i = 0; i < state.manualRoutingSize; ++i)
+    {
+        const auto slot = state.manualRouting[static_cast<size_t>(i)];
+        if (slot >= PedalSlotCount || routingSeen[slot])
+            return false;
+        routingSeen[slot] = true;
+    }
 
-    // Override mask (4 bytes)
-    const int maskOffset = knobOffset + static_cast<int>(TotalKnobs * sizeof(float));
-    std::memcpy(data + maskOffset, &state.overrideMask, sizeof(uint32_t));
+    const auto overrideMask = static_cast<int64_t>(tree[kOverrideMask]);
+    const auto linkFlags = static_cast<int64_t>(tree[kLinkFlags]);
+    const int barCount = static_cast<int>(tree[kBarCount]);
+    const int sectionStart = static_cast<int>(tree[kSectionStart]);
+    const int manualMode = static_cast<int>(tree[kManualMode]);
+    if (overrideMask < 0 || linkFlags < 0
+        || overrideMask > static_cast<int64_t>(std::numeric_limits<uint32_t>::max())
+        || linkFlags > static_cast<int64_t>(std::numeric_limits<uint32_t>::max())
+        || barCount < 1 || barCount > 8
+        || sectionStart < 0 || sectionStart > 7
+        || manualMode < 0 || manualMode > 1
+        || (overrideMask & ~static_cast<int64_t>((uint32_t{ 1 } << TotalKnobs) - 1u)) != 0
+        || (linkFlags & ~static_cast<int64_t>((uint32_t{ 1 } << TotalKnobs) - 1u)) != 0)
+        return false;
 
-    // Flags (3 bytes): barCount, sectionStartBar, manualMode (v5+)
-    const int flagsOffset = maskOffset + static_cast<int>(sizeof(uint32_t));
-    data[flagsOffset] = state.barCount;
-    data[flagsOffset + 1] = state.sectionStartBar;
-    data[flagsOffset + 2] = state.manualMode;
+    state.overrideMask = static_cast<uint32_t>(overrideMask);
+    state.barCount = static_cast<uint8_t>(barCount);
+    state.sectionStartBar = static_cast<uint8_t>(sectionStart);
+    state.manualMode = static_cast<uint8_t>(manualMode);
+    state.inputGain = static_cast<float>(tree[kInputGain]);
+    state.outputGain = static_cast<float>(tree[kOutputGain]);
+    state.linkFlags = static_cast<uint32_t>(static_cast<int64_t>(tree[kLinkFlags]));
+
+    if (!std::isfinite(state.inputGain) || !std::isfinite(state.outputGain)
+        || !finiteArray(state.knobValues) || !finiteArray(state.pedalGains)
+        || !finiteArray(state.linkRangeMins) || !finiteArray(state.linkRangeMaxs))
+        return false;
+    for (size_t i = 0; i < state.linkRangeMins.size(); ++i)
+    {
+        float mn = std::clamp(state.linkRangeMins[i], 0.0f, 1.0f);
+        float mx = std::clamp(state.linkRangeMaxs[i], 0.0f, 1.0f);
+        if (mx < mn + 0.05f) mx = std::min(1.0f, mn + 0.05f);
+        if (mn > mx - 0.05f) mn = std::max(0.0f, mx - 0.05f);
+        state.linkRangeMins[i] = mn;
+        state.linkRangeMaxs[i] = mx;
+    }
+
+    return true;
 }
 
-bool StateSerializer::isValidHeader(const uint8_t* data, size_t sizeInBytes)
+bool serializeTree(const juce::ValueTree& tree, juce::MemoryBlock& output)
 {
-    if (sizeInBytes < 4)
-        return false;
-
-    return data[0] == MagicBytes[0] &&
-           data[1] == MagicBytes[1] &&
-           data[2] == MagicBytes[2];
+    if (auto xml = tree.createXml())
+    {
+        juce::AudioProcessor::copyXmlToBinary(*xml, output);
+        return true;
+    }
+    return false;
 }
 
-bool StateSerializer::deserialize(const uint8_t* data, size_t sizeInBytes, SerializedState& outState)
+bool deserializeTree(const void* data, size_t size, StateSerializer::DocumentType type, juce::ValueTree& tree)
 {
-    if (!isValidHeader(data, sizeInBytes))
+    if (data == nullptr || size == 0
+        || size > static_cast<size_t>(std::numeric_limits<int>::max()))
         return false;
 
-    const size_t v2Size = 4 + TotalCells + PedalSlotCount + PedalSlotCount + 1;
-    if (sizeInBytes < v2Size)
+    auto xml = juce::AudioProcessor::getXmlFromBinary(data, static_cast<int>(size));
+    if (xml == nullptr)
         return false;
 
-    // Grid data
-    std::memcpy(outState.gridData.data(), data + 4, TotalCells);
+    tree = juce::ValueTree::fromXml(*xml);
+    const int version = static_cast<int>(tree[kVersion]);
+    return tree.isValid()
+        && tree.getType() == kRoot
+        && version >= 1 && version <= StateSerializer::SchemaVersion
+        && static_cast<int>(tree[kType]) == static_cast<int>(type);
+}
+}
 
-    // Validate and clamp grid values
-    for (auto& val : outState.gridData)
-        if (val > 12)
-            val = 0;
+bool StateSerializer::serializePreset(const PresetState& state, juce::MemoryBlock& outBlob)
+{
+    juce::ValueTree root(kRoot);
+    root.setProperty(kType, static_cast<int>(DocumentType::Preset), nullptr);
+    root.setProperty(kVersion, SchemaVersion, nullptr);
+    root.addChild(makePresetTree(state), -1, nullptr);
+    return serializeTree(root, outBlob);
+}
 
-    // Pedal slots
-    const int layoutOffset = 4 + TotalCells;
-    constexpr auto maxPedalType = static_cast<uint8_t>(DspModuleType::RESERVED_REMOVED_OCTAVER);
-    for (int i = 0; i < PedalSlotCount; ++i)
-    {
-        uint8_t raw = data[layoutOffset + i];
-        if (raw > maxPedalType ||
-            raw == static_cast<uint8_t>(DspModuleType::RESERVED_REMOVED_OCTAVER))
-            raw = 0;
-        outState.pedalSlots[i] = static_cast<DspModuleType>(raw);
-    }
+bool StateSerializer::serializeProject(const ProjectState& state, juce::MemoryBlock& outBlob)
+{
+    juce::ValueTree root(kRoot);
+    root.setProperty(kType, static_cast<int>(DocumentType::Project), nullptr);
+    root.setProperty(kVersion, SchemaVersion, nullptr);
+    root.addChild(makePresetTree(state.preset), -1, nullptr);
 
-    // Manual routing
-    outState.manualRouting.clear();
-    const int routingOffset = layoutOffset + PedalSlotCount;
-    for (int i = 0; i < PedalSlotCount; ++i)
-    {
-        uint8_t slot = data[routingOffset + i];
-        if (slot < PedalSlotCount)
-        {
-            // Valid slot index (0-5). Values >= PedalSlotCount are 0xFF (no routing) - skip.
-            outState.manualRouting.push_back(slot);
-        }
-        // If slot >= PedalSlotCount, it's 0xFF (no routing) - skip
-    }
+    juce::ValueTree session(kSession);
+    session.setProperty(kSelectedColour, static_cast<int>(state.session.selectedColour), nullptr);
+    session.setProperty(kSelectedTool, static_cast<int>(state.session.selectedTool), nullptr);
+    session.setProperty(kSelectedPedal, static_cast<int>(state.session.selectedPedal), nullptr);
+    session.setProperty(kBrushSizeIndex, static_cast<int>(state.session.brushSizeIndex), nullptr);
+    root.addChild(session, -1, nullptr);
+    return serializeTree(root, outBlob);
+}
 
-    // Knob values (v3+ only, backward compatible with v2)
-    const int flagOffset = routingOffset + PedalSlotCount;
-    const size_t knobOffset = static_cast<size_t>(flagOffset) + 1;
-    if (sizeInBytes >= knobOffset + TotalKnobs * sizeof(float))
-    {
-        std::memcpy(outState.knobValues.data(), data + knobOffset,
-                    TotalKnobs * sizeof(float));
-    }
-    else
-    {
-        // v2 save — leave knobValues at zero-initialized defaults
-        outState.knobValues.fill(0.5f);
-    }
+bool StateSerializer::deserializePreset(const void* data, size_t sizeInBytes, PresetState& outState)
+{
+    juce::ValueTree root;
+    if (!deserializeTree(data, sizeInBytes, DocumentType::Preset, root))
+        return false;
+    return readPresetTree(root.getChildWithName(kPreset), outState);
+}
 
-    // Override mask (v4+ only, backward compatible with v2/v3)
-    const size_t maskOffset = knobOffset + TotalKnobs * sizeof(float);
-    if (sizeInBytes >= maskOffset + sizeof(uint32_t))
-    {
-        std::memcpy(&outState.overrideMask, data + maskOffset, sizeof(uint32_t));
-    }
-    else
-    {
-        // v2/v3 save — default to clear (compiler fills in, UI shows canvas-derived values)
-        outState.overrideMask = 0x00000000;
-    }
+bool StateSerializer::deserializeProject(const void* data, size_t sizeInBytes, ProjectState& outState)
+{
+    juce::ValueTree root;
+    if (!deserializeTree(data, sizeInBytes, DocumentType::Project, root)
+        || !readPresetTree(root.getChildWithName(kPreset), outState.preset))
+        return false;
 
-    // Flags (v5+ only): barCount, sectionStartBar, manualMode
-    const size_t flagsOffset = maskOffset + sizeof(uint32_t);
-    if (sizeInBytes >= flagsOffset + 3)
-    {
-        outState.barCount = data[flagsOffset];
-        outState.sectionStartBar = data[flagsOffset + 1];
-        outState.manualMode = data[flagsOffset + 2];
-    }
+    const auto session = root.getChildWithName(kSession);
+    if (!session.isValid())
+        return false;
 
+    outState.session.selectedColour = static_cast<uint8_t>(juce::jlimit(0, 12, static_cast<int>(session[kSelectedColour])));
+    outState.session.selectedTool = static_cast<uint8_t>(juce::jlimit(0, 255, static_cast<int>(session[kSelectedTool])));
+    outState.session.selectedPedal = static_cast<int8_t>(juce::jlimit(-1, PedalSlotCount - 1, static_cast<int>(session[kSelectedPedal])));
+    outState.session.brushSizeIndex = static_cast<uint8_t>(juce::jlimit(0, 3, static_cast<int>(session[kBrushSizeIndex])));
     return true;
 }

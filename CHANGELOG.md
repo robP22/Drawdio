@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.2.3 — Editor / Buffering / FL Delete Fixes
+
+### Fixed
+- Brush size persists across minimize/maximize and save/restore (`EditorSessionState.brushSizeIndex`).
+- Canvas minimize/maximize no longer loses undo — `setGridData(clearUndo)` now optional on rehydrate; `applyFullConfigSync` checks `hasUndoData()` before overwriting grid-undo, and `m_undoBytes` tracking fixed.
+- `floodFill` now marks `DirtyRowMask` so single-instance fill recompiles cables/chain via `CanvasGraphAnalyzer`.
+- Pedal `BYPASS`→effect type/knobs update without minimize; `refreshRoutingFromConfig` polls `m_lastPedalTypes` every tick and `setManualRouting` triggers UI notification.
+- FL mix-chain `DELETE` no longer freezes on last-instance unload — `ReleaseQueue::drainAsync` detaches deletes off loader lock via `MessageManager::callAsync`, `ConfigManager::~ConfigManager::scheduleDelete` detaches pending payloads, plus heap keep-alive `DirectX 1×1` image.
+- Header pill is now `PEDALS | Reset` with the right slot turning destructive-red on hover.
+
+### Changed
+- `setBufferedToImage(true)` removed from `PedalComponent` and the `ColorPalette` root (kept only on `WoodGrainBackground`); buffered staleness no longer masks `PedalComponent`/`ArcButton` type changes until peer recreate.
+
 ## v0.2.2 - Canvas Mapping Rework and DSP Stability
 
 ### Added
@@ -46,7 +59,7 @@
   per channel where stereo behavior depends on channel history.
 - Cables render above pedals in a single charcoal color.
 - Parameter storage uses `KnobsPerPedal` and `TotalKnobs` constants.
-- Preset serialization uses `DRD` version `0x05`.
+- Preset serialization uses a versioned JUCE `ValueTree` document (`StateSerializer::SchemaVersion = 2`); the legacy binary `DRD 0x05` format is migrated on load.
 - The former Tape Stop Echo slot is now Re-Time with transport-synchronized
   variable-speed loop processing.
 

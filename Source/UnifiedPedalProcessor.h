@@ -10,6 +10,7 @@
 #include "Core/ParameterTypes.h"
 #include "Effects/DspEffect.h"
 #include "State/ParameterCache.h"
+#include "State/CompiledParameterBank.h"
 #include "State/PedalState.h"
 #include "State/CrossfadeState.h"
 
@@ -31,6 +32,8 @@ public:
 
     void updateParameter(int physicalSlot, int knobIdx, float newValue) { m_paramCache.update(physicalSlot, knobIdx, newValue); }
     void storeParameterValue(int physicalSlot, int knobIdx, float value) { m_paramCache.store(physicalSlot, knobIdx, value); }
+    void setCompiledParameterValue(int physicalSlot, int knobIdx, float value) { m_compiledParameterBank.store(physicalSlot, knobIdx, value); }
+    float getCompiledParameterValue(int physicalSlot, int knobIdx) const { return m_compiledParameterBank.load(physicalSlot, knobIdx); }
     void clearParamOffsets() { m_paramCache.clearOffsets(); }
     float getKnobDisplayValue(int slot, int knob, float compiledValue) const { return m_paramCache.getKnobDisplayValue(slot, knob, compiledValue); }
     void invalidateParamCacheForSlot(int physicalSlot) { m_paramCache.invalidateSlot(physicalSlot); }
@@ -64,12 +67,14 @@ public:
     int getMaxChannels() const { return m_maxChannels.load(std::memory_order_relaxed); }
 
 private:
-    void processChainBlock(float** b, int c, int s, const PedalAssetPayload& config);
+    void processChainBlock(float** b, int c, int s, const PedalAssetPayload& config,
+                           bool useCompiledParameterBank);
 
     std::atomic<double> m_sampleRate{44100.0};
     std::atomic<int> m_maxSamplesPerBlock{1024};
     std::atomic<int> m_maxChannels{2};
     ParameterCache m_paramCache;
+    CompiledParameterBank m_compiledParameterBank;
 
     std::atomic<bool> m_pendingReset{false};
     CrossfadeState m_crossfade;
@@ -82,6 +87,8 @@ private:
     std::atomic<double> m_transportPpq{0.0};
     std::atomic<bool> m_transportPlaying{false};
     float m_smoothedAutoValue = 0.0f;
+    float m_paramSmoothHz = 40.0f;
+    float m_paramSmoothAlphaMaxBlock = 0.0f;
     float m_paramSmoothAlpha = 0.0f;
     std::array<std::array<float, KnobsPerPedal>, PedalSlotCount> m_smoothedParams = {
         std::array<float, KnobsPerPedal>{0.5f, 0.5f, 0.5f, 0.5f},

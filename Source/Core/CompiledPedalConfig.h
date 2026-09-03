@@ -13,6 +13,7 @@ class DspEffect;
 
 struct PedalAssetPayload
 {
+    uint32_t sourceRevision = 0;
     std::vector<DspModuleType> activeRoutingChain;
     std::vector<uint8_t> routingSlotOrder;
     std::vector<ParameterDescriptor> parameters;
@@ -25,4 +26,7 @@ struct PedalAssetPayload
     // Per chain position, per knob: detent count (0 = no snap) for the final
     // param value on the audio thread (covers linked + canvas automation).
     std::array<std::array<uint8_t, KnobsPerPedal>, PedalSlotCount> snapSteps{};
+    // When true, the audio thread reads all params from the parameter cache
+    // (manual mode: knobs are user-controlled, canvas values are not applied).
+    bool manualParams = false;
 };

@@ -8,7 +8,7 @@ void ChorusEffect::prepare(double sampleRate, int numChannels)
 {
     DspEffect::prepare(sampleRate, numChannels);
     m_centerDelaySamples = static_cast<float>(sampleRate) * 0.030f;
-    m_maxDepthSamples = static_cast<float>(sampleRate) * 0.006f;
+    m_maxDepthSamples = static_cast<float>(sampleRate) * 0.003f;
     m_channels.resize(static_cast<size_t>(numChannels));
     for (size_t ch = 0; ch < m_channels.size(); ++ch)
     {
@@ -38,7 +38,7 @@ void ChorusEffect::processSample(float** b, int c, int s, float effectParam)
 void ChorusEffect::processBlock(float** b, int c, int n, const float* params)
 {
     juce::ScopedNoDenormals noDenorm;
-    const float rateHz = 0.05f + std::max(0.0f, std::min(1.0f, params[3])) * 1.45f;
+    const float rateHz = 0.05f + std::max(0.0f, std::min(1.0f, params[3])) * 0.95f;
     const float depth = std::max(0.0f, std::min(1.0f, params[1]));
     float depthSamples = depth * m_maxDepthSamples;
     if (depthSamples >= m_centerDelaySamples - 1.0f)

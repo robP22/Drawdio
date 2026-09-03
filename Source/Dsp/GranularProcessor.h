@@ -30,7 +30,8 @@ inline void prepareGranularProcessor(GranularProcessorState& state,
     double safeDuration = std::min(durationSec, MaxGranularDurationSec);
     size_t size = static_cast<size_t>(sampleRate * safeDuration);
     state.delayBuf.assign(size, 0.0f);
-    state.window.assign(size, 0.0f);
+    const size_t maxGrainLen = static_cast<size_t>(sampleRate * 0.5) + 1;
+    state.window.assign(std::max<size_t>(1, std::min(size, maxGrainLen)), 0.0f);
     state.writePtr = 0;
     state.readPtrA = 0.0f;
     state.readPtrB = 0.0f;

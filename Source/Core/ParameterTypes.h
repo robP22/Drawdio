@@ -19,4 +19,5 @@ struct ParameterDescriptor
     float currentValue;
     bool isManualOverride = false;
     uint8_t targetDspNodeRegister;
+    uint8_t physicalSlot = 0;
 };

@@ -26,7 +26,8 @@ struct ConfigAudioView
     ReleaseQueue& releaseQueue;
 };
 
-class ConfigManager : public IPedalboardModel,
+class ConfigManager : public juce::ChangeBroadcaster,
+                      public IPedalboardModel,
                       public IBottomBarModel,
                       public IConfigConsumer
 {
@@ -45,7 +46,15 @@ public:
     uint32_t getParamOverrideMask() const { return m_dsp.getParamOverrideMask(); }
     void setKnobParameter(int slot, int knob, float dragStartValue, float newValue) override { m_dsp.setKnobParameter(slot, knob, dragStartValue, newValue); }
     bool isKnobLinked(int slot, int knob) const override { return m_dsp.pedalState().isKnobLinked(slot, knob); }
-    void setKnobLink(int slot, int knob, bool linked) override { m_dsp.pedalState().setKnobLink(slot, knob, linked, 1.0f); }
+    void setKnobLink(int slot, int knob, bool linked) override
+    {
+        m_dsp.pedalState().setKnobLink(slot, knob, linked, 1.0f);
+        if (linked)
+            m_dsp.pedalState().setKnobLinkRange(slot, knob, 0.0f, 1.0f);
+    }
+    void setKnobLinkRange(int slot, int knob, float rangeMin, float rangeMax) override { m_dsp.pedalState().setKnobLinkRange(slot, knob, rangeMin, rangeMax); }
+    float getKnobLinkRangeMin(int slot, int knob) const override { return m_dsp.pedalState().getKnobLinkRangeMin(slot, knob); }
+    float getKnobLinkRangeMax(int slot, int knob) const override { return m_dsp.pedalState().getKnobLinkRangeMax(slot, knob); }
     float getPedalPeak(int slot) const override { return m_dsp.pedalState().getPedalPeak(slot); }
     float getPedalGain(int slot) const override { return m_dsp.pedalState().getPedalGain(slot); }
     void setPedalGain(int slot, float gain) override { m_dsp.pedalState().setPedalGain(slot, gain); }
@@ -94,6 +103,9 @@ public:
     void notifyPenDown() { m_penDebouncer.penDown(); }
     void notifyPenUp() { m_penDebouncer.penUp(); }
     void submitCanvasSnapshot(const std::array<uint8_t, TotalCells>& data);
+    void submitCanvasSnapshot(const std::array<uint8_t, TotalCells>& data,
+                              const DirtyRowMask& dirtyRows);
+    void resetParamDefaults();
 
     // --- Undo ---
     void storeUndoData(std::vector<uint8_t> data) override { m_undoData = std::move(data); }
@@ -102,6 +114,24 @@ public:
     // --- State serialization ---
     void getStateInformation(juce::MemoryBlock& destData);
     void setStateInformation(const void* data, int sizeInBytes);
+    void getPresetInformation(juce::MemoryBlock& destData) const;
+    bool setPresetInformation(const void* data, int sizeInBytes);
+
+    EditorSessionState getEditorSessionState() const { return m_sessionState; }
+    void setEditorSessionState(const EditorSessionState& state)
+    {
+        if (m_sessionState.selectedColour == state.selectedColour
+            && m_sessionState.selectedTool == state.selectedTool
+            && m_sessionState.selectedPedal == state.selectedPedal
+            && m_sessionState.brushSizeIndex == state.brushSizeIndex)
+            return;
+        m_sessionState = state;
+        m_sessionRevision.fetch_add(1, std::memory_order_acq_rel);
+        triggerUINotification();
+    }
+    uint32_t getSessionRevision() const { return m_sessionRevision.load(std::memory_order_acquire); }
+    void addEditorStateListener(juce::ChangeListener* listener) { addChangeListener(listener); }
+    void removeEditorStateListener(juce::ChangeListener* listener) { removeChangeListener(listener); }
 
     // --- Audio thread config view ---
     ConfigAudioView getAudioView()
@@ -114,8 +144,14 @@ private:
     void prebuildEffects(PedalAssetPayload* config, bool& deferred);
     void rePrepareEffects();
     void syncCompilerConfig();
-    void restoreKnobValuesFromState(const StateSerializer::SerializedState& state);
+    void retryPendingCompile();
+    PresetState capturePresetState() const;
+    void applyPresetState(const PresetState& state);
+    void restoreKnobValuesFromState(const PresetState& state);
     void syncLastConfig(const PedalAssetPayload* config);
+    void publishCompiledParameters(const PedalAssetPayload* config);
+    void updateCompiledParameterBank(const PedalAssetPayload* config);
+    void seedCacheFromCurrentConfig();
 
     UnifiedPedalProcessor& m_dsp;
     CanvasMessageQueue m_messageQueue;
@@ -127,12 +163,16 @@ private:
     int m_barCount = 1;
     int m_sectionStartBar = 0;
     bool m_manualMode = false;
+    EditorSessionState m_sessionState;
     std::vector<uint8_t> m_undoData;
     std::atomic<float> m_playHeadBpm{120.0f};
     std::atomic<double> m_playHeadPpq{0.0};
     std::atomic<bool> m_playHeadPlaying{false};
     std::atomic<uint32_t> m_configRevision{0};
+    std::atomic<uint32_t> m_sessionRevision{0};
+    uint32_t m_canvasRevision = 0;
     std::atomic<bool> m_uiNeedsUpdate{false};
+    bool m_compileRetryPending = false;
     ConfigSyncData m_lastConfigSync;
 
     // Config lifecycle (moved from UnifiedPedalProcessor)
@@ -141,4 +181,6 @@ private:
     std::atomic<PedalAssetPayload*> m_deferredConfig{nullptr};
     ReleaseQueue m_releaseQueue;
     double m_sampleRate = 44100.0;
+    int m_preparedBlockSize = 0;
+    int m_preparedChannels = 0;
 };

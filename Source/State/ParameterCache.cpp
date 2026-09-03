@@ -17,6 +17,7 @@ void ParameterCache::update(int physicalSlot, int knobIdx, float newValue)
     if (physicalSlot >= 0 && physicalSlot < PedalSlotCount && knobIdx >= 0 && knobIdx < KnobsPerPedal)
     {
         size_t idx = index(physicalSlot, knobIdx);
+        m_revision.fetch_add(1, std::memory_order_acq_rel);
         m_cache[idx].store(newValue, std::memory_order_release);
         uint32_t mask = m_validMask.load(std::memory_order_relaxed);
         mask |= (1u << idx);
@@ -33,6 +34,7 @@ void ParameterCache::store(int physicalSlot, int knobIdx, float value)
     if (physicalSlot >= 0 && physicalSlot < PedalSlotCount && knobIdx >= 0 && knobIdx < KnobsPerPedal)
     {
         size_t idx = index(physicalSlot, knobIdx);
+        m_revision.fetch_add(1, std::memory_order_acq_rel);
         m_cache[idx].store(value, std::memory_order_release);
         m_revision.fetch_add(1, std::memory_order_acq_rel);
     }
@@ -44,6 +46,7 @@ void ParameterCache::applyOffset(int physicalSlot, int knobIdx, float dragStartV
     if (physicalSlot >= 0 && physicalSlot < PedalSlotCount && knobIdx >= 0 && knobIdx < KnobsPerPedal)
     {
         size_t idx = index(physicalSlot, knobIdx);
+        m_revision.fetch_add(1, std::memory_order_acq_rel);
         m_offsets[idx] += newValue - dragStartValue;
         m_cache[idx].store(newValue, std::memory_order_release);
         uint32_t mask = m_validMask.load(std::memory_order_relaxed);
@@ -55,8 +58,10 @@ void ParameterCache::applyOffset(int physicalSlot, int knobIdx, float dragStartV
 
 void ParameterCache::clearOffsets()
 {
+    m_revision.fetch_add(1, std::memory_order_acq_rel);
     m_offsets.fill(0.0f);
     m_validMask.store(0, std::memory_order_release);
+    m_revision.fetch_add(1, std::memory_order_acq_rel);
 }
 
 float ParameterCache::getKnobDisplayValue(int slot, int knob, float compiledValue) const
@@ -73,10 +78,12 @@ float ParameterCache::getKnobDisplayValue(int slot, int knob, float compiledValu
 void ParameterCache::invalidateSlot(int physicalSlot)
 {
     if (physicalSlot < 0 || physicalSlot >= PedalSlotCount) return;
+    m_revision.fetch_add(1, std::memory_order_acq_rel);
     uint32_t mask = m_validMask.load(std::memory_order_relaxed);
     for (int k = 0; k < KnobsPerPedal; ++k)
         mask &= ~(1u << index(physicalSlot, k));
     m_validMask.store(mask, std::memory_order_release);
+    m_revision.fetch_add(1, std::memory_order_acq_rel);
 }
 
 bool ParameterCache::isOverridden(int physicalSlot, int knobIdx) const
@@ -91,8 +98,20 @@ bool ParameterCache::isOverridden(int physicalSlot, int knobIdx) const
 ParameterCache::Snapshot ParameterCache::getSnapshot() const
 {
     Snapshot snap;
-    snap.revision = m_revision.load(std::memory_order_acquire);
-    for (size_t i = 0; i < snap.values.size(); ++i)
-        snap.values[i] = m_cache[i].load(std::memory_order_relaxed);
-    return snap;
+    for (;;)
+    {
+        const uint32_t rev0 = m_revision.load(std::memory_order_acquire);
+        if ((rev0 & 1u) != 0u)
+            continue;
+        for (size_t i = 0; i < snap.values.size(); ++i)
+            snap.values[i] = m_cache[i].load(std::memory_order_relaxed);
+        snap.offsets = m_offsets;
+        snap.mask = m_validMask.load(std::memory_order_acquire);
+        const uint32_t rev1 = m_revision.load(std::memory_order_acquire);
+        if (rev0 == rev1)
+        {
+            snap.revision = rev0;
+            return snap;
+        }
+    }
 }

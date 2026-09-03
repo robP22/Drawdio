@@ -62,7 +62,7 @@ conflicting connections. Invalid or empty manual routing falls back to automatic
 routing.
 
 The current cable renderer uses Bezier paths and draws cables above pedal
-components. Lane allocation and advanced gap-aware routing are not implemented.
+components. It uses cached paths and gap-aware lane placement for the current pedal layout.
 
 ## Automation
 
@@ -72,8 +72,9 @@ falls back to the processor's default transport values when it is not.
 
 The editor displays an eight-bar timeline. Bar-count choices are 1, 2, 4, and 8;
 shorter active windows can be repositioned within the displayed timeline. The
-audio path smooths automation before applying it to linked parameters. The
-compiler's BPM argument does not currently alter the generated envelope.
+audio path smooths automation before applying it to linked parameters. BPM from
+the host transport drives time-quantized parameters (Re-Time loop length and
+Sidechain divisions, default 120 BPM until transport is available).
 
 Manual automation point editing is not implemented.
 

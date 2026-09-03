@@ -27,6 +27,8 @@ public:
         }
     }
     void drain();
+    void drainAsync();
+    ~ReleaseQueue() = default;
     uint32_t droppedCount() const { return m_droppedCount.load(std::memory_order_relaxed); }
 
 private:

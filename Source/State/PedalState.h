@@ -23,12 +23,17 @@ public:
     void setKnobLink(int slot, int knob, bool linked, float strength = 1.0f);
     bool isKnobLinked(int slot, int knob) const;
     float getKnobLinkStrength(int slot, int knob) const;
+    void setKnobLinkRange(int slot, int knob, float rangeMin, float rangeMax);
+    float getKnobLinkRangeMin(int slot, int knob) const;
+    float getKnobLinkRangeMax(int slot, int knob) const;
 
     // Raw atomic access for audio thread (processChainBlock)
     std::atomic<float>& peakRef(int slot) { return m_pedalPeaks[static_cast<size_t>(slot)]; }
     std::atomic<float>& gainRef(int slot) { return m_pedalGains[static_cast<size_t>(slot)]; }
     bool knobLinked(int slot, int knob) const { return m_knobLinks[static_cast<size_t>(slot)][static_cast<size_t>(knob)].load(std::memory_order_acquire); }
     float knobLinkStrength(int slot, int knob) const { return m_knobLinkStrengths[static_cast<size_t>(slot)][static_cast<size_t>(knob)].load(std::memory_order_acquire); }
+    float knobLinkRangeMin(int slot, int knob) const { return m_knobLinkRangeMins[static_cast<size_t>(slot)][static_cast<size_t>(knob)].load(std::memory_order_acquire); }
+    float knobLinkRangeMax(int slot, int knob) const { return m_knobLinkRangeMaxs[static_cast<size_t>(slot)][static_cast<size_t>(knob)].load(std::memory_order_acquire); }
 
 private:
     std::array<std::atomic<float>, PedalSlotCount> m_pedalPeaks;
@@ -37,4 +42,6 @@ private:
     std::atomic<float> m_outputGain{1.0f};
     std::array<std::array<std::atomic<bool>, 4>, PedalSlotCount> m_knobLinks{};
     std::array<std::array<std::atomic<float>, 4>, PedalSlotCount> m_knobLinkStrengths{};
+    std::array<std::array<std::atomic<float>, 4>, PedalSlotCount> m_knobLinkRangeMins{};
+    std::array<std::array<std::atomic<float>, 4>, PedalSlotCount> m_knobLinkRangeMaxs{};
 };

@@ -11,12 +11,6 @@ void CanvasRoutingManager::setRoutingOrder(const std::vector<uint8_t>& routingOr
     m_effectiveRoutingOrder = sanitizeRouting(routingOrder);
 }
 
-void CanvasRoutingManager::clearManualRouting()
-{
-    m_manualRoutingOrder.clear();
-    setRoutingOrder({});
-}
-
 std::vector<CanvasRoutingManager::RoutingConnection> CanvasRoutingManager::getConnections() const
 {
     std::vector<RoutingConnection> connections;

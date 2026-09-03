@@ -31,6 +31,7 @@ struct ReverbNetworkState
     std::vector<float> reflectBuf[2];
     size_t reflectPtr;
     std::array<std::array<DiffuserState, 3>, 2> diffusers;
+    float sizeScaleState = 0.65f;
     double sampleRate = 44100.0;
 };
 
@@ -44,4 +45,5 @@ void processReverbNetworkSample(float dryL, float dryR,
                                 const ReverbNetworkConfig& config,
                                 ReverbNetworkState& state,
                                 float decayNormalised,
+                                float sizeNormalised,
                                 float& outL, float& outR);
