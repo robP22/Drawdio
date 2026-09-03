@@ -153,6 +153,7 @@ private:
     std::vector<std::vector<PixelChange>> m_undoStack;
     std::vector<std::vector<PixelChange>> m_redoStack;
     size_t m_undoBytes = 0;
+    size_t m_redoBytes = 0;
     std::vector<int> m_fillQueue;
     std::vector<std::uint8_t> m_fillVisited;
     std::vector<PixelChange> m_fillChanges;
