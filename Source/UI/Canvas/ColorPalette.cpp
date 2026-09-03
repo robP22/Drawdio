@@ -1,5 +1,5 @@
 #include "ColorPalette.h"
-#include "GridLayout.h"
+#include "Core/EditorDesignMetrics.h"
 #include "UI/EditorLayout.h"
 
 
@@ -156,8 +156,11 @@ static void drawReboundArrow(juce::Graphics& g, juce::Rectangle<float> r)
 
 }
 
-ColorPalette::ColorPalette(const IResourceProvider& resources, const IThemeProvider& theme)
+ColorPalette::ColorPalette(const IResourceProvider& resources,
+                           const ScaledAssetProvider& assets,
+                           const IThemeProvider& theme)
     : m_resources(resources),
+      m_assets(assets),
       m_theme(theme),
       m_blobs {{
           { 0, {} },   // Black   (weight -1.0)
@@ -174,7 +177,6 @@ ColorPalette::ColorPalette(const IResourceProvider& resources, const IThemeProvi
           { 4, {} }    // White   (weight -0.7)
       }}
 {
-    setBufferedToImage(true);
 
     const auto& paletteTex = m_resources.getTexture(IResourceProvider::TextureId::ColorPaletteBody);
     m_paletteTopRatio = EditorLayout::topOpaqueRatio(paletteTex);
@@ -278,30 +280,23 @@ ColorPalette::ColorPalette(const IResourceProvider& resources, const IThemeProvi
 void ColorPalette::paint(juce::Graphics& g)
 {
     auto bounds = getLocalBounds().toFloat();
-    const auto& texture = m_resources.getTexture(IResourceProvider::TextureId::ColorPaletteBody);
-
-    if (texture.isValid())
     {
         const float offsetX = m_imageCenterX - bounds.getWidth() * 0.5f;
-        g.drawImage(texture,
-                   bounds.getX() + offsetX, bounds.getY(),
-                   bounds.getWidth(), bounds.getHeight(),
-                   0, 0, texture.getWidth(), texture.getHeight());
+        m_assets.drawImage(g, IResourceProvider::ImageId::ColorPaletteBody,
+                           juce::Rectangle<float>(bounds.getX() + offsetX, bounds.getY(),
+                                                  bounds.getWidth(), bounds.getHeight()),
+                           ScaledAssetProvider::ResamplingPolicy::Continuous);
     }
 
-    const auto& wellTex = m_resources.getTexture(IResourceProvider::TextureId::ColorWell);
-    if (wellTex.isValid())
+    for (const auto& blob : m_blobs)
     {
-        for (const auto& blob : m_blobs)
-        {
             const float wellSize = blob.bounds.getWidth() * 1.5f;
             const float cx = blob.bounds.getCentreX();
             const float cy = blob.bounds.getCentreY();
-            g.drawImage(wellTex,
-                        cx - wellSize * 0.5f, cy - wellSize * 0.5f,
-                        wellSize, wellSize,
-                        0, 0, wellTex.getWidth(), wellTex.getHeight());
-        }
+            m_assets.drawImage(g, IResourceProvider::ImageId::ColorWell,
+                               juce::Rectangle<float>(cx - wellSize * 0.5f, cy - wellSize * 0.5f,
+                                                      wellSize, wellSize),
+                               ScaledAssetProvider::ResamplingPolicy::Continuous);
     }
 
     for (int i = 0; i < static_cast<int>(m_blobs.size()); ++i)
@@ -405,25 +400,25 @@ void ColorPalette::resized()
     m_contentCenterOffset = static_cast<float>(
         juce::roundToInt(0.5f * paletteH * (m_paletteTopRatio - m_paletteBottomRatio)));
 
-    const float blobMaxFromRatio = paletteH * GridLayout::BlobMaxSizeRatio;
-    const float blobSizeFromRatio = paletteH * GridLayout::PaletteBlobSizeRatio;
+    const float blobMaxFromRatio = paletteH * EditorDesignMetrics::BlobMaxSizeRatio;
+    const float blobSizeFromRatio = paletteH * EditorDesignMetrics::Palette::BlobSizeRatio;
     const float blobSize = juce::jmin(blobSizeFromRatio, blobMaxFromRatio);
     const float halfBlob = blobSize * 0.5f;
 
     for (int i = 0; i < static_cast<int>(m_blobs.size()); ++i)
     {
-        const float centerX = paletteW * (GridLayout::PaletteBlob0CenterX +
-                      static_cast<float>(i) * GridLayout::PaletteBlobSpacingRatio);
-        const float centerY = paletteH * ((i % 2 == 0) ? GridLayout::PaletteBlobCenterY0
-                                                        : GridLayout::PaletteBlobCenterY1)
+        const float centerX = paletteW * (EditorDesignMetrics::Palette::Blob0CenterX +
+                      static_cast<float>(i) * EditorDesignMetrics::Palette::BlobSpacingRatio);
+        const float centerY = paletteH * ((i % 2 == 0) ? EditorDesignMetrics::Palette::BlobCenterY0
+                                                        : EditorDesignMetrics::Palette::BlobCenterY1)
                               + m_contentCenterOffset;
         m_blobs[static_cast<size_t>(i)].bounds = juce::Rectangle<float>(
             centerX - halfBlob, centerY - halfBlob, blobSize, blobSize);
     }
 
     // Center the wheel between the rightmost blob and the right palette edge
-    float lastBlobRight = paletteW * (GridLayout::PaletteBlob0CenterX +
-        11.0f * GridLayout::PaletteBlobSpacingRatio) + halfBlob;
+    float lastBlobRight = paletteW * (EditorDesignMetrics::Palette::Blob0CenterX +
+        11.0f * EditorDesignMetrics::Palette::BlobSpacingRatio) + halfBlob;
     float cx = lastBlobRight + (paletteW - lastBlobRight) * 0.5f;
     float cy = paletteH * 0.5f + m_contentCenterOffset;
     float centreR = paletteH * 0.09f;
@@ -546,4 +541,11 @@ void ColorPalette::cycleBrushSize()
     m_sizeButton.repaint();
     if (m_onBrushSize)
         m_onBrushSize(radius);
+}
+
+void ColorPalette::setBrushSizeIndex(uint8_t index)
+{
+    if (index >= m_brushSizes.size()) return;
+    m_currentBrushIndex = static_cast<int>(index);
+    m_sizeButton.repaint();
 }

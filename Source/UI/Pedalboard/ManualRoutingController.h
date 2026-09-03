@@ -5,14 +5,13 @@
 #include "Core/DrawdioConstants.h"
 #include "State/ManualConnectionModel.h"
 #include "JackHitMap.h"
-#include "Core/Contracts/ProcessorInterfaces.h"
 
 class ManualRoutingController
 {
 public:
     ManualRoutingController(ManualConnectionModel& connectionModel,
                             JackHitMap& jackMap,
-                            IPedalboardModel& pedalModel);
+                            std::function<bool()> isManualMode);
 
     void mouseDown(juce::Point<float> pos);
     void mouseDrag(juce::Point<float> pos);
@@ -43,7 +42,7 @@ private:
 
     ManualConnectionModel& m_connectionModel;
     JackHitMap& m_jackMap;
-    IPedalboardModel& m_pedalModel;
+    std::function<bool()> m_isManualMode;
 
     DragMode m_dragMode = DragMode::None;
     juce::Point<float> m_dragStartPos;

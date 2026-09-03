@@ -7,13 +7,15 @@
 void SpectralFreezeEffect::processBlock(float** b, int c, int n, const float* params)
 {
     juce::ScopedNoDenormals noDenorm;
+    m_offset = std::max(0.0f, std::min(1.0f, params[2]));
     for (int s = 0; s < n; ++s)
-        processSample(b, c, s, params[1]);
+        processSample(b, c, s, params[0]);
 }
 
 void SpectralFreezeEffect::prepare(double sampleRate, int numChannels)
 {
     DspEffect::prepare(sampleRate, numChannels);
+    m_xfadeLen = std::max(32.0f, static_cast<float>(sampleRate) * 0.005f);
     m_channels.resize(static_cast<size_t>(numChannels));
     for (auto& ch : m_channels)
     {
@@ -23,6 +25,7 @@ void SpectralFreezeEffect::prepare(double sampleRate, int numChannels)
         ch.writePtr = 0;
         ch.readPos = 0.0f;
         ch.wasFrozen = false;
+        ch.historyReady = false;
     }
 }
 
@@ -30,21 +33,22 @@ void SpectralFreezeEffect::reset()
 {
     for (auto& ch : m_channels)
     {
-        std::fill(ch.buf.begin(), ch.buf.end(), 0.0f);
-        std::fill(ch.freezeBuf.begin(), ch.freezeBuf.end(), 0.0f);
         ch.writePtr = 0;
         ch.readPos = 0.0f;
         ch.wasFrozen = false;
-        ch.entryXfadePos = FreezeChannel::kXfadeLen;
-        ch.exitXfadePos = FreezeChannel::kXfadeLen;
+        ch.historyReady = false;
+        ch.entryXfadePos = std::numeric_limits<float>::max();
+        ch.exitXfadePos = std::numeric_limits<float>::max();
         ch.exitXfadeFrom = 0.0f;
     }
 }
 
 void SpectralFreezeEffect::processSample(float** b, int c, int s, float effectParam)
 {
-    bool frozen = (effectParam >= 0.05f);
-    float pitchRatio = 0.25f + effectParam * 1.75f;
+    bool freezeParam = (effectParam >= 0.05f);
+    const bool offsetChanged = (m_offset != m_lastOffset);
+    if (offsetChanged)
+        m_lastOffset = m_offset;
 
     int chCount = std::min(c, static_cast<int>(m_channels.size()));
     for (int ch = 0; ch < chCount; ++ch)
@@ -57,6 +61,10 @@ void SpectralFreezeEffect::processSample(float** b, int c, int s, float effectPa
         if (!std::isfinite(in)) in = 0.0f;
         fc.buf[fc.writePtr] = in;
 
+        if (!fc.historyReady && fc.writePtr >= fc.freezeLen)
+            fc.historyReady = true;
+        const bool frozen = freezeParam && fc.historyReady;
+
         if (!frozen)
         {
             float live = fc.buf[fc.writePtr];
@@ -65,9 +73,10 @@ void SpectralFreezeEffect::processSample(float** b, int c, int s, float effectPa
                 fc.wasFrozen = false;
                 fc.exitXfadePos = 0.0f;
             }
-            if (fc.exitXfadePos < FreezeChannel::kXfadeLen)
+            const float xfadeLen = std::min(m_xfadeLen, static_cast<float>(fc.freezeLen) * 0.25f);
+            if (fc.exitXfadePos < xfadeLen)
             {
-                float w = fc.exitXfadePos / FreezeChannel::kXfadeLen;
+                float w = fc.exitXfadePos / xfadeLen;
                 b[ch][s] = fc.exitXfadeFrom * (1.0f - w) + live * w;
                 fc.exitXfadePos += 1.0f;
             }
@@ -84,27 +93,46 @@ void SpectralFreezeEffect::processSample(float** b, int c, int s, float effectPa
                 fc.entryXfadePos = 0.0f;
                 for (size_t i = 0; i < fc.freezeLen; ++i)
                     fc.freezeBuf[i] = fc.buf[(fc.writePtr + bufSize - fc.freezeLen + i) % bufSize];
+                fc.readPos = m_offset * static_cast<float>(fc.freezeLen);
+                if (fc.readPos >= static_cast<float>(fc.freezeLen))
+                    fc.readPos = 0.0f;
+            }
+            else if (offsetChanged)
+            {
+                fc.offsetXfadeFrom = interpolateDelayRead(fc.freezeBuf, fc.readPos);
+                fc.readPos = m_offset * static_cast<float>(fc.freezeLen);
+                if (fc.readPos >= static_cast<float>(fc.freezeLen))
+                    fc.readPos = 0.0f;
+                fc.offsetXfadePos = 0.0f;
             }
 
-            float step = pitchRatio;
+            const float xfadeLen = std::min(m_xfadeLen, static_cast<float>(fc.freezeLen) * 0.25f);
+
+            float step = 1.0f;
             fc.readPos += step;
             if (fc.readPos >= static_cast<float>(fc.freezeLen))
-                fc.readPos -= static_cast<float>(fc.freezeLen);
+                fc.readPos = fc.readPos - static_cast<float>(fc.freezeLen) + xfadeLen;
 
             float out = interpolateDelayRead(fc.freezeBuf, fc.readPos);
-            float wrapStart = fc.readPos - (static_cast<float>(fc.freezeLen) - FreezeChannel::kXfadeLen);
+            float wrapStart = fc.readPos - (static_cast<float>(fc.freezeLen) - xfadeLen);
             if (wrapStart >= 0.0f)
             {
-                float a = wrapStart / FreezeChannel::kXfadeLen;
+                float a = wrapStart / xfadeLen;
                 float w = 0.5f * (1.0f - std::cos(3.14159265f * a));
                 out = out * (1.0f - w)
                     + interpolateDelayRead(fc.freezeBuf, wrapStart) * w;
             }
+            if (fc.offsetXfadePos < xfadeLen)
+            {
+                const float w = 0.5f - 0.5f * std::cos(3.14159265f * fc.offsetXfadePos / xfadeLen);
+                out = fc.offsetXfadeFrom * (1.0f - w) + out * w;
+                fc.offsetXfadePos += 1.0f;
+            }
             b[ch][s] = out;
 
-            if (fc.entryXfadePos < FreezeChannel::kXfadeLen)
+            if (fc.entryXfadePos < xfadeLen)
             {
-                float w = fc.entryXfadePos / FreezeChannel::kXfadeLen;
+                float w = fc.entryXfadePos / xfadeLen;
                 b[ch][s] = in * (1.0f - w) + b[ch][s] * w;
                 fc.entryXfadePos += 1.0f;
             }
@@ -190,8 +218,7 @@ void MultiModeFilterEffect::processBlock(float** b, int c, int n, const float* p
     m_prevCutoffHz = cutoffEnd;
 
     float bandPos = params[0] * 3.0f;
-    int mode = std::min(2, static_cast<int>(bandPos));
-    float withinBand = bandPos - static_cast<float>(mode);
+    float withinBand = bandPos - static_cast<float>(static_cast<int>(bandPos));
     float R = 1.0f - withinBand * 0.9f;
     if (R > 0.98f) R = 0.98f;
     const float srF = static_cast<float>(m_sampleRate);
@@ -223,12 +250,22 @@ void MultiModeFilterEffect::processBlock(float** b, int c, int n, const float* p
             if (std::abs(st.bp) > 8.0f) st.bp = (st.bp >= 0.0f) ? 8.0f : -8.0f;
 
             float out;
-            switch (mode)
+            if (bandPos < 0.95f)
+                out = st.lp;
+            else if (bandPos < 1.05f)
             {
-                case 0: out = st.lp; break;
-                case 1: out = st.bp; break;
-                default: out = hp; break;
+                const float w = (bandPos - 0.95f) / 0.10f;
+                out = st.lp * (1.0f - w) + st.bp * w;
             }
+            else if (bandPos < 1.95f)
+                out = st.bp;
+            else if (bandPos < 2.05f)
+            {
+                const float w = (bandPos - 1.95f) / 0.10f;
+                out = st.bp * (1.0f - w) + hp * w;
+            }
+            else
+                out = hp;
             b[ch][s] = out;
         }
     }

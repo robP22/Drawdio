@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(Drawdio VERSION 0.2.2 LANGUAGES C CXX)
+project(Drawdio VERSION 0.2.3 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -10,7 +10,7 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(ASSETS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/Assets")
 if(EXISTS "${ASSETS_DIR}")
     message(STATUS "Assets directory found: ${ASSETS_DIR}")
-    file(GLOB_RECURSE ASSET_FILES "${ASSETS_DIR}/*.png")
+    file(GLOB_RECURSE ASSET_FILES CONFIGURE_DEPENDS "${ASSETS_DIR}/*.png" "${ASSETS_DIR}/*.ttf")
     foreach(file IN LISTS ASSET_FILES)
         message(STATUS "  Asset: ${file}")
     endforeach()
@@ -19,7 +19,7 @@ endif()
 include(FetchContent)
 FetchContent_Declare(JUCE
     GIT_REPOSITORY https://github.com/juce-framework/JUCE.git
-    GIT_TAG        8.0.4
+    GIT_TAG        8.0.15
     GIT_SHALLOW    TRUE
 )
 FetchContent_MakeAvailable(JUCE)
@@ -30,8 +30,8 @@ juce_add_binary_data(DrawdioAssets SOURCES ${ASSET_FILES})
 juce_add_plugin(Drawdio
     PRODUCT_NAME              "Drawdio"
     PLUGIN_NAME               "Drawdio"
-    VERSION                   "0.2.2"
-    BUILD_VERSION             "0.2.2"
+    VERSION                   "0.2.3"
+    BUILD_VERSION             "0.2.3"
     COMPANY_NAME              "robP"
     COMPANY_WEBSITE           "https://github.com/robP22/Drawdio"
     COMPANY_EMAIL             "drawdio@proton.me"
@@ -45,7 +45,7 @@ juce_add_plugin(Drawdio
 
     FORMATS VST3 AU Standalone
 
-    PLUGIN_CHANNEL_CONFIGS "0 1" "1 1" "2 2"
+    PLUGIN_CHANNEL_CONFIGS "1 1" "2 2"
 
     DEFINITIONS
         JUCE_WEB_BROWSER=0
@@ -69,19 +69,25 @@ target_sources(Drawdio PRIVATE
     Source/Compile/CanvasMessageQueue.cpp
     Source/Compile/PenDebouncer.cpp
     Source/Compile/CompilerEngine.cpp
+    Source/Compile/CanvasGraphAnalyzer.cpp
+    Source/Resources/FontManager.cpp
     Source/UI/Canvas/PixelCanvasComponent.cpp
     Source/UI/Canvas/ColorPalette.cpp
     Source/UI/Canvas/ArcButton.cpp
     Source/UI/Pedalboard/PedalComponent.cpp
+    Source/UI/Pedalboard/PedalboardHeader.cpp
     Source/UI/Pedalboard/CablePathBuilder.cpp
     Source/UI/Pedalboard/CableRenderer.cpp
     Source/UI/Pedalboard/ManualRoutingController.cpp
     Source/UI/EditorSyncController.cpp
+    Source/UI/EditorProcessorBridge.cpp
+    Source/UI/EditorViewBinder.cpp
     Source/UI/Controls/MixerStrip.cpp
     Source/UI/Controls/BottomControlBar.cpp
     Source/UI/Controls/AutomationDisplay.cpp
     Source/UI/Theme/ThemeManager.cpp
     Source/Resources/ResourceManager.cpp
+    Source/Resources/ScaledAssetProvider.cpp
     Source/State/ParameterCache.cpp
     Source/State/PedalState.cpp
     Source/State/ReleaseQueue.cpp
@@ -132,7 +138,13 @@ target_link_libraries(Drawdio PRIVATE
 target_compile_definitions(Drawdio PRIVATE
     JucePlugin_EditorWidth=1400
     JucePlugin_EditorHeight=900
+    JUCE_VST3_CAN_REPLACE_VST2=0
 )
+
+if (MSVC)
+    target_compile_options(Drawdio PRIVATE $<$<CONFIG:Release>:/Zi>)
+    target_link_options(Drawdio PRIVATE $<$<CONFIG:Release>:/DEBUG> $<$<CONFIG:Release>:/OPT:REF> $<$<CONFIG:Release>:/OPT:ICF>)
+endif()
 
 # ---------------------------------------------------------------------------
 # Headless unit tests (vertical slice). Compiles only the Effect sources plus
@@ -164,7 +176,27 @@ if(DRAWDIO_BUILD_TESTS)
         tests/test_DelayEffects.cpp
         tests/test_ExpandedEffects.cpp
         tests/test_SnapUtils.cpp
+        tests/test_ManualModeParams.cpp
+        tests/test_StateSerializer.cpp
+        tests/test_CanvasGraphAnalyzer.cpp
+        tests/test_EditorLayout.cpp
+        tests/test_CompiledParameterBank.cpp
+        tests/test_CompilerQueue.cpp
+        tests/test_ScaledAssetProvider.cpp
         ${DRAWDIO_TEST_EFFECT_SOURCES}
+        "${CMAKE_CURRENT_SOURCE_DIR}/Source/UnifiedPedalProcessor.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/Source/State/ConfigManager.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/Source/State/ParameterCache.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/Source/State/PedalState.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/Source/State/ReleaseQueue.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/Source/State/StateSerializer.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/Source/Compile/CompilerEngine.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/Source/Compile/CanvasGraphAnalyzer.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/Source/Resources/ScaledAssetProvider.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/Source/Compile/CompilerThread.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/Source/Compile/CanvasMessageQueue.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/Source/Compile/PenDebouncer.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/Source/Core/CanvasAnalysis.cpp"
     )
 
     target_include_directories(drawdio_tests PRIVATE
@@ -174,6 +206,8 @@ if(DRAWDIO_BUILD_TESTS)
 
     target_link_libraries(drawdio_tests PRIVATE
         juce::juce_audio_basics
+        juce::juce_audio_processors
+        juce::juce_data_structures
         juce::juce_dsp
         juce::juce_core
         Catch2::Catch2

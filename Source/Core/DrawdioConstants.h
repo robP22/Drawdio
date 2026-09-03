@@ -1,9 +1,12 @@
 #pragma once
 
 #include <cstddef>
+#include <array>
 
 constexpr int GridSize = 256;
 constexpr int TotalCells = GridSize * GridSize;
+constexpr int DirtyRowWordCount = GridSize / 64;
+using DirtyRowMask = std::array<uint64_t, DirtyRowWordCount>;
 constexpr int PedalSlotCount = 6;
 constexpr int KnobsPerPedal = 4;
 constexpr int TotalKnobs = PedalSlotCount * KnobsPerPedal;

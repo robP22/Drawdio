@@ -1,4 +1,5 @@
 #include "UI/Canvas/ArcButton.h"
+#include "UI/Theme/ModernButtonLNF.h"
 #include "RenderUtils.h"
 #include <cmath>
 
@@ -6,7 +7,8 @@ ArcButton::ArcButton()
 {
     setInterceptsMouseClicks(true, false);
     setWantsKeyboardFocus(true);
-    setMouseClickGrabsKeyboardFocus(true);
+    setMouseClickGrabsKeyboardFocus(false);
+    setBufferedToImage(false);
 }
 
 void ArcButton::setArc(float cx, float cy, float innerR, float outerR,
@@ -103,28 +105,30 @@ void ArcButton::setToggleState(bool on, juce::NotificationType n)
 void ArcButton::paint(juce::Graphics& g)
 {
     auto bodyColour = juce::Colour(0xFF2A2D30);
+    auto drawPath = m_arcPath;
+    auto bounds = getLocalBounds().toFloat();
+
     if (m_toggleOn)
-        bodyColour = bodyColour.interpolatedWith(m_accent, 0.50f);
-    if (m_hovered)
-        bodyColour = bodyColour.brighter(0.06f);
-    if (m_pressed)
-        bodyColour = bodyColour.darker(0.04f);
+    {
+        bodyColour = bodyColour.interpolatedWith(m_accent, 0.65f);
+        const auto centre = m_arcPath.getBounds().getCentre();
+        juce::AffineTransform t = juce::AffineTransform::scale(1.08f, 1.08f, centre.x, centre.y);
+        drawPath.applyTransform(t);
 
-    // 1 — Drop shadow
-    g.setColour(juce::Colours::black.withAlpha(0.25f));
-    g.saveState();
-    g.addTransform(juce::AffineTransform::translation(1.0f, 2.0f));
-    g.fillPath(m_arcPath);
-    g.restoreState();
+        g.saveState();
+        g.setColour(m_accent.withAlpha(0.55f));
+        g.fillPath(drawPath);
+        g.setColour(m_accent.withAlpha(0.85f));
+        g.strokePath(drawPath, juce::PathStrokeType(1.8f));
+        g.restoreState();
+    }
 
-    // 2 — Main body
-    g.setColour(bodyColour);
-    g.fillPath(m_arcPath);
+    ModernButtonLNF::drawBody(g, drawPath, bounds,
+                              bodyColour, m_hovered, m_pressed, hasKeyboardFocus(true));
 
-    // 3 — Subtle surface noise
     {
         g.saveState();
-        g.reduceClipRegion(m_arcPath);
+        g.reduceClipRegion(drawPath);
         g.setOpacity(0.03f);
         g.drawImage(RenderUtils::getNoiseTexture(),
                     getLocalBounds().toFloat(),
@@ -133,40 +137,10 @@ void ArcButton::paint(juce::Graphics& g)
         g.restoreState();
     }
 
-    // 4 — Top highlight gradient
-    g.setGradientFill(juce::ColourGradient(
-        juce::Colours::white.withAlpha(m_pressed ? 0.04f : (m_hovered ? 0.12f : 0.08f)),
-        getLocalBounds().toFloat().getTopLeft(),
-        juce::Colours::transparentWhite,
-        getLocalBounds().toFloat().getCentre(),
-        false));
-    g.fillPath(m_arcPath);
-
-    // 5 — Bottom shadow gradient
-    g.setGradientFill(juce::ColourGradient(
-        juce::Colours::transparentWhite,
-        getLocalBounds().toFloat().getCentre(),
-        juce::Colours::black.withAlpha(m_pressed ? 0.22f : (m_hovered ? 0.18f : 0.15f)),
-        getLocalBounds().toFloat().getBottomLeft(),
-        false));
-    g.fillPath(m_arcPath);
-
-    // 6 — Border bevel
-    g.setColour(bodyColour.brighter(0.04f));
-    g.strokePath(m_arcPath, juce::PathStrokeType(1.0f));
-
-    // 7 — Focus ring
-    if (hasKeyboardFocus(true))
-    {
-        g.setColour(juce::Colours::white.withAlpha(0.55f));
-        g.strokePath(m_arcPath, juce::PathStrokeType(1.5f));
-    }
-
-    // 8 — Icon
     if (m_drawIcon)
     {
         g.saveState();
-        g.reduceClipRegion(m_arcPath);
+        g.reduceClipRegion(drawPath);
         g.setColour(m_toggleOn ? m_accent.brighter(0.20f) : m_accent);
         m_drawIcon(g, m_iconBounds);
         g.restoreState();
@@ -182,6 +156,9 @@ void ArcButton::mouseDown(const juce::MouseEvent& e)
 {
     if (!e.mods.isLeftButtonDown())
         return;
+
+    if (hasKeyboardFocus(true))
+        giveAwayKeyboardFocus();
 
     m_pressed = true;
     m_clickCancelled = false;

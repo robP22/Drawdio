@@ -3,14 +3,14 @@
 
 ManualRoutingController::ManualRoutingController(ManualConnectionModel& connectionModel,
                                                   JackHitMap& jackMap,
-                                                  IPedalboardModel& pedalModel)
+                                                  std::function<bool()> isManualMode)
     : m_connectionModel(connectionModel),
       m_jackMap(jackMap),
-      m_pedalModel(pedalModel) {}
+      m_isManualMode(std::move(isManualMode)) {}
 
 void ManualRoutingController::mouseDown(juce::Point<float> pos)
 {
-    if (!m_pedalModel.isManualMode())
+    if (!m_isManualMode || !m_isManualMode())
         return;
 
     m_dragMode = DragMode::None;
@@ -205,7 +205,7 @@ void ManualRoutingController::mouseUp(juce::Point<float> pos,
             }
         }
     }
-    else if (m_pedalModel.isManualMode() && src.pedalIdx >= 0 && dstJackIdx == -1 && !wasGrabbing)
+    else if (m_isManualMode && m_isManualMode() && src.pedalIdx >= 0 && dstJackIdx == -1 && !wasGrabbing)
     {
         uint8_t removedSlot = static_cast<uint8_t>(src.pedalIdx);
         m_connectionModel.removeAllEdgesForSlot(removedSlot);

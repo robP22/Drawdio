@@ -1,8 +1,11 @@
 #include "CableRenderer.h"
+#include "Core/EditorDesignMetrics.h"
 #include "RenderUtils.h"
 
-CableRenderer::CableRenderer(const IThemeProvider& theme, const IResourceProvider& resources)
-    : m_theme(theme), m_resources(resources) {}
+CableRenderer::CableRenderer(const IThemeProvider& theme,
+                             const IResourceProvider& resources,
+                             const ScaledAssetProvider& assets)
+    : m_theme(theme), m_resources(resources), m_assets(assets) {}
 
 void CableRenderer::renderSegment(juce::Graphics& g,
                                   const juce::Path& left, const juce::Path& right,
@@ -41,14 +44,16 @@ void CableRenderer::drawRoutingCables(juce::Graphics& g,
 }
 
 void CableRenderer::drawActiveDraggingCable(juce::Graphics& g,
-                                            juce::Point<float> start, juce::Point<float> current,
-                                            int srcJackIdx) const
+                                             juce::Point<float> start, juce::Point<float> current,
+                                             int srcJackIdx) const
 {
     const float horizontal = std::abs(current.x - start.x);
     juce::Point<float> cp1, cp2;
 
-    float curveX = std::max(horizontal * 0.35f, 20.0f);
-    float lift = std::min(horizontal * 0.04f + 4.0f, 15.0f);
+    float curveX = std::max(horizontal * 0.35f, EditorDesignMetrics::Cable::CurveMinPx);
+    float lift = juce::jlimit(EditorDesignMetrics::Cable::JackRiseMinPx,
+                              horizontal * EditorDesignMetrics::Cable::JackRiseSpanRatio,
+                              EditorDesignMetrics::Cable::JackRiseMaxPx);
     cp1 = {start.x + curveX, start.y - lift};
     cp2 = {current.x - curveX, current.y - lift};
 
@@ -69,15 +74,15 @@ void CableRenderer::drawGrabbedCable(juce::Graphics& g,
 }
 
 void CableRenderer::drawInputJack(juce::Graphics& g, juce::Point<float> entryPos,
-                                  const juce::Path& path) const
+                                   const juce::Path& path, bool drawPath) const
 {
-    drawJack(g, entryPos, path, true);
+    drawJack(g, entryPos, path, true, drawPath);
 }
 
 void CableRenderer::drawOutputJack(juce::Graphics& g, juce::Point<float> exitPos,
-                                    const juce::Path& path) const
+                                    const juce::Path& path, bool drawPath) const
 {
-    drawJack(g, exitPos, path, false);
+    drawJack(g, exitPos, path, false, drawPath);
 }
 
 void CableRenderer::drawJackHighlight(juce::Graphics& g, juce::Point<float> position) const
@@ -92,12 +97,12 @@ void CableRenderer::drawJackHighlight(juce::Graphics& g, juce::Point<float> posi
 }
 
 void CableRenderer::drawJack(juce::Graphics& g, juce::Point<float> position,
-                             const juce::Path& path, bool isInput) const
+                              const juce::Path& path, bool isInput, bool drawPath) const
 {
     static constexpr float jackH = 14.0f;
     float jackW = jackH;
 
-    if (!path.isEmpty())
+    if (drawPath && !path.isEmpty())
     {
         juce::Path empty;
         renderSegment(g, isInput ? empty : path,
@@ -105,12 +110,18 @@ void CableRenderer::drawJack(juce::Graphics& g, juce::Point<float> position,
                       m_theme.cableColour());
     }
 
-    const auto& tex = m_resources.getTexture(IResourceProvider::TextureId::InputJack);
-    if (tex.isValid())
+    const auto& source = m_resources.getTexture(IResourceProvider::TextureId::InputJack);
+    if (source.isValid())
     {
-        const float aspect = static_cast<float>(tex.getWidth()) / static_cast<float>(tex.getHeight());
+        const float aspect = static_cast<float>(source.getWidth()) / static_cast<float>(source.getHeight());
         jackW = jackH * aspect;
-        const float scale = jackH / static_cast<float>(tex.getHeight());
+        const float deviceScale = std::max(1.0f, g.getInternalContext().getPhysicalPixelScaleFactor());
+        const auto jack = m_assets.getScaledImage(
+            IResourceProvider::ImageId::InputJack,
+            juce::jmax(1, juce::roundToInt(jackW * deviceScale)),
+            juce::jmax(1, juce::roundToInt(jackH * deviceScale)),
+            ScaledAssetProvider::ResamplingPolicy::Continuous);
+        const float scale = 1.0f / deviceScale;
         const float signedScaleX = isInput ? scale : -scale;
         const float offsetX = position.x + (isInput ? -jackW : jackW) * 0.5f;
         const float offsetY = position.y - jackH * 0.5f;
@@ -118,8 +129,9 @@ void CableRenderer::drawJack(juce::Graphics& g, juce::Point<float> position,
         g.saveState();
         g.setColour(juce::Colours::white);
         g.setOpacity(1.0f);
+        g.setImageResamplingQuality(juce::Graphics::highResamplingQuality);
         g.drawImageTransformed(
-            tex,
+            jack,
             juce::AffineTransform::scale(signedScaleX, scale).translated(offsetX, offsetY));
         g.restoreState();
     }

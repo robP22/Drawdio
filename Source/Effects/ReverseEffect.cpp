@@ -19,17 +19,16 @@ void ReverseEffect::prepare(double sampleRate, int numChannels)
         ch.playPos = 0;
         ch.sliceCounter = 0;
         ch.repeatCount = 0;
-        ch.xfadePos = RevChannel::kXfadeLen;
-        ch.exitFadePos = RevChannel::kXfadeLen;
+        ch.xfadePos = m_xfadeLen;
+        ch.exitFadePos = m_xfadeLen;
     }
+    m_xfadeLen = 32;
 }
 
 void ReverseEffect::reset()
 {
     for (auto& ch : m_channels)
     {
-        std::fill(ch.buf.begin(), ch.buf.end(), 0.0f);
-        std::fill(ch.freeze.begin(), ch.freeze.end(), 0.0f);
         ch.writePtr = 0;
         ch.mode = RevState::RECORDING;
         ch.sliceStart = 0;
@@ -37,14 +36,14 @@ void ReverseEffect::reset()
         ch.playPos = 0;
         ch.sliceCounter = 0;
         ch.repeatCount = 0;
-        ch.xfadePos = RevChannel::kXfadeLen;
-        ch.exitFadePos = RevChannel::kXfadeLen;
+        ch.xfadePos = std::numeric_limits<int>::max();
+        ch.exitFadePos = std::numeric_limits<int>::max();
     }
 }
 
 void ReverseEffect::processSample(float** b, int c, int s, float effectParam)
 {
-    float density = effectParam;
+    float density = 1.0f - effectParam;
     float grainSec = 0.05f + density * 0.95f;
     int maxRepeats = 1 + static_cast<int>((1.0f - density) * 4.0f);
 
@@ -63,12 +62,13 @@ void ReverseEffect::processSample(float** b, int c, int s, float effectParam)
         if (sliceSamples < 2) sliceSamples = 2;
         if (sliceSamples >= rc.freeze.size()) sliceSamples = rc.freeze.size() - 1;
         if (sliceSamples >= rc.buf.size()) sliceSamples = rc.buf.size() - 1;
+        const int xfadeLen = std::max(1, std::min(m_xfadeLen, static_cast<int>(sliceSamples / 4)));
 
         if (rc.mode == RevState::RECORDING)
         {
-            if (rc.exitFadePos < RevChannel::kXfadeLen)
+            if (rc.exitFadePos < xfadeLen)
             {
-                float a = static_cast<float>(rc.exitFadePos) / static_cast<float>(RevChannel::kXfadeLen);
+                float a = static_cast<float>(rc.exitFadePos) / static_cast<float>(xfadeLen);
                 float w = 0.5f * (1.0f - std::cos(3.14159265f * a));
                 b[ch][s] = rc.exitFadeFrom * (1.0f - w) + in * w;
                 rc.exitFadePos++;
@@ -95,9 +95,9 @@ void ReverseEffect::processSample(float** b, int c, int s, float effectParam)
         {
             size_t readPos = rc.sliceLen - 1 - static_cast<size_t>(rc.playPos);
 
-            if (rc.xfadePos < RevChannel::kXfadeLen)
+            if (rc.xfadePos < xfadeLen)
             {
-                float a = static_cast<float>(rc.xfadePos) / static_cast<float>(RevChannel::kXfadeLen);
+                float a = static_cast<float>(rc.xfadePos) / static_cast<float>(xfadeLen);
                 float w = 0.5f * (1.0f - std::cos(3.14159265f * a));
                 b[ch][s] = rc.xfadeFrom * (1.0f - w) + rc.freeze[readPos] * w;
                 rc.xfadePos++;
@@ -118,7 +118,7 @@ void ReverseEffect::processSample(float** b, int c, int s, float effectParam)
                 {
                     rc.mode = RevState::RECORDING;
                     rc.sliceCounter = 0;
-                    rc.xfadePos = RevChannel::kXfadeLen;
+                    rc.xfadePos = xfadeLen;
                     rc.exitFadePos = 0;
                     rc.exitFadeFrom = b[ch][s];
                 }
@@ -132,6 +132,9 @@ void ReverseEffect::processSample(float** b, int c, int s, float effectParam)
 void ReverseEffect::processBlock(float** b, int c, int n, const float* params)
 {
     juce::ScopedNoDenormals noDenorm;
+    const float smooth = std::max(0.0f, std::min(1.0f, params[2]));
+    m_xfadeLen = std::max(static_cast<int>(m_sampleRate * 0.015f),
+                          static_cast<int>(m_sampleRate * 0.002f * std::pow(40.0f, smooth) + 0.5f));
     for (int s = 0; s < n; ++s)
         processSample(b, c, s, params[3]);
 }

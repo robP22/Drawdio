@@ -1,22 +1,29 @@
 #include "EditorSyncController.h"
 #include "../PedalboardGrid.h"
 #include "UI/Controls/BottomControlBar.h"
+#include "UI/Pedalboard/PedalboardHeader.h"
 #include "State/AutomationPlayer.h"
 #include "State/AutomationCompiler.h"
 #include "UI/Canvas/PixelCanvasComponent.h"
+#include "UI/Canvas/ColorPalette.h"
 
-EditorSyncController::EditorSyncController(IConfigConsumer& processor,
+EditorSyncController::EditorSyncController(EditorProcessorBridge& processor,
                                            PedalboardGrid& pedalboardGrid,
                                            BottomControlBar& bottomBar,
+                                           PedalboardHeader& pedalboardHeader,
                                            AutomationPlayer& automationPlayer,
                                            AutomationCompiler& automationCompiler,
-                                           PixelCanvasComponent& pixelCanvas)
+                                           PixelCanvasComponent& pixelCanvas,
+                                           ColorPalette& palette)
     : m_processor(processor),
       m_pedalboardGrid(pedalboardGrid),
       m_bottomBar(bottomBar),
+      m_pedalboardHeader(pedalboardHeader),
       m_automationPlayer(automationPlayer),
       m_automationCompiler(automationCompiler),
-      m_pixelCanvas(pixelCanvas) {}
+      m_pixelCanvas(pixelCanvas),
+      m_palette(palette),
+      m_viewBinder(pedalboardGrid, bottomBar, pedalboardHeader, pixelCanvas, palette) {}
 
 void EditorSyncController::tick()
 {
@@ -26,6 +33,8 @@ void EditorSyncController::tick()
 
     syncCompiledKnobs(needsRepaint);
     syncAutomation();
+    for (int slot = 0; slot < PedalSlotCount; ++slot)
+        m_bottomBar.setPedalPeak(slot, m_processor.getPedalPeak(slot));
 
     if (consumeUINotification())
         applyFullConfigSync(needsRepaint);
@@ -56,14 +65,25 @@ void EditorSyncController::applyFullConfigSync(bool& needsRepaint)
 {
     needsRepaint = true;
 
-    m_pedalboardGrid.syncPedals();
+    const auto snapshot = m_processor.getUiSnapshot();
+    m_presentationStore.apply(snapshot);
+    m_viewBinder.apply(snapshot);
     m_bottomBar.syncPedalNames();
-    m_bottomBar.syncGainKnobs();
     refreshRoutingFromConfig();
 
-    m_processor.storeUndoData(m_pixelCanvas.captureUndoData());
-    m_pixelCanvas.setGridData(m_processor.getGridData());
-    m_pixelCanvas.applyUndoData(m_processor.getUndoData());
+    if (!m_pixelCanvas.isStrokeOpen() && !m_pixelCanvas.hasUndoData())
+    {
+        const auto& persisted = m_processor.getUndoData();
+        if (!persisted.empty())
+        {
+            m_pixelCanvas.setGridData(m_processor.getGridData(), false);
+            m_pixelCanvas.applyUndoData(persisted);
+        }
+    }
+    else if (!m_pixelCanvas.isStrokeOpen())
+    {
+        m_processor.storeUndoData(m_pixelCanvas.captureUndoData());
+    }
 
     {
         int bars = m_processor.getBarCount();
@@ -77,7 +97,7 @@ void EditorSyncController::applyFullConfigSync(bool& needsRepaint)
         m_automationPlayer.setSectionStartBar(start);
     }
 
-    m_bottomBar.updateManualButton(m_processor.isManualMode());
+    m_pedalboardHeader.updateModeButton(m_processor.isManualMode());
 }
 
 void EditorSyncController::syncCompiledKnobs(bool& needsRepaint)
@@ -86,41 +106,7 @@ void EditorSyncController::syncCompiledKnobs(bool& needsRepaint)
     m_processor.consumeCompiledResultIfAvailable();
     if (m_processor.getConfigRevision() != revBefore)
     {
-        m_didConsumeResult = true;
         needsRepaint = true;
-        if (!m_processor.isManualMode())
-        {
-            auto& syncData = m_processor.getLastConfigSync();
-            for (auto& param : syncData.parameters)
-                applyParameterToPedal(param, syncData.routingSlotOrder);
-        }
-    }
-}
-
-void EditorSyncController::applyParameterToPedal(
-    const ParameterDescriptor& param,
-    const std::vector<uint8_t>& routingSlotOrder)
-{
-    auto chainPos = param.targetDspNodeRegister;
-    if (chainPos >= static_cast<int>(routingSlotOrder.size()))
-        return;
-    int slotIdx = routingSlotOrder[static_cast<size_t>(chainPos)];
-    int token = static_cast<int>(param.parameterToken);
-    if (auto* pedal = m_pedalboardGrid.getPedal(slotIdx))
-    {
-        if (m_processor.isParamOverridden(slotIdx, token))
-        {
-            float display = m_processor.getKnobDisplayValue(slotIdx, token, param.currentValue);
-            display = pedal->snapValue(token, display);
-            pedal->setKnobValue(token, display);
-            m_processor.storeParameterValue(slotIdx, token, display);
-        }
-        else
-        {
-            float display = pedal->snapValue(token, param.currentValue);
-            pedal->setKnobValue(token, display);
-            m_processor.storeParameterValue(slotIdx, token, display);
-        }
     }
 }
 
@@ -148,7 +134,6 @@ void EditorSyncController::syncAutomation()
 void EditorSyncController::syncKnobAutomation()
 {
     float autoVal = m_automationPlayer.getValue();
-    auto knobVals = m_processor.getKnobValues();
     for (int slot = 0; slot < PedalSlotCount; ++slot)
     {
         auto* pedal = m_pedalboardGrid.getPedal(slot);
@@ -157,17 +142,47 @@ void EditorSyncController::syncKnobAutomation()
         {
             if (!m_processor.isKnobLinked(slot, k))
                 continue;
-            size_t idx = static_cast<size_t>(slot * KnobsPerPedal + k);
-            float strength = m_processor.getKnobLinkStrength(slot, k);
-            float display = std::max(0.0f, std::min(1.0f, knobVals[idx] * (1.0f - strength) + autoVal * strength));
+            const float rMin = m_processor.getKnobLinkRangeMin(slot, k);
+            const float rMax = m_processor.getKnobLinkRangeMax(slot, k);
+            float display = std::clamp(rMin + autoVal * (rMax - rMin), 0.0f, 1.0f);
             display = pedal->snapValue(k, display);
             pedal->setKnobValue(k, display);
         }
     }
+    syncKnobLinkIndicators();
+}
+
+void EditorSyncController::syncKnobLinkIndicators()
+{
+    for (int slot = 0; slot < PedalSlotCount; ++slot)
+        for (int knob = 0; knob < KnobsPerPedal; ++knob)
+        {
+            const bool linked = m_processor.isKnobLinked(slot, knob);
+            const float rMin = m_processor.getKnobLinkRangeMin(slot, knob);
+            const float rMax = m_processor.getKnobLinkRangeMax(slot, knob);
+            m_pedalboardGrid.syncKnobLinkState(slot, knob, linked, rMin, rMax);
+        }
 }
 
 void EditorSyncController::refreshRoutingFromConfig()
 {
+    bool pedalChanged = false;
+    for (int slot = 0; slot < PedalSlotCount; ++slot)
+    {
+        auto type = m_processor.getPedalSlot(slot);
+        if (type != m_lastPedalTypes[static_cast<size_t>(slot)])
+            pedalChanged = true;
+        m_lastPedalTypes[static_cast<size_t>(slot)] = type;
+    }
+    if (pedalChanged)
+    {
+        const auto snapshot = m_processor.getUiSnapshot();
+        m_pedalboardGrid.setViewState(snapshot);
+        m_bottomBar.setViewState(snapshot);
+        m_bottomBar.syncPedalNames();
+        m_needsRepaint = true;
+    }
+
     if (m_processor.isManualMode())
     {
         const auto& routing = m_processor.getManualRouting();
@@ -180,9 +195,10 @@ void EditorSyncController::refreshRoutingFromConfig()
         return;
     }
     const auto& routingOrder = m_processor.getLastConfigSync().routingSlotOrder;
-    if (routingOrder != m_lastRoutingOrder || m_lastRoutingOrder.empty() || m_didConsumeResult)
+
+    bool routingChanged = (routingOrder != m_lastRoutingOrder || m_lastRoutingOrder.empty());
+    if (routingChanged)
     {
-        m_didConsumeResult = false;
         m_lastRoutingOrder = routingOrder;
         m_pedalboardGrid.updateRouting(m_lastRoutingOrder);
         m_needsRepaint = true;

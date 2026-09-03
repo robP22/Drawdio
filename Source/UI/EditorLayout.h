@@ -1,8 +1,76 @@
 #pragma once
 #include <JuceHeader.h>
+#include "Core/EditorDesignMetrics.h"
 
 namespace EditorLayout
 {
+
+struct LayoutResult
+{
+    float scale = 0.0f;
+    juce::Rectangle<int> content;
+    juce::Rectangle<int> topArea;
+    juce::Rectangle<int> bottomBar;
+    juce::Rectangle<int> pedalboardArea;
+    juce::Rectangle<int> canvasArea;
+    juce::Rectangle<int> header;
+    juce::Rectangle<int> palette;
+    juce::Rectangle<int> pixelCanvas;
+};
+
+inline LayoutResult calculate(juce::Rectangle<int> bounds)
+{
+    LayoutResult result;
+
+    if (bounds.isEmpty())
+        return result;
+
+    const float scale = std::min(
+        static_cast<float>(bounds.getWidth()) / static_cast<float>(EditorDesignMetrics::DesignResolution::Width),
+        static_cast<float>(bounds.getHeight()) / static_cast<float>(EditorDesignMetrics::DesignResolution::Height));
+    const int contentW = std::min(bounds.getWidth(), juce::roundToInt(
+        static_cast<float>(EditorDesignMetrics::DesignResolution::Width) * scale));
+    const int contentH = std::min(bounds.getHeight(), juce::roundToInt(
+        static_cast<float>(EditorDesignMetrics::DesignResolution::Height) * scale));
+    result.content = bounds.withSizeKeepingCentre(contentW, contentH);
+    result.scale = static_cast<float>(contentW)
+                 / static_cast<float>(EditorDesignMetrics::DesignResolution::Width);
+
+    auto remaining = result.content;
+    const int bottomBarH = juce::roundToInt(remaining.getHeight() * EditorDesignMetrics::BottomBar::HeightRatio);
+    result.topArea = remaining.removeFromTop(remaining.getHeight() - bottomBarH);
+    result.bottomBar = remaining;
+
+    const int pedalW = juce::roundToInt(result.topArea.getWidth() * EditorDesignMetrics::PedalboardWidthRatio);
+    const int canvasW = result.topArea.getWidth() - pedalW;
+    result.pedalboardArea = result.topArea.withTrimmedLeft(canvasW);
+    result.canvasArea = result.topArea.withTrimmedRight(pedalW);
+
+    const int headerH = juce::roundToInt(result.pedalboardArea.getHeight() * EditorDesignMetrics::PedalboardHeader::HeightRatio);
+    result.header = result.pedalboardArea.withTrimmedBottom(result.pedalboardArea.getHeight() - headerH);
+
+    const int paletteH = juce::roundToInt(result.canvasArea.getHeight() * EditorDesignMetrics::PaletteHeightRatio);
+    const int paletteInset = juce::roundToInt(result.canvasArea.getWidth() * EditorDesignMetrics::PaletteColumnInsetRatio);
+    result.palette = result.canvasArea
+                         .withTrimmedTop(result.canvasArea.getHeight() - paletteH)
+                         .withTrimmedLeft(paletteInset)
+                         .withTrimmedRight(paletteInset);
+
+    const auto canvasRegion = result.canvasArea.withTrimmedBottom(paletteH);
+    const int squareSize = canvasRegion.getHeight();
+    result.pixelCanvas = canvasRegion.withSizeKeepingCentre(squareSize, squareSize);
+    return result;
+}
+
+inline float scaleFromHeight(float componentHeight, float designRatio)
+{
+    return componentHeight / (designRatio * static_cast<float>(EditorDesignMetrics::DesignResolution::Height));
+}
+
+inline float scaledCap(float usable, float ratio, float designPx, float scale)
+{
+    return std::min(usable * ratio, designPx * scale);
+}
 
 constexpr float PedalboardWidthRatio = 0.55f;
 

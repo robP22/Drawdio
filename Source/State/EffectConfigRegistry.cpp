@@ -12,7 +12,7 @@ ReverbNetworkConfig EffectConfigRegistry::getDiffusedReverbConfig()
 ReverbNetworkConfig EffectConfigRegistry::getPlateReverbConfig()
 {
     return ReverbNetworkConfig{
-        .feedbackBase = 0.88,
+        .feedbackBase = 0.86,
         .feedbackRange = 0.08,
         .fdnTimes = { 1321, 1427, 1543, 1657, 1783, 1907, 2039, 2161 }
     };

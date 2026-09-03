@@ -1,6 +1,7 @@
 #include <JuceHeader.h>
 #include "UnifiedPedalProcessor.h"
 #include "State/ConfigManager.h"
+#include <array>
 #include <algorithm>
 #include <cmath>
 #include <utility>
@@ -28,7 +29,10 @@ void UnifiedPedalProcessor::prepareToPlay(double sampleRate, int maxSamplesPerBl
     const size_t maxCh = static_cast<size_t>(m_maxChannels.load(std::memory_order_relaxed));
 
     constexpr float kParamSmoothHz = 40.0f;
-    m_paramSmoothAlpha = 1.0f - std::exp(-2.0f * 3.14159265f * kParamSmoothHz * static_cast<float>(maxSamplesPerBlock) / static_cast<float>(sampleRate));
+    const float maxSamplesF = static_cast<float>(maxSamplesPerBlock);
+    const float srF = static_cast<float>(sampleRate);
+    m_paramSmoothHz = kParamSmoothHz;
+    m_paramSmoothAlphaMaxBlock = 1.0f - std::exp(-2.0f * 3.14159265f * kParamSmoothHz * maxSamplesF / srF);
 
     m_crossfade.prepare(sampleRate, maxSamplesPerBlock, maxCh);
 
@@ -74,7 +78,9 @@ void UnifiedPedalProcessor::scheduleReset()
     m_pendingReset.store(true, std::memory_order_release);
 }
 
-void UnifiedPedalProcessor::processChainBlock(float** b, int c, int s, const PedalAssetPayload& config)
+void UnifiedPedalProcessor::processChainBlock(float** b, int c, int s,
+                                              const PedalAssetPayload& config,
+                                              bool useCompiledParameterBank)
 {
     juce::ScopedNoDenormals noDenorm;
     int chCount = std::min(c, m_maxChannels.load(std::memory_order_relaxed));
@@ -101,8 +107,10 @@ void UnifiedPedalProcessor::processChainBlock(float** b, int c, int s, const Ped
         for (int k = 0; k < KnobsPerPedal; ++k)
         {
             size_t ci = baseIdx + static_cast<size_t>(k);
-            if ((mask & (1u << ci)) != 0)
+            if (config.manualParams || (mask & (1u << ci)) != 0)
                 params[k] = m_paramCache.readRaw(static_cast<int>(ci));
+            else if (useCompiledParameterBank)
+                params[k] = m_compiledParameterBank.load(physSlot, k);
             else if (row[static_cast<size_t>(k)] != nullptr)
                 params[k] = *row[static_cast<size_t>(k)];
         }
@@ -113,14 +121,21 @@ void UnifiedPedalProcessor::processChainBlock(float** b, int c, int s, const Ped
         float autoVal = m_smoothedAutoValue;
         for (int k = 0; k < KnobsPerPedal; ++k)
             if (k != mi && m_pedalState.knobLinked(physSlot, k))
-                params[k] = params[k] * (1.0f - m_pedalState.knobLinkStrength(physSlot, k)) + autoVal * m_pedalState.knobLinkStrength(physSlot, k);
+            {
+                const float rMin = m_pedalState.knobLinkRangeMin(physSlot, k);
+                const float rMax = m_pedalState.knobLinkRangeMax(physSlot, k);
+                const float mapped = rMin + autoVal * (rMax - rMin);
+                params[k] = mapped;
+            }
 
         auto& smoothRow = m_smoothedParams[static_cast<size_t>(physSlot)];
+        const float srForSmooth = m_sampleRate.load(std::memory_order_relaxed) > 0.0 ? static_cast<float>(m_sampleRate.load(std::memory_order_relaxed)) : 44100.0f;
+        const float blockAlpha = 1.0f - std::exp(-2.0f * 3.14159265f * m_paramSmoothHz * static_cast<float>(s) / srForSmooth);
         for (int k = 0; k < KnobsPerPedal; ++k)
         {
             if (k == mi)
                 continue;
-            smoothRow[static_cast<size_t>(k)] += (params[k] - smoothRow[static_cast<size_t>(k)]) * m_paramSmoothAlpha;
+            smoothRow[static_cast<size_t>(k)] += (params[k] - smoothRow[static_cast<size_t>(k)]) * blockAlpha;
             params[k] = smoothRow[static_cast<size_t>(k)];
         }
 
@@ -186,7 +201,7 @@ void UnifiedPedalProcessor::processChainBlock(float** b, int c, int s, const Ped
         }
 
         const bool fullyDry = (hasMix && m_prevMix[static_cast<size_t>(physSlot)] == 0.0f && params[mi] == 0.0f);
-        if (!(fullyDry && !effectPtr->hasActiveTail()))
+        if (!fullyDry || effectPtr->requiresContinuousProcessing())
             effectPtr->processBlock(b, chCount, s, params);
 
         float prevMix = hasMix ? m_prevMix[static_cast<size_t>(physSlot)] : 1.0f;
@@ -225,10 +240,30 @@ void UnifiedPedalProcessor::processAudioBlock(float** buffer, int numChannels, i
 {
     juce::ScopedNoDenormals noDenormals;
     int maxSamples = m_maxSamplesPerBlock.load(std::memory_order_relaxed);
-    if (numSamples > maxSamples) numSamples = maxSamples;
+    if (maxSamples <= 0 || numSamples <= 0)
+        return;
+
+    if (numSamples > maxSamples)
+    {
+        std::array<float*, 32> chunk{};
+        const int chunkChannels = std::min(numChannels, static_cast<int>(chunk.size()));
+        for (int ch = 0; ch < chunkChannels; ++ch)
+            chunk[static_cast<size_t>(ch)] = buffer[ch];
+
+        for (int offset = 0; offset < numSamples; offset += maxSamples)
+        {
+            const int chunkSamples = std::min(maxSamples, numSamples - offset);
+            for (int ch = 0; ch < chunkChannels; ++ch)
+                chunk[static_cast<size_t>(ch)] = buffer[ch] + offset;
+            processAudioBlock(chunk.data(), chunkChannels, chunkSamples, cfg);
+        }
+        return;
+    }
 
     if (m_crossfade.consumeResetRequest())
         m_crossfade.reset();
+
+    m_pedalState.resetPedalPeaks();
 
     const auto* current = cfg.currentConfig.load(std::memory_order_acquire);
     const auto* next = cfg.nextConfig.load(std::memory_order_acquire);
@@ -263,19 +298,19 @@ void UnifiedPedalProcessor::processAudioBlock(float** buffer, int numChannels, i
     if (next && m_crossfade.isActive())
     {
         m_crossfade.copyToTemp(buffer, copyCh, numSamples);
-        processChainBlock(buffer, numChannels, numSamples, *current);
+        processChainBlock(buffer, numChannels, numSamples, *current, false);
         m_crossfade.captureOldOut(buffer, copyCh, numSamples);
         m_crossfade.restoreInput(buffer, copyCh, numSamples);
-        processChainBlock(buffer, numChannels, numSamples, *next);
+        processChainBlock(buffer, numChannels, numSamples, *next, false);
         m_crossfade.fadeOutputs(buffer, copyCh, numSamples);
     }
     else if (next && m_crossfade.isComplete())
     {
-        processChainBlock(buffer, numChannels, numSamples, *next);
+        processChainBlock(buffer, numChannels, numSamples, *next, false);
     }
     else
     {
-        processChainBlock(buffer, numChannels, numSamples, *current);
+        processChainBlock(buffer, numChannels, numSamples, *current, true);
     }
 
     float outGain = m_pedalState.getOutputGain();

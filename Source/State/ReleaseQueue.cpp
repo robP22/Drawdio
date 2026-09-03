@@ -1,5 +1,6 @@
 #include "ReleaseQueue.h"
 #include "Effects/DspEffect.h"
+#include <JuceHeader.h>
 
 ReleaseQueue::ReleaseQueue() = default;
 
@@ -34,6 +35,35 @@ void ReleaseQueue::drain()
     while (rIdx != wIdx)
     {
         delete m_queue[static_cast<size_t>(rIdx)];
+        rIdx = (rIdx + 1) % kCapacity;
+    }
+    m_readIndex.store(rIdx, std::memory_order_release);
+}
+
+void ReleaseQueue::drainAsync()
+{
+    auto schedule = [](const PedalAssetPayload* ptr)
+    {
+        if (!ptr)
+            return;
+        if (juce::MessageManager::existsAndIsCurrentThread()
+            || juce::MessageManager::getInstanceWithoutCreating() == nullptr)
+            delete ptr;
+        else
+            juce::MessageManager::callAsync([ptr]() { delete ptr; });
+    };
+
+    for (auto& slot : m_singleSlots)
+        schedule(slot.exchange(nullptr, std::memory_order_acq_rel));
+
+    schedule(m_overflow.exchange(nullptr, std::memory_order_acq_rel));
+    schedule(m_pendingDelete.exchange(nullptr, std::memory_order_acq_rel));
+
+    int rIdx = m_readIndex.load(std::memory_order_relaxed);
+    const int wIdx = m_writeIndex.load(std::memory_order_acquire);
+    while (rIdx != wIdx)
+    {
+        schedule(m_queue[static_cast<size_t>(rIdx)]);
         rIdx = (rIdx + 1) % kCapacity;
     }
     m_readIndex.store(rIdx, std::memory_order_release);

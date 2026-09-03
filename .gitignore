@@ -24,13 +24,14 @@ Thumbs.db
 # Dev-support files (not part of the release)
 agents.MD
 docs/*
-!docs/working-notes.md
 !docs/effects.md
 !docs/architecture.md
 !docs/build.md
 !docs/ui-controls.md
 !docs/state-format.md
 !docs/resources.md
+!docs/positioning.md
+!docs/ui-architecture.md
 !docs/audits/
 !docs/audits/**
 !docs/archive/

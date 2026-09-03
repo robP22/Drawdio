@@ -59,8 +59,11 @@ void HpLpFilterEffect::processBlock(float** b, int c, int n, const float* params
             const float low = low0 + (low1 - low0) * t;
             const float q = 0.5f + (qp0 + (qp1 - qp0) * t) * 1.5f;
 
-            const float hpHz = 30.0f * std::pow(2000.0f / 30.0f, high);
-            const float lpHz = 500.0f * std::pow(16000.0f / 500.0f, low);
+            const float hpHzRaw = 30.0f * std::pow(2000.0f / 30.0f, high);
+            const float lpHzRaw = 500.0f * std::pow(16000.0f / 500.0f, low);
+            const float nyquist = sr * 0.45f;
+            const float hpHz = std::min(hpHzRaw, nyquist);
+            const float lpHz = std::min(lpHzRaw, nyquist);
 
             const float hpCos = std::cos(6.2831853f * hpHz / sr);
             const float lpCos = std::cos(6.2831853f * lpHz / sr);

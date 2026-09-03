@@ -6,7 +6,7 @@
 class SpectralFreezeEffect : public DspEffect
 {
 public:
-    SpectralFreezeEffect() : DspEffect(0) {}
+    SpectralFreezeEffect() : DspEffect(1) {}
     void prepare(double sampleRate, int numChannels) override;
     void reset() override;
     void processSample(float** b, int c, int s, float effectParam) override;
@@ -22,12 +22,17 @@ private:
         float readPos = 0.0f;
         size_t freezeLen = 0;
         bool wasFrozen = false;
+        bool historyReady = false;
         float entryXfadePos = 32.0f;
         float exitXfadePos = 32.0f;
         float exitXfadeFrom = 0.0f;
-        static constexpr float kXfadeLen = 32.0f;
+        float offsetXfadePos = 32.0f;
+        float offsetXfadeFrom = 0.0f;
     };
     std::vector<FreezeChannel> m_channels;
+    float m_xfadeLen = 32.0f;
+    float m_offset = 0.0f;
+    float m_lastOffset = -1.0f;
 };
 
 class FormantShifterEffect : public DspEffect

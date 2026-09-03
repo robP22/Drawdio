@@ -48,7 +48,7 @@ void WaveshaperEffect::processBlock(float** b, int c, int n, const float* params
             float x1 = prev;
             prev = x2;
             float dx = x2 - x1;
-            if (std::abs(dx) > 1e-10f)
+            if (std::abs(dx) > 1e-4f)
             {
                 float ax2 = alpha * x2;
                 float ax1 = alpha * x1;
@@ -108,16 +108,10 @@ void WavefolderEffect::processBlock(float** b, int c, int n, const float* params
             float x1 = prev;
             prev = x2;
             float dx = x2 - x1;
-            if (std::abs(dx) > 1e-10f)
-            {
-                float F2 = -std::cos(x2 * a) / (a * norm);
-                float F1 = -std::cos(x1 * a) / (a * norm);
-                b[ch][s] = (F2 - F1) / dx;
-            }
-            else
-            {
-                b[ch][s] = std::sin((x1 + x2) * 0.5f * a) / norm;
-            }
+            const float xm = (x1 + x2) * 0.5f;
+            const float u = a * dx * 0.5f;
+            const float sinc = (std::abs(u) < 1e-8f) ? 1.0f : std::sin(u) / u;
+            b[ch][s] = std::sin(xm * a) * sinc / norm;
         }
         m_prevSample[static_cast<size_t>(ch)] = prev;
     }

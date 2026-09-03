@@ -1,21 +1,25 @@
 #include "Compile/CompilerEngine.h"
-#include "State/PedalDefinition.h"
-#include "Core/CanvasAnalysis.h"
-#include "Effects/DspEffect.h"
+
 #include <algorithm>
 #include <cstring>
+#include <memory>
 #include <numeric>
 
-PedalAssetPayload compileCanvas(const std::array<uint8_t, TotalCells>& gridData,
-                                const std::vector<DspModuleType>& pedalSlots,
-                                const std::vector<uint8_t>& manualRouting,
-                                const std::vector<ParameterDescriptor>& existingParams)
+#include "State/PedalDefinition.h"
+#include "Effects/DspEffect.h"
+
+namespace
+{
+PedalAssetPayload compileCanvasFromAnalysis(
+    CanvasGraphAnalyzer& analyzer,
+    const std::vector<DspModuleType>& pedalSlots,
+    const std::vector<uint8_t>& manualRouting,
+    const std::vector<ParameterDescriptor>& existingParams)
 {
     PedalAssetPayload result;
-
-    // Build active chain (skip BYPASS slots), tracking original slot indices.
     std::vector<DspModuleType> activeChain;
     std::vector<uint8_t> activeSlotIndices;
+
     for (int i = 0; i < static_cast<int>(pedalSlots.size()); ++i)
         if (pedalSlots[static_cast<size_t>(i)] != DspModuleType::BYPASS)
         {
@@ -24,54 +28,28 @@ PedalAssetPayload compileCanvas(const std::array<uint8_t, TotalCells>& gridData,
         }
 
     if (activeChain.empty())
-    {
         return result;
-    }
 
     std::vector<DspModuleType> sortedChain;
     std::vector<uint8_t> routingSlotOrder;
-
     if (!manualRouting.empty())
     {
         for (uint8_t slotIdx : manualRouting)
-        {
             if (slotIdx < pedalSlots.size() && pedalSlots[slotIdx] != DspModuleType::BYPASS)
             {
-                routingSlotOrder.push_back(slotIdx);
                 sortedChain.push_back(pedalSlots[slotIdx]);
+                routingSlotOrder.push_back(slotIdx);
             }
-        }
     }
 
-    // Fallback to automatic scoring if manual routing is empty or invalid
     if (routingSlotOrder.empty())
     {
-        int activeCount = static_cast<int>(activeChain.size());
-        auto ranges = calculateRowRanges(activeCount);
-
-        // Score each pedal position based on painted pixel distribution
+        const int activeCount = static_cast<int>(activeChain.size());
+        const auto ranges = calculateRowRanges(activeCount);
         std::vector<int> scores(activeCount, 0);
         for (int i = 0; i < activeCount; ++i)
-        {
-            int totalPainted = 0;
-            long long xSum = 0;
-            for (int y = ranges[static_cast<size_t>(i)].startRow;
-                 y < ranges[static_cast<size_t>(i)].startRow + ranges[static_cast<size_t>(i)].numRows && y < GridSize; ++y)
-            {
-                for (int x = 0; x < GridSize; ++x)
-                {
-                    if (gridData[y * GridSize + x] != 0)
-                    {
-                        ++totalPainted;
-                        xSum += x;
-                    }
-                }
-            }
-            if (totalPainted > 0)
-                scores[i] = static_cast<int>((static_cast<double>(xSum) / totalPainted) * (100.0 / static_cast<double>(GridSize - 1)));
-        }
+            scores[i] = analyzer.routingScore(ranges[static_cast<size_t>(i)]);
 
-        // Sort chain by routing score ascending (left-biased pixels processed first)
         std::vector<int> sortedOrder(activeCount);
         std::iota(sortedOrder.begin(), sortedOrder.end(), 0);
         std::stable_sort(sortedOrder.begin(), sortedOrder.end(),
@@ -84,91 +62,101 @@ PedalAssetPayload compileCanvas(const std::array<uint8_t, TotalCells>& gridData,
         }
     }
 
-    int activeCount = static_cast<int>(sortedChain.size());
-    // Recalculate row ranges for the sorted chain order
-    auto sortedRanges = calculateRowRanges(activeCount);
-
-    // Build parameter descriptors
-    std::vector<ParameterDescriptor> paramDescriptors;
+    const int activeCount = static_cast<int>(sortedChain.size());
+    const auto sortedRanges = calculateRowRanges(activeCount);
+    std::vector<ParameterDescriptor> parameters;
     for (int i = 0; i < activeCount; ++i)
     {
         const auto& definition = PedalDefinitions::get(sortedChain[static_cast<size_t>(i)]);
         for (const auto& parameter : definition.parameters)
         {
-            ParameterDescriptor p;
-            p.parameterToken = parameter.param.parameterToken;
-            p.minValue = parameter.param.minValue;
-            p.maxValue = parameter.param.maxValue;
-            p.defaultValue = parameter.param.defaultValue;
-            p.currentValue = parameter.param.defaultValue;
-            p.targetDspNodeRegister = static_cast<uint8_t>(i);
-            paramDescriptors.push_back(p);
+            ParameterDescriptor descriptor;
+            descriptor.parameterToken = parameter.param.parameterToken;
+            descriptor.minValue = parameter.param.minValue;
+            descriptor.maxValue = parameter.param.maxValue;
+            descriptor.defaultValue = parameter.param.defaultValue;
+            descriptor.currentValue = parameter.param.defaultValue;
+            descriptor.targetDspNodeRegister = static_cast<uint8_t>(i);
+            descriptor.physicalSlot = routingSlotOrder[static_cast<size_t>(i)];
+            parameters.push_back(descriptor);
         }
     }
 
     result.activeRoutingChain = sortedChain;
     result.routingSlotOrder = routingSlotOrder;
-
-    for (auto& param : paramDescriptors)
+    for (const auto& parameter : parameters)
     {
-        ParameterDescriptor compiledParam = param;
-        int chainPos = static_cast<int>(param.targetDspNodeRegister);
-
-        // Check for manual override in existing params
+        auto compiled = parameter;
+        const int chainPos = static_cast<int>(parameter.targetDspNodeRegister);
         bool overridden = false;
-        for (const auto& ep : existingParams)
-        {
-            if (ep.targetDspNodeRegister == param.targetDspNodeRegister &&
-                ep.parameterToken == param.parameterToken &&
-                ep.isManualOverride)
+
+        for (const auto& existing : existingParams)
+            if (existing.physicalSlot == parameter.physicalSlot
+                && existing.parameterToken == parameter.parameterToken
+                && existing.isManualOverride)
             {
-                compiledParam.currentValue = ep.currentValue;
-                compiledParam.isManualOverride = true;
+                compiled.currentValue = existing.currentValue;
+                compiled.isManualOverride = true;
                 overridden = true;
                 break;
             }
-        }
 
         if (!overridden && chainPos >= 0 && chainPos < activeCount)
         {
             const auto& definition = PedalDefinitions::get(sortedChain[static_cast<size_t>(chainPos)]);
-            const int paramCount = static_cast<int>(definition.parameters.size());
-            int paramIdx = paramCount;
-            for (int i = 0; i < paramCount; ++i)
-            {
-                if (definition.parameters[static_cast<size_t>(i)].param.parameterToken == param.parameterToken)
+            const int parameterCount = static_cast<int>(definition.parameters.size());
+            int parameterIndex = parameterCount;
+            for (int i = 0; i < parameterCount; ++i)
+                if (definition.parameters[static_cast<size_t>(i)].param.parameterToken == parameter.parameterToken)
                 {
-                    paramIdx = i;
+                    parameterIndex = i;
                     break;
                 }
-            }
 
-            if (paramIdx >= paramCount)
-                continue;
-
-            const auto& paramDef = definition.parameters[static_cast<size_t>(paramIdx)];
-            const bool isMix = (paramDef.label != nullptr && std::strcmp(paramDef.label, "Mix") == 0);
-            const bool isFreeze = (paramDef.label != nullptr && std::strcmp(paramDef.label, "Freeze") == 0);
-            if (isMix)
+            if (parameterIndex < parameterCount)
             {
-                compiledParam.currentValue = 1.0f;
-            }
-            else if (isFreeze)
-            {
-                compiledParam.currentValue = 0.0f;
-            }
-            else
-            {
-                float normalized = calculatePixelAccumulation(gridData,
-                                       sortedRanges[static_cast<size_t>(chainPos)],
-                                       paramIdx, paramCount);
-                normalized = 0.5f + (normalized - 0.5f) * 0.5f;
-                compiledParam.currentValue = param.minValue + (normalized * (param.maxValue - param.minValue));
+                const auto& definitionParameter = definition.parameters[static_cast<size_t>(parameterIndex)];
+                const bool isMix = definitionParameter.label != nullptr
+                                && std::strcmp(definitionParameter.label, "Mix") == 0;
+                if (isMix)
+                    compiled.currentValue = 1.0f;
+                else
+                {
+                    float normalized = analyzer.pixelAccumulation(
+                        sortedRanges[static_cast<size_t>(chainPos)], parameterIndex, parameterCount);
+                    normalized = 0.5f + (normalized - 0.5f) * 0.5f;
+                    compiled.currentValue = parameter.minValue
+                        + normalized * (parameter.maxValue - parameter.minValue);
+                }
             }
         }
-
-        result.parameters.push_back(compiledParam);
+        result.parameters.push_back(compiled);
     }
 
     return result;
+}
+}
+
+PedalAssetPayload compileCanvas(const std::array<uint8_t, TotalCells>& gridData,
+                                const std::vector<DspModuleType>& pedalSlots,
+                                const std::vector<uint8_t>& manualRouting,
+                                const std::vector<ParameterDescriptor>& existingParams)
+{
+    auto analyzer = std::make_unique<CanvasGraphAnalyzer>();
+    DirtyRowMask allRows;
+    allRows.fill(~uint64_t{ 0 });
+    analyzer->update(gridData, allRows, 0);
+    return compileCanvasFromAnalysis(*analyzer, pedalSlots, manualRouting, existingParams);
+}
+
+PedalAssetPayload compileCanvas(CanvasGraphAnalyzer& analyzer,
+                                const std::array<uint8_t, TotalCells>& gridData,
+                                const DirtyRowMask& dirtyRows,
+                                uint32_t revision,
+                                const std::vector<DspModuleType>& pedalSlots,
+                                const std::vector<uint8_t>& manualRouting,
+                                const std::vector<ParameterDescriptor>& existingParams)
+{
+    analyzer.update(gridData, dirtyRows, revision);
+    return compileCanvasFromAnalysis(analyzer, pedalSlots, manualRouting, existingParams);
 }

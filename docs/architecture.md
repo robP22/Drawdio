@@ -10,35 +10,48 @@ Drawdio uses three cooperating execution contexts:
 
 | Context | Responsibilities |
 |---|---|
-| UI/message thread | Editor controls, canvas drawing, undo/redo, result consumption, effect preparation, state synchronization, release draining |
-| Compiler thread | Debounced canvas snapshots, routing and parameter compilation |
+| UI/message thread | Editor controls, canvas drawing, undo/redo, result consumption, effect preparation, state synchronization, release draining, session state |
+| Compiler thread | Revisioned canvas snapshots, incremental graph analysis, routing and parameter compilation |
 | Audio thread | Host `processBlock`, effect processing, configuration crossfade, gain, metering, and output limiting |
 
 The compiler never runs on the audio thread. Effect instances and their buffers
 are prepared before publication. The audio path uses atomic configuration
-pointers and does not lock a mutex or intentionally allocate.
+pointers and does not lock a mutex or intentionally allocate. Host lifecycle
+calls (`prepareToPlay`, `releaseResources`, destruction) use the JUCE callback
+lock (`AudioProcessor::getCallbackLock()`). `CompilerThread::stop()` is
+serialized by `m_stopMutex` to avoid a double-join when the host races
+`releaseResources()` against instance destruction. `DrawdioProcessor` guards
+`processBlock` with a heap-allocated shutdown flag, a processing-enabled flag,
+and an in-flight counter so destruction can wait briefly for the last audio
+callback to exit.
 
 ## 2. Canvas Compilation
 
-The canvas is a 256x256 grid containing 65,536 cells. A UI edit submits a full
-snapshot to `CanvasMessageQueue`; the compiler thread consumes snapshots after a
-300 ms pen debounce and calls `compileCanvas()`.
+The canvas is a 256x256 grid containing 65,536 cells. Each completed UI stroke
+submits a full grid snapshot, a dirty-row mask, and a monotonically increasing
+`m_canvasRevision` to `CanvasMessageQueue`. The message also carries the current
+pedal slots, manual routing, and existing parameter descriptors as a fixed-state
+snapshot — the compiler no longer reads mutable shared vectors.
 
-Compilation:
+`CanvasGraphAnalyzer` caches per-row summaries (`paintedPrefix`, `xSumPrefix`,
+`weightPrefix`, `colourPrefix`) and rebuilds only dirty rows. The compiler
+thread waits (50 ms poll) until `PenDebouncer::isIdle()` and a message is
+available. Compilation steps:
 
-1. Determines active non-Bypass pedal slots.
-2. Selects automatic routing from horizontal pixel scores unless valid manual routing is active.
-3. Divides the canvas rows among active pedals.
-4. Divides each pedal row band among four knob positions.
-5. Accumulates color-weighted values into normalized parameter descriptors.
-6. Preserves manually overridden knob values.
-7. Produces a `PedalAssetPayload` for UI-thread preparation.
+1. Update cached graph analysis for dirty rows only.
+2. Determine active non-Bypass pedal slots.
+3. Select automatic routing from horizontal pixel scores unless valid manual routing is active.
+4. Divide the canvas rows among active pedals.
+5. Divide each pedal row band among four knob positions.
+6. Accumulate color-weighted values into normalized parameter descriptors.
+7. Preserve manually overridden knob values via `existingParams`.
+8. Produce a revisioned `PedalAssetPayload` for UI-thread preparation.
 
 Automatic routing uses stable ordering for equal scores. Manual routing supports
 one incoming and one outgoing connection per pedal and removes conflicting
 connections. Invalid or empty manual routing falls back to automatic routing.
-The current cable renderer uses simple Bezier paths; lane allocation and
-gap-aware routing remain future work.
+The cable renderer uses cached Bezier paths with gap-aware lane placement for
+the current pedal layout.
 
 ### Color and Empty Cells
 
@@ -60,13 +73,16 @@ it, creates and prepares effect instances, and publishes the finished payload:
 compileCanvas()                         compiler thread
     |
     v
-consumeCompiledResultIfAvailable()     UI thread
+m_slot.exchange(new payload)            compiler thread  (old payload deleted)
+    |  -> m_resultAvailableCallback -> sendChangeMessage
+    v
+consumeCompiledResultIfAvailable()      UI thread (polls m_slot)
     |
     v
-prebuildEffects(payload)                UI thread
+prebuildEffects(payload)                UI thread (create + prepare)
     |
     v
-m_nextConfig.store(payload, release)   UI thread
+m_nextConfig.store(payload, release)   UI thread  (or deferred if occupied)
     |
     v
 audio thread acquires and crossfades
@@ -78,31 +94,50 @@ retired payload -> ReleaseQueue
 UI thread drains and deletes
 ```
 
-Once published, a payload is treated as immutable by the audio path. The
-re-preparation path can mutate effect preparation state during the host lifecycle
-operation that invokes it; that operation must not overlap active processing.
+Once published, a payload is treated as immutable by the audio path. Preparation
+tracks sample rate, block size, and channel count; re-preparation re-prepares
+all live payloads. If `CanvasMessageQueue::pushSnapshot` returns `false` (full),
+the UI retains the newest grid state and sets `m_compileRetryPending` to retry
+on the next UI poll after the consumer frees capacity. Obsolete revisions are
+discarded before and after compilation (`sourceRevision != latestRevision`),
+and `ConfigManager::consumeCompiledResultIfAvailable` rejects results older
+than `m_canvasRevision`.
 
-The current source contains 27 enum/definition positions: Bypass, 24 active
-effects, and two reserved legacy positions. The factory creates only the active
-effects. Legacy IDs 22 and 26 are migrated to Bypass by state loading.
+When the new compilation has the same topology (`activeRoutingChain` and
+`routingSlotOrder` identical) and mode as the current payload and no crossfade
+is active, the manager takes a parameter-only fast path: it updates the
+compiled parameter bank and the last-config sync without allocating a new
+payload. Otherwise a full payload is built and crossfaded. If `m_nextConfig`
+is already occupied, the new payload is deferred (`m_deferredConfig`) and
+applied once the audio thread clears `m_nextConfig`.
+
+The current source contains 27 enum/definition positions: BYPASS plus 25
+active effects plus one reserved slot (ID 26, formerly Analog Octaver, now
+migrated to BYPASS on load). Slot 22 was Random Modulator in older projects and
+now holds the active HP/LP Filter. The factory creates only active effects.
 
 ## 4. Audio Processing
 
-`PluginProcessor::processBlock` establishes the host entry and denormal guard.
+`PluginProcessor::processBlock` establishes the host entry and denormal guard,
+updates transport (BPM/PPQ/playing), samples input/output peaks via a fast
+path, and delegates to `UnifiedPedalProcessor::processAudioBlock`.
+
 `UnifiedPedalProcessor` then:
 
-1. Reads the current configuration.
-2. Builds per-slot parameter values from descriptors or the atomic parameter cache.
-3. Applies automation where linking is enabled.
-4. Smooths non-mix parameters using the prepared block-time coefficient.
-5. Applies optional per-slot Drift and Unstable modulation to non-mix parameters.
-6. Processes the active chain through `DspEffect::processBlock`.
-7. Applies per-pedal wet/dry mixing and gain.
-8. Applies the unity soft clipper and updates meters.
+1. Handles chunked blocks if `numSamples > maxSamplesPerBlock`.
+2. Reads the current and next configurations atomically.
+3. Builds per-slot parameter values from descriptors, the atomic parameter cache, or the compiled parameter bank.
+4. Applies automation where linking is enabled.
+5. Smooths non-mix parameters using the prepared block-time coefficient.
+6. Applies optional per-slot Drift and Unstable modulation to non-mix parameters.
+7. Processes the active chain through `DspEffect::processBlock`.
+8. Applies per-pedal wet/dry mixing (linear ramp per block) and gain.
+9. Applies the unity soft clipper and updates per-pedal meters; re-applies a final soft clip after output gain.
 
 The external mix knob is excluded from parameter smoothing and uses a per-sample
 linear interpolation across each block. Effects with no external mix remain
-fully wet within the effect chain.
+fully wet within the effect chain. Snap detents are applied after smoothing
+and modulation (mix knob excluded).
 
 ## 5. Configuration Crossfade
 
@@ -117,7 +152,9 @@ toward the newest payload. Pointer-identical configurations are guarded against
 self-release.
 
 The fade does not reset the new effect after it becomes current. Retired payloads
-are transferred to deferred deletion rather than destroyed on the audio thread.
+are transferred to deferred deletion via `ReleaseQueue::pushSingle` rather than
+destroyed on the audio thread. Crossfade state tracks the pending reset request
+separately from the publishing path.
 
 ## 6. Parameter and Automation Pipeline
 
@@ -125,22 +162,24 @@ Parameter order is:
 
 ```text
 compiled descriptor
-    -> parameter-cache override
-    -> linked automation blend
-    -> non-mix smoothing
-    -> Drift/Unstable modulation
+    -> parameter-cache override (or compiled bank when useCompiledParameterBank)
+    -> linked automation blend (range-mapped, mix knob excluded)
+    -> non-mix smoothing (per-block 40 Hz, adapted to actual block size)
+    -> Drift/Unstable modulation (per-slot dual-rate random walk, mix excluded)
+    -> snap detents (mix excluded)
     -> effect processBlock
 ```
 
 Automation is compiled from 64 horizontal canvas slices and uses the DAW PPQ
-position when available. The display shows an eight-bar envelope and highlights
-the selected active section. Bar counts are 1, 2, 4, or 8. The current UI uses
-full-strength knob links; there is no user-adjustable link-strength control.
-Moving a manually linked knob creates an override and removes that link.
+position when available (fallback 120 BPM / 0 PPQ). The display shows an
+eight-bar envelope and highlights the selected active section. Bar counts are
+1, 2, 4, or 8. Knob links support an adjustable automation range with a minimum
+0.05 width; moving a linked knob still creates an override and removes that link
+(and resets its range to 0..1).
 
-The 40 Hz smoothing coefficient is prepared from the maximum block size rather
-than recomputed from each actual host block, so its exact response varies with
-host block sizing. Automation smoothing is a separate approximately 12 Hz path.
+The 40 Hz smoothing coefficient is prepared from the maximum block size and
+adapted per actual host block for accurate smoothing. Automation smoothing is a
+separate approximately 12 Hz path.
 
 ## 7. Real-Time Safety
 
@@ -148,15 +187,24 @@ Effect construction, buffer allocation, FFT construction, and configuration
 preparation occur before publication. The normal audio path contains no deliberate
 `new`, `delete`, vector growth, string construction, or mutex lock.
 
-`ReleaseQueue` has eight single-pointer slots plus an atomic overflow slot. The
-audio thread enqueues retired payloads; the UI thread drains and deletes them.
-If the overflow slot is overwritten while already occupied, the displaced
-pointer is currently leaked. This is a known limitation, not a guarantee of
-lossless deferred deletion.
+`ReleaseQueue` has a 16-entry ring (`kCapacity`) plus eight single-pointer slots,
+an atomic overflow slot, a pending-delete slot, and a `droppedCount` counter.
+The audio thread enqueues retired payloads via `pushSingle` (single slots first,
+then overflow); the UI thread drains all slots and the ring. If the overflow
+slot is overwritten while already occupied, the displaced pointer is moved to
+`pendingDelete`; a second displacement is counted in `droppedCount` (a bounded
+leak, not lossless).
 
-`CanvasMessageQueue` is an SPSC ring with an eight-entry backing array and one
-reserved empty slot, giving seven usable entries. When full, it drops the newest
-snapshot. The compiler result slot separately keeps the newest available result.
+`CanvasMessageQueue` is an SPSC ring with `QueueCapacity = 8` and one reserved
+empty slot, giving seven usable entries (`CanvasMessageQueue.h:27`,
+`CanvasMessageQueue.cpp:37` `nextWrite == readIndex` -> full -> `false`).
+Messages carry a revision and dirty-row mask. When full, `pushSnapshot` returns
+`false` without modifying an occupied slot; the caller retains state and retries.
+The compiler result slot (`m_slot`) is a single atomic pointer that keeps the
+newest available result, deleting the previous payload on exchange.
+
+Obsolete revisions are discarded before publication, and the configuration
+manager rejects results older than the latest canvas revision.
 
 ## 8. Numerical and Signal Guardrails
 
@@ -164,35 +212,38 @@ snapshot. The compiler result slot separately keeps the newest available result.
 - Most delay writes sanitize non-finite input.
 - `interpolateDelayRead` sanitizes non-finite results.
 - Comb and reverb feedback are bounded by `tanh` and configured gains.
-- Dynamic and spectral TDF-II filters reset state after non-finite output.
+- Dynamic and spectral TDF-II filters reset state after non-finite output; SpectralFreeze uses a short xfade to smooth offset changes.
+- HP/LP and Multi-Mode cutoffs are capped below Nyquist (0.45 * sample rate for Multi-Mode).
 - The chain converts non-finite final samples to zero.
 - Delay lengths, slice lengths, cycle lengths, and feedback parameters are bounded.
-
-These are layered protections, not a guarantee that every internal state recovers
-from every non-finite input. Multi-Mode Filter still lacks explicit state reset
-for NaN values, and cutoff should be capped below Nyquist for low-rate hosts.
 
 ## 9. Tail and Silent-Block Behavior
 
 `getTailLengthSeconds()` reports the maximum tail declared by the active effects,
 with a five-second fallback when no configuration is available. Re-Time declares
-an eight-second maximum. Several stateful effects do not yet override
-`hasActiveTail()`, so exact mix-zero processing can skip their internal state and
-host tail reporting can understate their tails.
+`kReleaseSeconds = 0.05` (ring holds 16 s of history, release fades over 50 ms);
+Simple Delay and plate/diffused reverbs declare 2.5 s; Spectral Freeze 2.0 s;
+Convolution Space 1.5 s; Wavefolder 0.8 s. During shutdown `getTailLengthSeconds`
+returns 0.
 
-`silenceInProducesSilenceOut()` is false for the Resampler and true for the other
-current processor configurations. Hosts may therefore apply their own silence
-optimization to effects whose internal tails are not fully declared.
+`silenceInProducesSilenceOut()` returns `false` only when the active chain
+contains the Bitcrusher; otherwise it returns `true` (during shutdown it returns
+`true`). Hosts may therefore apply their own silence optimization to effects
+whose internal tails are not fully declared. Several stateful effects still rely
+on the host keeping processing alive via `getTailLengthSeconds` rather than
+overriding `hasActiveTail()`.
 
 ## 10. Canvas Queue and Routing Semantics
 
 The SPSC queue uses release/acquire publication for complete snapshots. A full
-queue drops the newest message rather than overwriting the oldest. This is safe
-for memory ownership but can delay the visual state represented by the compiler.
+queue returns `false` and leaves the occupied slot untouched; the UI retains the
+newest grid/configuration state and retries after the consumer frees capacity. The
+compiler discards obsolete revisions both before and after `compileCanvas`.
 
-Manual parameter overrides are keyed by physical chain position and parameter
-token. Rerouting can therefore cause an override to apply to a different effect
-at the same position; effect identity is not part of the current override key.
+Manual parameter overrides are keyed by physical slot and parameter token
+(`ParameterCache` is `PedalSlotCount x KnobsPerPedal` per-slot), while the
+compiled descriptor also retains the current chain position for DSP dispatch via
+`routingSlotOrder`.
 
 ## 11. Design Trade-offs
 
@@ -205,9 +256,9 @@ at the same position; effect identity is not part of the current override key.
 | Equal-power crossfade | Maintains approximately constant power between unrelated chains |
 | Uniform four-knob pedals | Preserves the visual language; unused labels/parameters are intentional in many effects |
 | Dual-grain engine | Reduces single-grain boundary amplitude modulation; spray makes unity overlap approximate |
-| Synthetic convolution IR | Avoids external IR assets; current FFT path is limited to 1024 IR samples |
+| Synthetic convolution IR | Avoids external IR assets; uniform 512-sample partitions, ~0.8 s / 69 partitions at 44.1 kHz |
 | Soft clipper | Provides unity behavior below the knee but is not a lookahead limiter |
-| Bounded queues | Avoids blocking; saturation can drop snapshots or expose deferred-release ownership limits |
+| Bounded queues | Avoids blocking; a full queue drops the newest snapshot (`false`) and the UI retries; `ReleaseQueue` overflow is counted in `droppedCount` |
 
 ## Related Documents
 
