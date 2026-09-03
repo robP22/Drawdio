@@ -196,6 +196,8 @@ void PixelCanvasComponent::beginStroke()
 
     m_activeStrokeOpen = true;
     m_activeStroke.clear();
+    for (auto& t : m_redoStack)
+        m_redoBytes -= t.size() * sizeof(PixelChange);
     m_redoStack.clear();
 }
 
@@ -209,19 +211,37 @@ bool PixelCanvasComponent::commitStroke()
     if (!m_activeStroke.empty())
     {
         changed = true;
-        if (m_undoStack.size() == static_cast<size_t>(MaxUndoLevels))
+        const size_t totalLevels = m_undoStack.size() + m_redoStack.size();
+        if (totalLevels >= static_cast<size_t>(MaxUndoLevels))
         {
-            m_undoBytes -= m_undoStack.front().size() * sizeof(PixelChange);
-            m_undoStack.erase(m_undoStack.begin());
+            if (!m_undoStack.empty())
+            {
+                m_undoBytes -= m_undoStack.front().size() * sizeof(PixelChange);
+                m_undoStack.erase(m_undoStack.begin());
+            }
+            else if (!m_redoStack.empty())
+            {
+                m_redoBytes -= m_redoStack.front().size() * sizeof(PixelChange);
+                m_redoStack.erase(m_redoStack.begin());
+            }
         }
 
         m_undoStack.push_back(std::move(m_activeStroke));
         m_undoBytes += m_undoStack.back().size() * sizeof(PixelChange);
 
-        while (m_undoBytes > MaxUndoBytes && !m_undoStack.empty())
+        while (m_undoBytes + m_redoBytes > MaxUndoBytes
+               && (m_undoStack.size() + m_redoStack.size()) > 1)
         {
-            m_undoBytes -= m_undoStack.front().size() * sizeof(PixelChange);
-            m_undoStack.erase(m_undoStack.begin());
+            if (!m_undoStack.empty())
+            {
+                m_undoBytes -= m_undoStack.front().size() * sizeof(PixelChange);
+                m_undoStack.erase(m_undoStack.begin());
+            }
+            else
+            {
+                m_redoBytes -= m_redoStack.front().size() * sizeof(PixelChange);
+                m_redoStack.erase(m_redoStack.begin());
+            }
         }
     }
 
@@ -413,9 +433,11 @@ bool PixelCanvasComponent::undo()
 
     auto transaction = std::move(m_undoStack.back());
     m_undoStack.pop_back();
+    const size_t bytes = transaction.size() * sizeof(PixelChange);
+    m_undoBytes -= bytes;
+    m_redoBytes += bytes;
     m_redoStack.push_back(std::move(transaction));
     auto& t = m_redoStack.back();
-    m_undoBytes -= t.size() * sizeof(PixelChange);
 
     for (auto it = t.rbegin(); it != t.rend(); ++it)
         applyPixelValue(static_cast<int>(it->index), it->previous, false);
@@ -438,9 +460,11 @@ bool PixelCanvasComponent::redo()
 
     auto transaction = std::move(m_redoStack.back());
     m_redoStack.pop_back();
+    const size_t bytes = transaction.size() * sizeof(PixelChange);
+    m_redoBytes -= bytes;
+    m_undoBytes += bytes;
     m_undoStack.push_back(std::move(transaction));
     auto& t = m_undoStack.back();
-    m_undoBytes += t.size() * sizeof(PixelChange);
 
     for (auto it = t.begin(); it != t.end(); ++it)
         applyPixelValue(static_cast<int>(it->index), it->current, false);
@@ -458,7 +482,7 @@ bool PixelCanvasComponent::redo()
 
 std::vector<uint8_t> PixelCanvasComponent::captureUndoData() const
 {
-    if (m_undoStack.empty()) return {};
+    if (m_undoStack.empty() && m_redoStack.empty()) return {};
 
     std::vector<uint8_t> data;
     auto writeU32 = [&](uint32_t v) {
@@ -469,7 +493,19 @@ std::vector<uint8_t> PixelCanvasComponent::captureUndoData() const
     };
 
     writeU32(static_cast<uint32_t>(m_undoStack.size()));
+    writeU32(static_cast<uint32_t>(m_redoStack.size()));
     for (auto& transaction : m_undoStack)
+    {
+        writeU32(static_cast<uint32_t>(transaction.size()));
+        for (auto& change : transaction)
+        {
+            data.push_back(static_cast<uint8_t>(change.index));
+            data.push_back(static_cast<uint8_t>(change.index >> 8));
+            data.push_back(static_cast<uint8_t>(change.previous));
+            data.push_back(static_cast<uint8_t>(change.current));
+        }
+    }
+    for (auto& transaction : m_redoStack)
     {
         writeU32(static_cast<uint32_t>(transaction.size()));
         for (auto& change : transaction)
@@ -486,6 +522,7 @@ std::vector<uint8_t> PixelCanvasComponent::captureUndoData() const
 void PixelCanvasComponent::applyUndoData(const std::vector<uint8_t>& data)
 {
     m_undoStack.clear();
+    m_redoStack.clear();
     m_activeStroke.clear();
     m_activeStrokeOpen = false;
 
@@ -501,27 +538,64 @@ void PixelCanvasComponent::applyUndoData(const std::vector<uint8_t>& data)
         return v;
     };
 
-    uint32_t numTransactions = readU32();
-    for (uint32_t t = 0; t < numTransactions; ++t)
-    {
+    auto readTransaction = [&](std::vector<std::vector<PixelChange>>& stack) -> bool {
+        if (pos + 4 > data.size()) return false;
         uint32_t numChanges = readU32();
         std::vector<PixelChange> transaction;
         transaction.reserve(numChanges);
-
         for (uint32_t c = 0; c < numChanges; ++c)
         {
-            if (pos + 4 > data.size()) return;
+            if (pos + 4 > data.size()) return false;
             uint16_t index = static_cast<uint16_t>(data[pos] | (data[pos + 1] << 8));
             pos += 2;
             auto previous = static_cast<PixelColor>(data[pos++]);
             auto current  = static_cast<PixelColor>(data[pos++]);
             transaction.push_back({ index, previous, current });
         }
-        m_undoStack.push_back(std::move(transaction));
+        stack.push_back(std::move(transaction));
+        return true;
+    };
+
+    if (data.size() < 4) return;
+    uint32_t firstCount = readU32();
+
+    bool legacyFits = true;
+    {
+        size_t p = 4;
+        for (uint32_t t = 0; t < firstCount; ++t)
+        {
+            if (p + 4 > data.size()) { legacyFits = false; break; }
+            uint32_t nc = data[p] | (static_cast<uint32_t>(data[p+1])<<8)
+                        | (static_cast<uint32_t>(data[p+2])<<16)
+                        | (static_cast<uint32_t>(data[p+3])<<24);
+            p += 4;
+            if (p + static_cast<size_t>(nc)*4 > data.size()) { legacyFits = false; break; }
+            p += static_cast<size_t>(nc)*4;
+        }
+        if (p != data.size()) legacyFits = false;
     }
+
+    if (legacyFits)
+    {
+        for (uint32_t t = 0; t < firstCount; ++t)
+            if (!readTransaction(m_undoStack)) return;
+        m_undoBytes = 0;
+        m_redoBytes = 0;
+        for (const auto& t : m_undoStack) m_undoBytes += t.size() * sizeof(PixelChange);
+        return;
+    }
+
+    uint32_t numUndo = firstCount;
+    if (pos + 4 > data.size()) return;
+    uint32_t numRedo = readU32();
+    for (uint32_t t = 0; t < numUndo; ++t)
+        if (!readTransaction(m_undoStack)) return;
+    for (uint32_t t = 0; t < numRedo; ++t)
+        if (!readTransaction(m_redoStack)) return;
     m_undoBytes = 0;
-    for (const auto& t : m_undoStack)
-        m_undoBytes += t.size() * sizeof(PixelChange);
+    m_redoBytes = 0;
+    for (const auto& t : m_undoStack) m_undoBytes += t.size() * sizeof(PixelChange);
+    for (const auto& t : m_redoStack)  m_redoBytes  += t.size() * sizeof(PixelChange);
 }
 
 void PixelCanvasComponent::setGridData(const std::array<uint8_t, TotalCells>& data, bool clearUndo)
@@ -748,16 +822,36 @@ void PixelCanvasComponent::floodFill(int startX, int startY)
 
     m_undoStack.push_back({});
     m_undoStack.back().swap(m_fillChanges);
+    for (auto& t : m_redoStack)
+        m_redoBytes -= t.size() * sizeof(PixelChange);
+    m_redoStack.clear();
     m_undoBytes += m_undoStack.back().size() * sizeof(PixelChange);
-    while (m_undoBytes > MaxUndoBytes && m_undoStack.size() > 1)
+    while (m_undoBytes + m_redoBytes > MaxUndoBytes
+           && (m_undoStack.size() + m_redoStack.size()) > 1)
     {
-        m_undoBytes -= m_undoStack.front().size() * sizeof(PixelChange);
-        m_undoStack.erase(m_undoStack.begin());
+        if (!m_undoStack.empty())
+        {
+            m_undoBytes -= m_undoStack.front().size() * sizeof(PixelChange);
+            m_undoStack.erase(m_undoStack.begin());
+        }
+        else
+        {
+            m_redoBytes -= m_redoStack.front().size() * sizeof(PixelChange);
+            m_redoStack.erase(m_redoStack.begin());
+        }
     }
-    if (m_undoStack.size() > static_cast<size_t>(MaxUndoLevels))
+    if (m_undoStack.size() + m_redoStack.size() > static_cast<size_t>(MaxUndoLevels))
     {
-        m_undoBytes -= m_undoStack.front().size() * sizeof(PixelChange);
-        m_undoStack.erase(m_undoStack.begin());
+        if (!m_undoStack.empty())
+        {
+            m_undoBytes -= m_undoStack.front().size() * sizeof(PixelChange);
+            m_undoStack.erase(m_undoStack.begin());
+        }
+        else
+        {
+            m_redoBytes -= m_redoStack.front().size() * sizeof(PixelChange);
+            m_redoStack.erase(m_redoStack.begin());
+        }
     }
 
     // Schedule overlay rebuild — BFS already updated pixels array
