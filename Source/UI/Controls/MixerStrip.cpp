@@ -1,24 +1,26 @@
 #include "UI/Controls/MixerStrip.h"
-#include "GridLayout.h"
+#include "Core/EditorDesignMetrics.h"
 #include "Core/DrawdioConstants.h"
 
 #include <cmath>
+#include <utility>
 
 
-MixerStrip::MixerStrip(IMixerStripModel& model, int slotIdx)
-    : m_model(model), m_slotIndex(slotIdx)
+MixerStrip::MixerStrip(int slotIdx, MixerStripViewState state, Actions actions)
+    : m_slotIndex(slotIdx), m_actions(std::move(actions))
 {
+    setViewState(state);
 }
 
 void MixerStrip::resized()
 {
     const float h = getHeight();
-    const float labelH = h * GridLayout::Mixer::NameLabelHeightRatio;
+    const float labelH = h * EditorDesignMetrics::Mixer::NameLabelHeightRatio;
     auto b = getLocalBounds().toFloat().withTrimmedTop(labelH);
 
-    float meterW = h * GridLayout::Mixer::MeterWidthRatio;
-    float gap = h * GridLayout::Mixer::MeterTrackGapRatio;
-    float trackW = h * GridLayout::Mixer::TrackWidthRatio;
+    float meterW = h * EditorDesignMetrics::Mixer::MeterWidthRatio;
+    float gap = h * EditorDesignMetrics::Mixer::MeterTrackGapRatio;
+    float trackW = h * EditorDesignMetrics::Mixer::TrackWidthRatio;
     float blockW = meterW + gap + trackW;
     float sidePad = std::max(0.0f, (b.getWidth() - blockW) * 0.5f);
     auto block = b.reduced(sidePad, 0.0f);
@@ -31,7 +33,7 @@ void MixerStrip::paint(juce::Graphics& g)
 {
     auto bounds = getLocalBounds().toFloat();
     const float h = bounds.getHeight();
-    const float labelH = h * GridLayout::Mixer::NameLabelHeightRatio;
+    const float labelH = h * EditorDesignMetrics::Mixer::NameLabelHeightRatio;
 
     g.setColour(juce::Colours::white.withAlpha(0.6f));
     g.setFont(juce::Font(juce::FontOptions(juce::jlimit(7.0f, 12.0f, h * 0.09f))));
@@ -41,7 +43,7 @@ void MixerStrip::paint(juce::Graphics& g)
     g.setColour(juce::Colours::white.withAlpha(0.15f));
     g.drawRect(bounds, 1.0f);
 
-    bool active = (m_model.getPedalSlot(m_slotIndex) != DspModuleType::BYPASS);
+    bool active = (m_type != DspModuleType::BYPASS);
 
     // Meter
     g.setColour(juce::Colour(0xFF1A1D20));
@@ -60,7 +62,7 @@ void MixerStrip::paint(juce::Graphics& g)
     }
 
     // Slider track with groove
-    float trackW = h * GridLayout::Mixer::TrackWidthRatio;
+    float trackW = h * EditorDesignMetrics::Mixer::TrackWidthRatio;
     float trackX = m_sliderBounds.getCentreX() - trackW * 0.5f;
     auto track = juce::Rectangle<float>(trackX, m_sliderBounds.getY(), trackW, m_sliderBounds.getHeight());
     g.setColour(juce::Colours::black.withAlpha(0.45f));
@@ -72,8 +74,8 @@ void MixerStrip::paint(juce::Graphics& g)
 
     if (active)
     {
-        float thumbW = h * GridLayout::Mixer::ThumbWidthRatio;
-        float thumbH = h * GridLayout::Mixer::ThumbHeightRatio;
+        float thumbW = h * EditorDesignMetrics::Mixer::ThumbWidthRatio;
+        float thumbH = h * EditorDesignMetrics::Mixer::ThumbHeightRatio;
         auto travel = m_sliderBounds.withTrimmedTop(thumbH * 0.5f)
                                     .withTrimmedBottom(thumbH * 0.5f);
         const float gain = std::isfinite(m_displayGain)
@@ -98,20 +100,20 @@ void MixerStrip::paint(juce::Graphics& g)
 
 void MixerStrip::mouseDown(const juce::MouseEvent& e)
 {
-    if (m_model.getPedalSlot(m_slotIndex) == DspModuleType::BYPASS) return;
+    if (m_type == DspModuleType::BYPASS) return;
     const float h = getHeight();
-    float expand = h * GridLayout::Mixer::SliderHitExpandRatio;
+    float expand = h * EditorDesignMetrics::Mixer::SliderHitExpandRatio;
     if (m_sliderBounds.expanded(expand).contains(e.position))
     {
         m_dragging = true;
-        const float thumbH = h * GridLayout::Mixer::ThumbHeightRatio;
+        const float thumbH = h * EditorDesignMetrics::Mixer::ThumbHeightRatio;
         auto travel = m_sliderBounds.withTrimmedTop(thumbH * 0.5f)
                                     .withTrimmedBottom(thumbH * 0.5f);
         const float y = juce::jlimit(travel.getY(), travel.getBottom(), e.position.y);
         const float frac = 1.0f - (y - travel.getY()) / travel.getHeight();
         m_displayGain = juce::Decibels::decibelsToGain(
             juce::jmap(frac, 0.0f, 1.0f, PedalGainMinDb, PedalGainMaxDb));
-        m_model.setPedalGain(m_slotIndex, m_displayGain);
+        if (m_actions.setGain) m_actions.setGain(m_slotIndex, m_displayGain);
         repaint();
     }
 }
@@ -120,14 +122,14 @@ void MixerStrip::mouseDrag(const juce::MouseEvent& e)
 {
     if (!m_dragging) return;
     const float h = getHeight();
-    const float thumbH = h * GridLayout::Mixer::ThumbHeightRatio;
+    const float thumbH = h * EditorDesignMetrics::Mixer::ThumbHeightRatio;
     auto travel = m_sliderBounds.withTrimmedTop(thumbH * 0.5f)
                                 .withTrimmedBottom(thumbH * 0.5f);
     const float y = juce::jlimit(travel.getY(), travel.getBottom(), e.position.y);
     const float frac = 1.0f - (y - travel.getY()) / travel.getHeight();
     m_displayGain = juce::Decibels::decibelsToGain(
         juce::jmap(frac, 0.0f, 1.0f, PedalGainMinDb, PedalGainMaxDb));
-    m_model.setPedalGain(m_slotIndex, m_displayGain);
+    if (m_actions.setGain) m_actions.setGain(m_slotIndex, m_displayGain);
     repaint();
 }
 
@@ -138,17 +140,27 @@ void MixerStrip::mouseUp(const juce::MouseEvent&)
 
 void MixerStrip::tick()
 {
-    float peak = m_model.getPedalPeak(m_slotIndex);
-    float gain = m_model.getPedalGain(m_slotIndex);
-    if (std::abs(peak - m_displayPeak) > 0.001f || std::abs(gain - m_displayGain) > 0.001f)
+    if (std::abs(m_targetPeak - m_displayPeak) > 0.001f)
     {
-        m_displayPeak = m_displayPeak * 0.85f + peak * 0.15f;
-        m_displayGain = gain;
+        m_displayPeak = m_displayPeak * 0.85f + m_targetPeak * 0.15f;
         repaint();
     }
     else
     {
         m_displayPeak = m_displayPeak * 0.85f;
-        if (m_displayPeak > peak && m_displayPeak > 0.002f) repaint();
+        if (m_displayPeak > m_targetPeak && m_displayPeak > 0.002f) repaint();
     }
+}
+
+void MixerStrip::setViewState(const MixerStripViewState& state)
+{
+    m_type = state.type;
+    setPeak(state.peak);
+    m_displayGain = state.gain;
+    repaint();
+}
+
+void MixerStrip::setPeak(float peak)
+{
+    m_targetPeak = std::isfinite(peak) ? juce::jlimit(0.0f, 1.0f, peak) : 0.0f;
 }

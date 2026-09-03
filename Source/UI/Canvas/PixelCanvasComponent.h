@@ -10,6 +10,7 @@
 #include "Core/DrawdioConstants.h"
 #include "UI/Theme/IThemeProvider.h"
 #include "Core/Contracts/IResourceProvider.h"
+#include "Resources/ScaledAssetProvider.h"
 
 class PixelCanvasComponent : public juce::Component
 {
@@ -45,11 +46,14 @@ public:
     using CanvasSnapshotCallback = std::function<void(const std::array<uint8_t, TotalCells>&)>;
     using CanvasPenCallback = std::function<void()>;
 
-    explicit PixelCanvasComponent(const IResourceProvider& resources, const IThemeProvider& theme);
+    explicit PixelCanvasComponent(const IResourceProvider& resources,
+                                  const ScaledAssetProvider& assets,
+                                  const IThemeProvider& theme);
     ~PixelCanvasComponent() override = default;
 
     void paint(juce::Graphics& g) override;
     void resized() override;
+    void refreshAfterResize();
 
     void mouseDown(const juce::MouseEvent& event) override;
     void mouseDrag(const juce::MouseEvent& event) override;
@@ -65,7 +69,9 @@ public:
     void applyUndoData(const std::vector<uint8_t>& data);
 
     const std::array<uint8_t, TotalCells>& getGridData() const { return m_gridCache; }
-    void setGridData(const std::array<uint8_t, TotalCells>& data);
+    void setGridData(const std::array<uint8_t, TotalCells>& data, bool clearUndo = true);
+    const DirtyRowMask& getDirtyRows() const { return m_dirtyRows; }
+    void clearDirtyRows() { m_dirtyRows.fill(0); }
 
     void setCurrentColor(PixelColor color) { m_currentColor = color; }
 
@@ -79,6 +85,8 @@ public:
     void setOnColorChanged(std::function<void(PixelColor)> cb) { m_onColorChanged = std::move(cb); }
 
     void setReboundModeEnabled(bool on);
+    bool isStrokeOpen() const { return m_activeStrokeOpen; }
+    bool hasUndoData() const { return !m_undoStack.empty(); }
 
     static const juce::Image& getGrainOverlay();
 
@@ -116,6 +124,7 @@ private:
     PixelColor randomReboundColor();
 
     const IResourceProvider& m_resources;
+    const ScaledAssetProvider& m_assets;
     const IThemeProvider& m_theme;
     PixelArray pixels;
     std::array<uint8_t, TotalCells> m_gridCache;
@@ -150,6 +159,7 @@ private:
     juce::Image m_pixelOverlay;
     bool m_overlayDirty = true;
     std::vector<int> m_pendingOverlayIndices;
+    DirtyRowMask m_dirtyRows{};
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PixelCanvasComponent)
 };

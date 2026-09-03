@@ -99,7 +99,7 @@ TEST_CASE("Sidechain rate detents gate at the expected beat divisions", "[sidech
 {
     const int sr = 44100, ch = 1;
     const float detents[5] = {0.0f, 0.25f, 0.5f, 0.75f, 1.0f};
-    const float divisions[5] = {1.0f / 6.0f, 0.25f, 1.0f / 3.0f, 0.5f, 1.0f};
+    const float divisions[5] = {1.0f, 0.5f, 1.0f / 3.0f, 0.25f, 1.0f / 6.0f};
 
     for (int i = 0; i < 5; ++i)
     {

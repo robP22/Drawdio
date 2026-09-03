@@ -80,14 +80,15 @@ void prepareReverbNetworkBlock(ReverbNetworkState& state,
 {
     (void)config;
     const float decay = std::max(0.0f, std::min(1.0f, decayNormalised));
-    const float sr = static_cast<float>(state.sampleRate);
-    const float baseFreq = std::max(1200.0f, 8000.0f * (1.0f - decay));
+    const float baseCoeff = std::max(0.02f, std::min(0.16f, 0.02f + 0.14f * decay));
     for (int i = 0; i < 8; ++i)
     {
         float len = static_cast<float>(state.fdnBuf[static_cast<size_t>(i)].size());
         if (len < 1.0f) len = 1.0f;
-        const float f = baseFreq * (state.lineMean / len);
-        state.fdnDampCoeff[static_cast<size_t>(i)] = 1.0f - std::exp(-6.2831853f * f / sr);
+        float ratio = state.lineMean / len;
+        if (ratio < 0.7f) ratio = 0.7f;
+        else if (ratio > 1.4f) ratio = 1.4f;
+        state.fdnDampCoeff[static_cast<size_t>(i)] = baseCoeff * ratio;
     }
 }
 
@@ -95,12 +96,16 @@ void processReverbNetworkSample(float dryL, float dryR,
                                 const ReverbNetworkConfig& config,
                                 ReverbNetworkState& state,
                                 float decayNormalised,
+                                float sizeNormalised,
                                 float& outL, float& outR)
 {
     if (!std::isfinite(dryL)) dryL = 0.0f;
     if (!std::isfinite(dryR)) dryR = 0.0f;
 
     float feedback = std::max(0.0f, static_cast<float>(config.feedbackBase + decayNormalised * config.feedbackRange));
+    const float sizeTarget = 0.3f + 0.7f * std::max(0.0f, std::min(1.0f, sizeNormalised));
+    state.sizeScaleState += (sizeTarget - state.sizeScaleState) * 0.001f;
+    const float sizeScale = state.sizeScaleState;
 
     static constexpr size_t kTapOffsets[5] = { 882, 1102, 1411, 1852, 2426 };
     static constexpr float kTapGains[5] = { 0.32f, 0.20f, 0.13f, 0.07f, 0.03f };
@@ -114,7 +119,7 @@ void processReverbNetworkSample(float dryL, float dryR,
     float erL = 0.0f, erR = 0.0f;
     for (int t = 0; t < 5; ++t)
     {
-        size_t tapOff = static_cast<size_t>(static_cast<double>(kTapOffsets[t]) * srScale + 0.5);
+        size_t tapOff = static_cast<size_t>(static_cast<double>(kTapOffsets[t]) * srScale * sizeScale + 0.5);
         size_t idx = (state.reflectPtr + rLen - tapOff) % rLen;
         erL += state.reflectBuf[0][idx] * kTapGains[t];
         erR += state.reflectBuf[1][idx] * kTapGains[t];
@@ -140,7 +145,7 @@ void processReverbNetworkSample(float dryL, float dryR,
             if (df.phase >= 6.2831853f)
                 df.phase -= 6.2831853f;
 
-            float delaySamples = static_cast<float>(bufLen) - 1.0f
+            float delaySamples = sizeScale * (static_cast<float>(bufLen) - 1.0f)
                                - std::sin(df.phase) * kDiffModDepth;
             float readPos = static_cast<float>(df.writePtr + bufLen) - delaySamples;
             if (readPos >= static_cast<float>(bufLen))
@@ -179,7 +184,9 @@ void processReverbNetworkSample(float dryL, float dryR,
         if (state.fdnLfoPhase[i] > 2.0f * 3.14159265f)
             state.fdnLfoPhase[i] -= 2.0f * 3.14159265f;
 
-        float modPos = static_cast<float>(state.fdnPtr[i]) + std::sin(state.fdnLfoPhase[i]) * 50.0f;
+        float modPos = static_cast<float>(state.fdnPtr[i])
+                     + (1.0f - sizeScale) * static_cast<float>(bufLen)
+                     + std::sin(state.fdnLfoPhase[i]) * 28.0f;
         if (modPos < 0.0f) modPos += static_cast<float>(bufLen);
         tap[i] = interpolateDelayRead(state.fdnBuf[i], modPos);
         tap[i] = state.fdnDampState[i] = state.fdnDampState[i]
@@ -212,7 +219,8 @@ void processReverbNetworkSample(float dryL, float dryR,
     float aR = -k * combOut + state.decorrR;
     state.decorrR = combOut + k * aR;
 
-    const float wetScale = 1.0f - feedback;
-    outL = aL * wetScale;
-    outR = aR * wetScale;
+    const float tailScale = (1.0f - feedback * 0.92f) * 0.9f;
+    const float erGain = 0.5f;
+    outL = aL * tailScale + diffusedL * erGain;
+    outR = aR * tailScale + diffusedR * erGain;
 }

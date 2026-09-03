@@ -1,5 +1,5 @@
 #include "UI/Pedalboard/PedalComponent.h"
-#include "GridLayout.h"
+#include "Core/EditorDesignMetrics.h"
 #include "RenderUtils.h"
 
 
@@ -19,27 +19,38 @@ juce::Rectangle<int> japTextureCell(int idx)
 }
 }
 
-PedalComponent::PedalComponent(IPedalComponentModel& model,
-                               int slotIndex,
+PedalComponent::PedalComponent(int slotIndex,
                                DspModuleType initialType,
                                const IResourceProvider& resources,
-                               const IThemeProvider& theme)
-    : m_model(model),
-      m_resources(resources),
+                               const ScaledAssetProvider& assets,
+                               const IThemeProvider& theme,
+                               Actions actions)
+    : m_resources(resources),
+      m_assets(assets),
       m_theme(theme),
+      m_actions(std::move(actions)),
       m_slotIndex(slotIndex),
       m_currentType(initialType),
       m_definition(&PedalDefinitions::get(initialType))
 {
-    setBufferedToImage(true);
-    const auto& knobImg = m_resources.getImage(IResourceProvider::ImageId::PedalKnobImage);
     for (int i = 0; i < kKnobCount; ++i)
     {
-        m_knobs[i] = std::make_unique<SpriteKnob>(knobImg, 0.0f, 1.0f);
+        m_knobs[i] = std::make_unique<SpriteKnob>(m_assets, IResourceProvider::ImageId::PedalKnobImage, 0.0f, 1.0f);
         m_knobs[i]->setValue(m_definition->parameters[static_cast<size_t>(i)].param.defaultValue);
+        m_knobs[i]->setLinked(false);
+        m_knobs[i]->setLinkRange(0.0f, 1.0f);
+        m_linkMins[static_cast<size_t>(i)] = 0.0f;
+        m_linkMaxs[static_cast<size_t>(i)] = 1.0f;
         m_knobs[i]->onDragStart = [this, i](float v) { onKnobDragStart(i, v); };
         m_knobs[i]->onValueChanged = [this, i](float v) { onKnobValueChanged(i, v); };
         m_knobs[i]->onRightClick = [this, i]() { onKnobRightClick(i); };
+        m_knobs[i]->onLinkRangeChanged = [this, i](float rMin, float rMax)
+        {
+            m_linkMins[static_cast<size_t>(i)] = rMin;
+            m_linkMaxs[static_cast<size_t>(i)] = rMax;
+            if (m_actions.setLinkRange) m_actions.setLinkRange(m_slotIndex, i, rMin, rMax);
+            repaint();
+        };
         const auto& param = m_definition->parameters[static_cast<size_t>(i)];
         m_knobs[i]->setVisible(param.label != nullptr && param.label[0] != '\0');
         addAndMakeVisible(m_knobs[i].get());
@@ -56,30 +67,26 @@ void PedalComponent::paint(juce::Graphics& g)
     const auto pedalW = bounds.getWidth();
     const auto pedalH = bounds.getHeight();
 
-    const float insetX = pedalW * GridLayout::PedalBodyInsetXRatio;
-    const float insetY = pedalH * GridLayout::PedalBodyInsetYRatio;
-    const float maskW  = pedalW * GridLayout::PedalBodyMaskWRatio;
-    const float maskH  = pedalH * GridLayout::PedalBodyMaskHRatio;
-    const float corner = pedalW * GridLayout::PedalBodyCornerRatio;
+    const float insetX = pedalW * EditorDesignMetrics::PedalBodyInsetXRatio;
+    const float insetY = pedalH * EditorDesignMetrics::PedalBodyInsetYRatio;
+    const float maskW  = pedalW * EditorDesignMetrics::PedalBodyMaskWRatio;
+    const float maskH  = pedalH * EditorDesignMetrics::PedalBodyMaskHRatio;
+    const float corner = pedalW * EditorDesignMetrics::PedalBodyCornerRatio;
 
     juce::Path pedalClipPath;
     pedalClipPath.addRoundedRectangle(insetX, insetY, maskW, maskH, corner);
 
     {
-        const auto& enclosure = m_resources.getTexture(IResourceProvider::TextureId::PedalEnclosure);
-        if (enclosure.isValid())
-            g.drawImage(enclosure, 0, 0, pedalW, pedalH, 0, 0, enclosure.getWidth(), enclosure.getHeight());
+        m_assets.drawImage(g, IResourceProvider::ImageId::PedalEnclosure,
+                           bounds, ScaledAssetProvider::ResamplingPolicy::Continuous);
 
-        const auto& japSheet = m_resources.getTexture(IResourceProvider::TextureId::JapanesePedalSheet);
-        if (japSheet.isValid())
-        {
-            const auto srcRect = japTextureCell(m_slotIndex % 6);
-            g.saveState();
-            g.reduceClipRegion(pedalClipPath);
-            g.setOpacity(0.85f);
-            g.drawImage(japSheet, 0, 0, pedalW, pedalH, srcRect.getX(), srcRect.getY(), srcRect.getWidth(), srcRect.getHeight());
-            g.restoreState();
-        }
+        const auto srcRect = japTextureCell(m_slotIndex % 6);
+        g.saveState();
+        g.reduceClipRegion(pedalClipPath);
+        g.setOpacity(0.85f);
+        m_assets.drawFrame(g, IResourceProvider::ImageId::JapanesePedalSheet,
+                           srcRect, bounds, ScaledAssetProvider::ResamplingPolicy::Continuous);
+        g.restoreState();
 
         {
             g.saveState();
@@ -98,31 +105,36 @@ void PedalComponent::paint(juce::Graphics& g)
     const float ledDeviceScale = g.getInternalContext().getPhysicalPixelScaleFactor();
     if (ledImage.isValid() && ledDeviceScale > 0.0f)
     {
-        g.setImageResamplingQuality(juce::Graphics::highResamplingQuality);
-
         const float deviceScale = ledDeviceScale;
-        const int ledPx = juce::jmax(1, juce::roundToInt(pedalH * GridLayout::LedSizeRatio * deviceScale));
+        const int ledPx = juce::jmax(1, juce::roundToInt(pedalH * EditorDesignMetrics::LedSizeRatio * deviceScale));
 
         if (ledPx != m_ledScaledSize || !m_ledScaled[0].isValid() || !m_ledScaled[1].isValid())
         {
             const int frameW = ledImage.getWidth() / 2;
             const int frameH = ledImage.getHeight();
-            m_ledScaled[0] = ledImage.getClippedImage({ 0, 0, frameW, frameH })
-                                 .rescaled(ledPx, ledPx, juce::Graphics::highResamplingQuality);
-            m_ledScaled[1] = ledImage.getClippedImage({ frameW, 0, frameW, frameH })
-                                 .rescaled(ledPx, ledPx, juce::Graphics::highResamplingQuality);
-            m_ledScaledSize = ledPx;
+            m_ledScaled[0] = m_assets.getScaledFrame(
+                IResourceProvider::ImageId::PedalLedImage,
+                { 0, 0, frameW, frameH }, ledPx, ledPx,
+                ScaledAssetProvider::ResamplingPolicy::Continuous);
+            m_ledScaled[1] = m_assets.getScaledFrame(
+                IResourceProvider::ImageId::PedalLedImage,
+                { frameW, 0, frameW, frameH }, ledPx, ledPx,
+                ScaledAssetProvider::ResamplingPolicy::Continuous);
+            m_ledScaledSize = m_ledScaled[0].isValid() ? m_ledScaled[0].getWidth() : 0;
         }
 
         if (m_ledScaledSize > 0 && m_ledScaled[0].isValid() && m_ledScaled[1].isValid())
         {
             const float destSize = static_cast<float>(m_ledScaledSize) / deviceScale;
-            const float x = std::round((pedalW * GridLayout::LedCenterXRatio - destSize * 0.5f) * deviceScale) / deviceScale;
-            const float y = std::round((pedalH * GridLayout::LedCenterYRatio - destSize * 0.5f) * deviceScale) / deviceScale;
+            const float x = std::round((pedalW * EditorDesignMetrics::LedCenterXRatio - destSize * 0.5f) * deviceScale) / deviceScale;
+            const float y = std::round((pedalH * EditorDesignMetrics::LedCenterYRatio - destSize * 0.5f) * deviceScale) / deviceScale;
 
             const bool isOn = (m_currentType != DspModuleType::BYPASS);
+            g.saveState();
+            g.setImageResamplingQuality(juce::Graphics::highResamplingQuality);
             g.drawImage(m_ledScaled[isOn ? 1 : 0],
                         juce::Rectangle<float>(x, y, destSize, destSize));
+            g.restoreState();
         }
     }
 
@@ -134,7 +146,7 @@ void PedalComponent::paint(juce::Graphics& g)
             m_theme.pedalLcdBottom(), labelArea.getBottomLeft(), false));
         g.fillRoundedRectangle(labelArea, m_theme.pedalStyle().lcdRadius);
 
-        g.setColour(juce::Colour(0xFFC8E0E8));
+        g.setColour(juce::Colour(0xFFE8F1F5));
         g.setFont(m_lcdFont);
         g.drawFittedText(m_definition ? juce::String(m_definition->displayName) : "---",
                          labelArea.toNearestInt().reduced(2, 0),
@@ -146,32 +158,15 @@ void PedalComponent::paint(juce::Graphics& g)
         g.fillRoundedRectangle(labelArea, m_theme.pedalStyle().lcdRadius);
     }
     
-    for (int i = 0; i < kKnobCount; ++i)
-    {
-        if (m_definition != nullptr)
-        {
-            const auto& param = m_definition->parameters[static_cast<size_t>(i)];
-            if (param.label == nullptr || param.label[0] == '\0')
-                continue;
-        }
-        if (m_model.isKnobLinked(m_slotIndex, i))
-        {
-            float ringD = m_knobBounds[i].getWidth() * GridLayout::KnobLinkRingRatio;
-            float ringR = ringD * 0.5f;
-            g.setColour(juce::Colours::limegreen.withAlpha(0.85f));
-            g.drawEllipse(m_knobBounds[i].getCentreX() - ringR,
-                          m_knobBounds[i].getCentreY() - ringR,
-                          ringD, ringD, 2.0f);
-        }
-    }
+    juce::ignoreUnused(g);
 
     if (m_definition == nullptr)
         return;
 
-    const float fontSize = pedalH * GridLayout::KnobFontSizeRatio;
-    const float labelWidth = pedalW * GridLayout::KnobLabelWidthRatio;
+    const float fontSize = pedalH * EditorDesignMetrics::KnobFontSizeRatio;
+    const float labelWidth = pedalW * EditorDesignMetrics::KnobLabelWidthRatio;
     const float labelHeight = fontSize * 1.3f;
-    const float offsetY = pedalH * GridLayout::KnobLabelOffsetYRatio;
+    const float offsetY = pedalH * EditorDesignMetrics::KnobLabelOffsetYRatio;
 
     g.setColour(juce::Colours::white.withAlpha(0.75f));
     g.setFont(m_labelFont);
@@ -196,7 +191,7 @@ void PedalComponent::resized()
     const float pedalH = static_cast<float>(getHeight());
     m_lcdFont = juce::Font(juce::FontOptions(std::max(8.0f, getLabelArea().getHeight() * 0.35f)));
     m_lcdFont.setTypefaceName(juce::Font::getDefaultMonospacedFontName());
-    m_labelFont = juce::Font(juce::FontOptions(std::max(6.0f, pedalH * GridLayout::KnobFontSizeRatio)));
+    m_labelFont = juce::Font(juce::FontOptions(std::max(6.0f, pedalH * EditorDesignMetrics::KnobFontSizeRatio)));
 
     applyKnobLayout();
 }
@@ -214,10 +209,10 @@ juce::Rectangle<float> PedalComponent::getLabelArea() const
     const float pedalW = static_cast<float>(getWidth());
     const float pedalH = static_cast<float>(getHeight());
     auto bounds = getLocalBounds().toFloat()
-                      .reduced(pedalW * GridLayout::LabelInsetXRatio, pedalH * GridLayout::LabelInsetYRatio);
-    bounds.removeFromTop(pedalH * GridLayout::LabelTopTrimRatio);
+                      .reduced(pedalW * EditorDesignMetrics::LabelInsetXRatio, pedalH * EditorDesignMetrics::LabelInsetYRatio);
+    bounds.removeFromTop(pedalH * EditorDesignMetrics::LabelTopTrimRatio);
     return bounds.withTrimmedTop(bounds.getHeight() * 0.67f)
-                .reduced(pedalW * GridLayout::LabelReducedXRatio, pedalH * GridLayout::LabelReducedYRatio);
+                .reduced(pedalW * EditorDesignMetrics::LabelReducedXRatio, pedalH * EditorDesignMetrics::LabelReducedYRatio);
 }
 
 void PedalComponent::mouseDown(const juce::MouseEvent& event)
@@ -282,14 +277,14 @@ void PedalComponent::showTypePopup()
                 safeThis->m_definition = &PedalDefinitions::get(type);
                 safeThis->applyKnobLayout();
                 safeThis->repaint();
-                safeThis->m_model.setPedalSlot(safeThis->m_slotIndex, type);
+                if (safeThis->m_actions.setType)
+                    safeThis->m_actions.setType(safeThis->m_slotIndex, type);
             }
         });
 }
 
-void PedalComponent::syncFromProcessor()
+void PedalComponent::syncType(DspModuleType type)
 {
-    auto type = m_model.getPedalSlot(m_slotIndex);
     if (type != m_currentType)
     {
         m_currentType = type;
@@ -297,6 +292,31 @@ void PedalComponent::syncFromProcessor()
         applyKnobLayout();
         repaint();
     }
+}
+
+void PedalComponent::setKnobLinked(int knobIdx, bool linked)
+{
+    if (knobIdx < 0 || knobIdx >= kKnobCount)
+        return;
+    m_linked[static_cast<size_t>(knobIdx)] = linked;
+    if (m_knobs[static_cast<size_t>(knobIdx)])
+        m_knobs[static_cast<size_t>(knobIdx)]->setLinked(linked);
+    repaint();
+}
+
+void PedalComponent::setKnobLinkRange(int knobIdx, float rMin, float rMax)
+{
+    if (knobIdx < 0 || knobIdx >= kKnobCount)
+        return;
+    rMin = std::clamp(rMin, 0.0f, 1.0f);
+    rMax = std::clamp(rMax, 0.0f, 1.0f);
+    if (rMax < rMin + 0.05f) rMax = std::min(1.0f, rMin + 0.05f);
+    if (rMin > rMax - 0.05f) rMin = std::max(0.0f, rMax - 0.05f);
+    m_linkMins[static_cast<size_t>(knobIdx)] = rMin;
+    m_linkMaxs[static_cast<size_t>(knobIdx)] = rMax;
+    if (m_knobs[static_cast<size_t>(knobIdx)])
+        m_knobs[static_cast<size_t>(knobIdx)]->setLinkRange(rMin, rMax);
+    repaint();
 }
 
 void PedalComponent::setKnobValue(int knobIdx, float value)
@@ -315,17 +335,33 @@ void PedalComponent::onKnobValueChanged(int knobIdx, float value)
     const float snapped = PedalDefinitions::snapValue(m_currentType, knobIdx, value);
     if (snapped != value)
         m_knobs[static_cast<size_t>(knobIdx)]->setValue(snapped);
-    m_model.setKnobParameter(m_slotIndex, knobIdx, m_knobDragStartValues[knobIdx], snapped);
+    if (m_actions.setKnob)
+        m_actions.setKnob(m_slotIndex, knobIdx, m_knobDragStartValues[knobIdx], snapped);
 }
 
 void PedalComponent::onKnobRightClick(int knobIdx)
 {
-    bool linked = m_model.isKnobLinked(m_slotIndex, knobIdx);
+    bool linked = m_linked[static_cast<size_t>(knobIdx)];
+    juce::Component::SafePointer<PedalComponent> safeThis(this);
     juce::PopupMenu menu;
     menu.addItem("Link to Automation", !linked, linked,
-        [this, knobIdx]() { m_model.setKnobLink(m_slotIndex, knobIdx, true); repaint(); });
+        [safeThis, knobIdx]()
+        {
+            if (safeThis == nullptr)
+                return;
+            safeThis->m_linked[static_cast<size_t>(knobIdx)] = true;
+            if (safeThis->m_actions.setLink) safeThis->m_actions.setLink(safeThis->m_slotIndex, knobIdx, true);
+            safeThis->repaint();
+        });
     menu.addItem("Unlink from Automation", linked, !linked,
-        [this, knobIdx]() { m_model.setKnobLink(m_slotIndex, knobIdx, false); repaint(); });
+        [safeThis, knobIdx]
+        {
+            if (safeThis == nullptr)
+                return;
+            safeThis->m_linked[static_cast<size_t>(knobIdx)] = false;
+            if (safeThis->m_actions.setLink) safeThis->m_actions.setLink(safeThis->m_slotIndex, knobIdx, false);
+            safeThis->repaint();
+        });
     menu.showMenuAsync(juce::PopupMenu::Options());
 }
 
@@ -338,7 +374,7 @@ void PedalComponent::updateKnobBounds()
     const float pedalWidth = pedalBounds.getWidth();
     const float pedalHeight = pedalBounds.getHeight();
 
-    const float knobSize = pedalHeight * GridLayout::KnobSizeRatio;
+    const float knobSize = pedalHeight * EditorDesignMetrics::KnobSizeRatio;
     const float halfKnob = knobSize * 0.5f;
 
     const auto layout = knobLayoutForCount(m_definition->knobCount);
@@ -366,7 +402,7 @@ void PedalComponent::updateKnobBounds()
     const float groupCenterX = pedalBounds.getX() + pedalWidth * (minCentreX + maxCentreX) / 2.0f;
     float scaleX = 1.0f;
     if (currentSpreadX >= 0.001f)
-        scaleX = (pedalWidth * GridLayout::KnobSpreadRatio) / currentSpreadX;
+        scaleX = (pedalWidth * EditorDesignMetrics::KnobSpreadRatio) / currentSpreadX;
 
     slot = 0;
     for (int i = 0; i < kKnobCount; ++i)
@@ -382,7 +418,7 @@ void PedalComponent::updateKnobBounds()
 
         const auto& normBounds = layout[static_cast<size_t>(slot)];
         const float centerX = groupCenterX + (normBounds.centreX - (minCentreX + maxCentreX) / 2.0f) * scaleX * pedalWidth;
-        const float centerY = pedalBounds.getY() + (normBounds.centreY + GridLayout::KnobCenterYShiftRatio) * pedalHeight;
+        const float centerY = pedalBounds.getY() + (normBounds.centreY + EditorDesignMetrics::KnobCenterYShiftRatio) * pedalHeight;
 
         m_knobBounds[static_cast<size_t>(i)] = juce::Rectangle<float>(
             centerX - halfKnob,
@@ -408,13 +444,13 @@ void PedalComponent::setBounds(juce::Rectangle<int> r)
 juce::Point<float> PedalComponent::getInputJackPos() const
 {
     auto bounds = getBounds().toFloat();
-    return { bounds.getX() + bounds.getWidth() * GridLayout::JackInsetXRatio,
-             bounds.getY() + bounds.getHeight() * GridLayout::JackInsetYRatio };
+    return { bounds.getX() + bounds.getWidth() * EditorDesignMetrics::JackInsetXRatio,
+             bounds.getY() + bounds.getHeight() * EditorDesignMetrics::JackInsetYRatio };
 }
 
 juce::Point<float> PedalComponent::getOutputJackPos() const
 {
     auto bounds = getBounds().toFloat();
-    return { bounds.getRight() - bounds.getWidth() * GridLayout::JackInsetXRatio,
-             bounds.getY() + bounds.getHeight() * GridLayout::JackInsetYRatio };
+    return { bounds.getRight() - bounds.getWidth() * EditorDesignMetrics::JackInsetXRatio,
+             bounds.getY() + bounds.getHeight() * EditorDesignMetrics::JackInsetYRatio };
 }

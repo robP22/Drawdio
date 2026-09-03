@@ -19,7 +19,7 @@ void DelayEffect::processBlock(float** b, int c, int n, const float* params)
         m_firstBlock = false;
     }
     float delayStart = m_smoothedDelaySamples;
-    m_smoothedDelaySamples += (targetDelay - m_smoothedDelaySamples) * 0.05f;
+    m_smoothedDelaySamples += (targetDelay - m_smoothedDelaySamples) * 0.2f;
     float delayEnd = m_smoothedDelaySamples;
 
     int chCount = std::min(c, static_cast<int>(m_delays.size()));

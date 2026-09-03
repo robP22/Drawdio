@@ -13,16 +13,25 @@ void ReTimeEffect::prepare(double sampleRate, int numChannels)
         channel.ring.assign(bufferSize, 0.0f);
         channel.freeze.assign(bufferSize, 0.0f);
         channel.writePos = 0;
-        channel.smoothState = 0.0f;
     }
+    m_fadeFrom.assign(m_channels.size(), 0.0f);
+    m_lastOut.assign(m_channels.size(), 0.0f);
+    m_releaseFrom.assign(m_channels.size(), 0.0f);
 
     m_loopLength = static_cast<float>(sampleRate * 2.0);
     m_phase = 0.0f;
     m_speed = 0.5f;
-    m_smoothAlpha = 1.0f - std::exp(-1.0f / (0.015f * static_cast<float>(sampleRate)));
+    m_xfadePos = 0;
+    m_xfadeLen = 0;
+    m_historySamples = 0;
+    m_releasePos = 0;
+    m_releaseLength = std::max<size_t>(1, static_cast<size_t>(sampleRate * kReleaseSeconds));
+    m_silenceSamples = 0;
     m_needsSync = true;
     m_hasCaptured = false;
     m_hasTail = false;
+    m_state = PlaybackState::Priming;
+    m_previousPpqValid = false;
 }
 
 void ReTimeEffect::reset()
@@ -30,28 +39,57 @@ void ReTimeEffect::reset()
     for (auto& channel : m_channels)
     {
         std::fill(channel.ring.begin(), channel.ring.end(), 0.0f);
-        std::fill(channel.freeze.begin(), channel.freeze.end(), 0.0f);
         channel.writePos = 0;
-        channel.smoothState = 0.0f;
     }
+    std::fill(m_fadeFrom.begin(), m_fadeFrom.end(), 0.0f);
+    std::fill(m_lastOut.begin(), m_lastOut.end(), 0.0f);
+    std::fill(m_releaseFrom.begin(), m_releaseFrom.end(), 0.0f);
 
     m_phase = 0.0f;
+    m_xfadePos = 0;
+    m_xfadeLen = 0;
+    m_historySamples = 0;
+    m_releasePos = 0;
+    m_silenceSamples = 0;
     m_needsSync = true;
     m_hasCaptured = false;
     m_hasTail = false;
+    m_state = PlaybackState::Priming;
+    m_previousPpqValid = false;
 }
 
 void ReTimeEffect::setTransport(float bpm, double ppqPosition, bool isPlaying)
 {
     const float safeBpm = std::isfinite(bpm) && bpm > 1.0f ? bpm : 120.0f;
 
+    const double safePpq = std::isfinite(ppqPosition) ? ppqPosition : 0.0;
+
     if (isPlaying && !m_isPlaying)
+    {
         m_needsSync = true;
+        m_hasCaptured = false;
+        m_historySamples = 0;
+        m_silenceSamples = 0;
+        m_state = PlaybackState::Priming;
+        m_previousPpqValid = false;
+    }
+    else if (!isPlaying && m_isPlaying)
+    {
+        startRelease();
+    }
+    else if (isPlaying && m_isPlaying && m_previousPpqValid
+             && (safePpq < m_previousPpqPosition - 0.25
+                 || safePpq > m_previousPpqPosition + 1.0))
+    {
+        m_needsSync = true;
+    }
 
     m_bpm = safeBpm;
-    m_ppqPosition = std::isfinite(ppqPosition) ? ppqPosition : 0.0;
+    m_ppqPosition = safePpq;
     m_isPlaying = isPlaying;
     m_hasTransport = true;
+    m_previousPpqPosition = safePpq;
+    m_previousPpqValid = isPlaying;
 }
 
 float ReTimeEffect::wrapPosition(float position, float size)
@@ -64,17 +102,17 @@ float ReTimeEffect::wrapPosition(float position, float size)
     return position;
 }
 
-float ReTimeEffect::readInterpolated(const ChannelState& channel, float position) const
+float ReTimeEffect::readInterpolated(const std::vector<float>& buffer, float position) const
 {
-    const float size = static_cast<float>(channel.freeze.size());
+    const float size = static_cast<float>(buffer.size());
     if (size <= 1.0f)
         return 0.0f;
 
     const float wrapped = wrapPosition(position, size);
     const auto i0 = static_cast<size_t>(wrapped);
-    const auto i1 = (i0 + 1) % channel.freeze.size();
+    const auto i1 = (i0 + 1) % buffer.size();
     const float frac = wrapped - static_cast<float>(i0);
-    return channel.freeze[i0] + (channel.freeze[i1] - channel.freeze[i0]) * frac;
+    return buffer[i0] + (buffer[i1] - buffer[i0]) * frac;
 }
 
 void ReTimeEffect::updateTiming(float timeParam, float barsParam)
@@ -131,8 +169,48 @@ void ReTimeEffect::recapture()
     }
 
     m_phase = wrapPosition(m_shift * m_loopLength, m_loopLength);
+    const size_t xfadeLen = static_cast<size_t>(m_sampleRate * 0.040);
+    m_xfadeLen = std::max<size_t>(1, std::min<size_t>(xfadeLen, std::max<size_t>(1, static_cast<size_t>(m_loopLength / 2.0f))));
+    m_xfadePos = 0;
     m_needsSync = false;
     m_hasCaptured = true;
+    m_state = PlaybackState::Captured;
+    m_releasePos = 0;
+    m_silenceSamples = 0;
+}
+
+void ReTimeEffect::startRelease()
+{
+    if (m_state == PlaybackState::Releasing || m_state == PlaybackState::Idle)
+        return;
+
+    for (size_t ch = 0; ch < m_releaseFrom.size(); ++ch)
+        m_releaseFrom[ch] = m_lastOut[ch];
+    m_releasePos = 0;
+    m_releaseLength = std::max<size_t>(1, static_cast<size_t>(m_sampleRate * kReleaseSeconds));
+    m_state = PlaybackState::Releasing;
+}
+
+size_t ReTimeEffect::requiredHistorySamples() const
+{
+    if (m_channels.empty())
+        return 0;
+
+    float endDelay = 0.0f;
+    if (m_hasTransport)
+    {
+        const double ppq = std::max(0.0, m_ppqPosition);
+        const double barStart = std::floor(ppq / 4.0) * 4.0;
+        endDelay = static_cast<float>((ppq - barStart) * (m_sampleRate * 60.0 / m_bpm));
+    }
+
+    const auto required = static_cast<size_t>(std::ceil(m_loopLength + endDelay));
+    return std::min(required, m_channels.front().ring.size());
+}
+
+bool ReTimeEffect::hasSufficientHistory() const
+{
+    return m_historySamples >= requiredHistorySamples();
 }
 
 void ReTimeEffect::processBlock(float** buffer, int numChannels, int numSamples, const float* params)
@@ -144,8 +222,22 @@ void ReTimeEffect::processBlock(float** buffer, int numChannels, int numSamples,
     updateTiming(params[1], params[2]);
     m_shift = juce::jlimit(0.0f, 1.0f, params[3]);
 
-    if (m_needsSync || !m_hasCaptured)
-        recapture();
+    if ((m_needsSync || !m_hasCaptured)
+        && m_state != PlaybackState::Releasing
+        && m_state != PlaybackState::Idle)
+    {
+        if (hasSufficientHistory())
+        {
+            for (size_t ch = 0; ch < m_channels.size(); ++ch)
+                m_fadeFrom[ch] = m_lastOut[ch];
+            recapture();
+        }
+        else
+        {
+            m_state = PlaybackState::Priming;
+            m_hasCaptured = false;
+        }
+    }
 
     const int channels = std::min(numChannels, static_cast<int>(m_channels.size()));
     const float loopLength = m_loopLength;
@@ -153,27 +245,120 @@ void ReTimeEffect::processBlock(float** buffer, int numChannels, int numSamples,
     for (int sample = 0; sample < numSamples; ++sample)
     {
         float peak = 0.0f;
+        float inputActivity = 0.0f;
+        for (int ch = 0; ch < channels; ++ch)
+        {
+            const float input = std::isfinite(buffer[ch][sample]) ? buffer[ch][sample] : 0.0f;
+            inputActivity = std::max(inputActivity, std::abs(input));
+        }
+
+        if ((m_state == PlaybackState::Releasing || m_state == PlaybackState::Idle)
+            && inputActivity > kInputSilenceThreshold
+            && (m_isPlaying || !m_hasTransport))
+        {
+            m_state = PlaybackState::Priming;
+            m_needsSync = true;
+            m_hasCaptured = false;
+            m_historySamples = 0;
+            m_releasePos = 0;
+            m_silenceSamples = 0;
+        }
+
+        const bool xfading = m_state == PlaybackState::Captured && m_xfadePos < m_xfadeLen;
+        float xfadeMix = 1.0f;
+        if (xfading)
+        {
+            const float t = static_cast<float>(m_xfadePos) / static_cast<float>(m_xfadeLen);
+            xfadeMix = 0.5f - 0.5f * std::cos(3.14159265358979323846f * t);
+        }
+
         for (int ch = 0; ch < channels; ++ch)
         {
             auto& channel = m_channels[static_cast<size_t>(ch)];
             const float input = std::isfinite(buffer[ch][sample]) ? buffer[ch][sample] : 0.0f;
+
             channel.ring[channel.writePos] = input;
 
-            const float raw = readInterpolated(channel, m_phase);
-            channel.smoothState += (raw - channel.smoothState) * m_smoothAlpha;
-            buffer[ch][sample] = channel.smoothState;
-            peak = std::max(peak, std::abs(channel.smoothState));
+            float out = 0.0f;
+            if (m_state == PlaybackState::Priming)
+            {
+                out = input;
+            }
+            else if (m_state == PlaybackState::Captured)
+            {
+                const float raw = readInterpolated(channel.freeze, m_phase);
+                out = raw;
+                if (xfading)
+                    out = m_fadeFrom[static_cast<size_t>(ch)]
+                        + (raw - m_fadeFrom[static_cast<size_t>(ch)]) * xfadeMix;
+            }
+            else if (m_state == PlaybackState::Releasing)
+            {
+                const float t = static_cast<float>(m_releasePos)
+                              / static_cast<float>(std::max<size_t>(1, m_releaseLength));
+                const float releaseMix = 0.5f + 0.5f * std::cos(3.14159265358979323846f * t);
+                out = m_releaseFrom[static_cast<size_t>(ch)] * releaseMix;
+            }
+
+            buffer[ch][sample] = out;
+            m_lastOut[static_cast<size_t>(ch)] = out;
+            peak = std::max(peak, std::abs(out));
             channel.writePos = (channel.writePos + 1) % channel.ring.size();
         }
 
-        m_phase += m_speed;
-        if (m_phase >= loopLength)
+        if (m_state != PlaybackState::Idle)
+            m_historySamples = std::min(m_historySamples + 1, m_channels.front().ring.size());
+
+        if (m_state == PlaybackState::Priming && m_needsSync && hasSufficientHistory())
         {
-            m_phase -= loopLength;
-            if (m_isPlaying || !m_hasTransport)
-                recapture();
+            for (size_t ch = 0; ch < m_channels.size(); ++ch)
+                m_fadeFrom[ch] = m_lastOut[ch];
+            recapture();
         }
-        m_hasTail = peak > 1.0e-8f;
+
+        if (inputActivity > kInputSilenceThreshold)
+            m_silenceSamples = 0;
+        else
+            m_silenceSamples = std::min(m_silenceSamples + 1,
+                                        static_cast<size_t>(m_sampleRate * kInputSilenceTimeoutSeconds));
+
+        if (m_state == PlaybackState::Captured
+            && m_silenceSamples >= static_cast<size_t>(m_sampleRate * kInputSilenceTimeoutSeconds)
+            && (m_isPlaying || !m_hasTransport))
+        {
+            startRelease();
+        }
+
+        if (xfading)
+            ++m_xfadePos;
+
+        if (m_state == PlaybackState::Captured)
+        {
+            m_phase += m_speed;
+            if (m_phase >= loopLength)
+            {
+                m_phase -= loopLength;
+                for (int ch = 0; ch < channels; ++ch)
+                    m_fadeFrom[static_cast<size_t>(ch)] = m_lastOut[static_cast<size_t>(ch)];
+                if ((m_isPlaying || !m_hasTransport) && hasSufficientHistory())
+                    recapture();
+                else
+                    m_xfadePos = 0;
+            }
+        }
+
+        if (m_state == PlaybackState::Releasing)
+        {
+            ++m_releasePos;
+            if (m_releasePos >= m_releaseLength)
+            {
+                m_state = PlaybackState::Idle;
+                m_hasCaptured = false;
+                m_hasTail = false;
+                m_xfadePos = 0;
+            }
+        }
+        m_hasTail = m_state != PlaybackState::Idle && peak > 1.0e-8f;
     }
 }
 

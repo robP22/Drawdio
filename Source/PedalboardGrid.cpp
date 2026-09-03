@@ -1,23 +1,76 @@
 #include "PedalboardGrid.h"
-#include "GridLayout.h"
+#include "Core/EditorDesignMetrics.h"
+#include <algorithm>
+#include <utility>
 
-PedalboardGrid::PedalboardGrid(IPedalboardModel& model,
+PedalboardGrid::PedalboardGrid(const EditorUiSnapshot& initialState,
                                    const IResourceProvider& resources,
+                                   const ScaledAssetProvider& assets,
                                    const IThemeProvider& theme,
-                                   CanvasRoutingManager& routingManager)
-    : m_model(model),
-      m_resources(resources),
+                                   CanvasRoutingManager& routingManager,
+                                   Actions actions)
+    : m_resources(resources),
+      m_assets(assets),
       m_theme(theme),
       m_routingManager(routingManager),
-      m_renderer(theme, m_resources),
-      m_routingCtrl(m_connectionModel, m_jackMap, model)
+      m_renderer(theme, m_resources, m_assets),
+      m_routingCtrl(m_connectionModel, m_jackMap, [this]() { return m_manualMode; }),
+      m_actions(std::move(actions)),
+      m_manualMode(initialState.manualMode)
 {
     addMouseListener(this, true);
 
     for (int s = 0; s < PedalSlotCount; ++s)
     {
+        m_pedalTypes[static_cast<size_t>(s)] = initialState.pedals[static_cast<size_t>(s)].type;
+        m_linked[static_cast<size_t>(s)] = initialState.pedals[static_cast<size_t>(s)].linked;
+        m_linkMins[static_cast<size_t>(s)] = initialState.pedals[static_cast<size_t>(s)].linkRangeMins;
+        m_linkMaxs[static_cast<size_t>(s)] = initialState.pedals[static_cast<size_t>(s)].linkRangeMaxs;
+        PedalComponent::Actions actions;
+        actions.setType = [this](int slot, DspModuleType type)
+        {
+            if (slot >= 0 && slot < PedalSlotCount)
+                m_pedalTypes[static_cast<size_t>(slot)] = type;
+            if (m_actions.setPedalType)
+                m_actions.setPedalType(slot, type);
+            rebuildCableCache();
+            repaint();
+        };
+        actions.setKnob = [this](int slot, int knob, float start, float value)
+        {
+            if (m_actions.setKnob)
+                m_actions.setKnob(slot, knob, start, value);
+        };
+        actions.setLink = [this](int slot, int knob, bool linked)
+        {
+            if (slot >= 0 && slot < PedalSlotCount && knob >= 0 && knob < KnobsPerPedal)
+            {
+                m_linked[static_cast<size_t>(slot)][static_cast<size_t>(knob)] = linked;
+                if (linked)
+                {
+                    m_linkMins[static_cast<size_t>(slot)][static_cast<size_t>(knob)] = 0.0f;
+                    m_linkMaxs[static_cast<size_t>(slot)][static_cast<size_t>(knob)] = 1.0f;
+                }
+            }
+            if (m_actions.setLink)
+                m_actions.setLink(slot, knob, linked);
+        };
+        actions.setLinkRange = [this](int slot, int knob, float rMin, float rMax)
+        {
+            if (slot >= 0 && slot < PedalSlotCount && knob >= 0 && knob < KnobsPerPedal)
+            {
+                rMin = std::clamp(rMin, 0.0f, 1.0f);
+                rMax = std::clamp(rMax, 0.0f, 1.0f);
+                if (rMax < rMin + 0.05f) rMax = std::min(1.0f, rMin + 0.05f);
+                if (rMin > rMax - 0.05f) rMin = std::max(0.0f, rMax - 0.05f);
+                m_linkMins[static_cast<size_t>(slot)][static_cast<size_t>(knob)] = rMin;
+                m_linkMaxs[static_cast<size_t>(slot)][static_cast<size_t>(knob)] = rMax;
+            }
+            if (m_actions.setLinkRange)
+                m_actions.setLinkRange(slot, knob, rMin, rMax);
+        };
         m_pedalComponents[static_cast<size_t>(s)] = std::make_unique<PedalComponent>(
-            m_model, s, m_model.getPedalSlot(s), m_resources, m_theme);
+            s, m_pedalTypes[static_cast<size_t>(s)], m_resources, m_assets, m_theme, std::move(actions));
         addAndMakeVisible(m_pedalComponents[static_cast<size_t>(s)].get());
     }
 }
@@ -28,8 +81,8 @@ void PedalboardGrid::paintOverChildren(juce::Graphics& g)
     const int grabbedIdx = m_routingCtrl.grabbedEdgeIndex();
     const bool isGrabDrag = m_routingCtrl.isGrabDrag();
 
-    if (!(isGrabDrag && grabbedIdx == -1))
-        m_renderer.drawInputJack(g, dawEntryPos(), m_cachedInputPath);
+    m_renderer.drawInputJack(g, dawEntryPos(), m_cachedInputPath,
+                              !(isGrabDrag && grabbedIdx == -1));
 
     m_renderer.drawRoutingCables(g, m_cachedConnectionPaths,
                                   isGrabDrag && grabbedIdx >= 0
@@ -39,15 +92,15 @@ void PedalboardGrid::paintOverChildren(juce::Graphics& g)
         m_renderer.drawGrabbedCable(g, m_routingCtrl.anchoredPos(),
                                      m_routingCtrl.dragCurrentPos());
 
-    if (!(isGrabDrag && grabbedIdx == -2))
-        m_renderer.drawOutputJack(g, dawExitPos(), m_cachedOutputPath);
+    m_renderer.drawOutputJack(g, dawExitPos(), m_cachedOutputPath,
+                              !(isGrabDrag && grabbedIdx == -2));
 
     if (isDragging && m_routingCtrl.isNewCableDrag())
         m_renderer.drawActiveDraggingCable(g, m_routingCtrl.dragStartPos(),
                                             m_routingCtrl.dragCurrentPos(),
                                             m_routingCtrl.dragSrcJackIdx());
 
-    if (m_model.isManualMode() && isDragging)
+    if (m_manualMode && isDragging)
     {
         const auto targets = m_routingCtrl.validTargetJackIndices();
         for (const int idx : targets)
@@ -98,12 +151,12 @@ void PedalboardGrid::rebuildConnectionCables()
     m_cachedInputPath.clear();
     m_cachedOutputPath.clear();
 
-    // Cable corner fillet control arm; scales with the window so bends stay
-    // smooth (~palette blob size) at any layout.
-    const float maxCurve = juce::jmax(
-        20.0f, static_cast<float>(getHeight()) * GridLayout::CableCurveBlobRatio);
+    const float maxCurve = juce::jlimit(
+        EditorDesignMetrics::Cable::CurveMinPx,
+        static_cast<float>(getHeight()) * EditorDesignMetrics::Cable::CurveBlobRatio,
+        EditorDesignMetrics::Cable::CurveMaxPx);
 
-    constexpr int kRowGaps = GridLayout::ColCount - 1;
+    constexpr int kRowGaps = EditorDesignMetrics::ColCount - 1;
     constexpr int kVertChannels = kRowGaps;
 
     struct CableChannel
@@ -126,7 +179,7 @@ void PedalboardGrid::rebuildConnectionCables()
 
     {
         const auto& top = m_pedalComponents[0]->getBounds();
-        const auto& bottom = m_pedalComponents[static_cast<size_t>(GridLayout::ColCount)]->getBounds();
+        const auto& bottom = m_pedalComponents[static_cast<size_t>(EditorDesignMetrics::ColCount)]->getBounds();
         hChannel.pos = (static_cast<float>(top.getBottom()) + static_cast<float>(bottom.getY())) * 0.5f;
     }
 
@@ -168,15 +221,17 @@ void PedalboardGrid::rebuildConnectionCables()
 
         const auto p1 = m_pedalComponents[static_cast<size_t>(srcIdx)]->getOutputJackPos();
         const auto p2 = m_pedalComponents[static_cast<size_t>(dstIdx)]->getInputJackPos();
-        const int srcRow = srcIdx / GridLayout::ColCount;
-        const int dstRow = dstIdx / GridLayout::ColCount;
-        const int srcCol = srcIdx % GridLayout::ColCount;
-        const int dstCol = dstIdx % GridLayout::ColCount;
+        const int srcRow = srcIdx / EditorDesignMetrics::ColCount;
+        const int dstRow = dstIdx / EditorDesignMetrics::ColCount;
+        const int srcCol = srcIdx % EditorDesignMetrics::ColCount;
+        const int dstCol = dstIdx % EditorDesignMetrics::ColCount;
 
         Route route;
         route.p1 = p1;
         route.p2 = p2;
-        route.lift = std::min(std::abs(p2.x - p1.x) * 0.30f, 70.0f);
+        route.lift = juce::jlimit(EditorDesignMetrics::Cable::JackRiseMinPx,
+                                  std::abs(p2.x - p1.x) * EditorDesignMetrics::Cable::JackRiseSpanRatio,
+                                  EditorDesignMetrics::Cable::JackRiseMaxPx);
 
         if (srcRow == dstRow)
         {
@@ -206,14 +261,14 @@ void PedalboardGrid::rebuildConnectionCables()
         if (pedalSlot < 0 || pedalSlot >= PedalSlotCount)
             return;
 
-        const int row = pedalSlot / GridLayout::ColCount;
+        const int row = pedalSlot / EditorDesignMetrics::ColCount;
 
         Route route;
         route.p1 = isInput ? dawEntryPos()
                            : m_pedalComponents[static_cast<size_t>(pedalSlot)]->getOutputJackPos();
         route.p2 = isInput ? m_pedalComponents[static_cast<size_t>(pedalSlot)]->getInputJackPos()
                            : dawExitPos();
-        route.lift = GridLayout::CableArcLiftPx;
+        route.lift = EditorDesignMetrics::Cable::ArcLiftPx;
 
         if (isInput)
         {
@@ -231,7 +286,7 @@ void PedalboardGrid::rebuildConnectionCables()
         registerRoute(std::move(route));
     };
 
-    if (m_model.isManualMode())
+    if (m_manualMode)
     {
         for (const auto& edge : m_connectionModel.edges())
             addConnectionRoute(static_cast<int>(edge.first), static_cast<int>(edge.second));
@@ -253,7 +308,7 @@ void PedalboardGrid::rebuildConnectionCables()
 
         int firstActive = -1, lastActive = -1;
         for (int i = 0; i < PedalSlotCount; ++i)
-            if (m_model.getPedalSlot(i) != DspModuleType::BYPASS)
+            if (m_pedalTypes[static_cast<size_t>(i)] != DspModuleType::BYPASS)
             {
                 if (firstActive == -1) firstActive = i;
                 lastActive = i;
@@ -266,7 +321,7 @@ void PedalboardGrid::rebuildConnectionCables()
         addDawRoute(false, lastSlot);
     }
 
-    const float laneSpacing = GridLayout::CableLaneSpacingPx;
+    const float laneSpacing = EditorDesignMetrics::Cable::LaneSpacingPx;
     const auto allocateLanes = [&](const std::vector<int>& users, const auto& laneSetter)
     {
         const int count = static_cast<int>(users.size());
@@ -373,10 +428,71 @@ void PedalboardGrid::rebuildConnectionCables()
 
 void PedalboardGrid::syncPedals()
 {
-    for (auto& pedal : m_pedalComponents)
-        if (pedal)
-            pedal->syncFromProcessor();
+    for (int slot = 0; slot < PedalSlotCount; ++slot)
+        if (auto& pedal = m_pedalComponents[static_cast<size_t>(slot)])
+        {
+            pedal->syncType(m_pedalTypes[static_cast<size_t>(slot)]);
+            for (int knob = 0; knob < KnobsPerPedal; ++knob)
+            {
+                pedal->setKnobLinked(knob, m_linked[static_cast<size_t>(slot)][static_cast<size_t>(knob)]);
+                pedal->setKnobLinkRange(knob,
+                                        m_linkMins[static_cast<size_t>(slot)][static_cast<size_t>(knob)],
+                                        m_linkMaxs[static_cast<size_t>(slot)][static_cast<size_t>(knob)]);
+            }
+        }
     m_jackMap.refresh(componentBounds(), dawEntryPos(), dawExitPos(), getLocalBounds());
+}
+
+void PedalboardGrid::setViewState(const EditorUiSnapshot& state)
+{
+    m_manualMode = state.manualMode;
+    for (int slot = 0; slot < PedalSlotCount; ++slot)
+    {
+        m_pedalTypes[static_cast<size_t>(slot)] = state.pedals[static_cast<size_t>(slot)].type;
+        m_linked[static_cast<size_t>(slot)] = state.pedals[static_cast<size_t>(slot)].linked;
+        m_linkMins[static_cast<size_t>(slot)] = state.pedals[static_cast<size_t>(slot)].linkRangeMins;
+        m_linkMaxs[static_cast<size_t>(slot)] = state.pedals[static_cast<size_t>(slot)].linkRangeMaxs;
+        if (auto* pedal = m_pedalComponents[static_cast<size_t>(slot)].get())
+        {
+            for (int knob = 0; knob < KnobsPerPedal; ++knob)
+                pedal->setKnobValue(knob, state.pedals[static_cast<size_t>(slot)].knobValues[static_cast<size_t>(knob)]);
+        }
+    }
+    syncPedals();
+    rebuildCableCache();
+    repaint();
+}
+
+void PedalboardGrid::syncKnobLinkState(int slot, int knob, bool linked, float rangeMin, float rangeMax)
+{
+    if (slot < 0 || slot >= PedalSlotCount || knob < 0 || knob >= KnobsPerPedal)
+        return;
+    rangeMin = std::clamp(rangeMin, 0.0f, 1.0f);
+    rangeMax = std::clamp(rangeMax, 0.0f, 1.0f);
+    if (rangeMax < rangeMin + 0.05f) rangeMax = std::min(1.0f, rangeMin + 0.05f);
+    if (rangeMin > rangeMax - 0.05f) rangeMin = std::max(0.0f, rangeMax - 0.05f);
+    auto& l = m_linked[static_cast<size_t>(slot)][static_cast<size_t>(knob)];
+    auto& mn = m_linkMins[static_cast<size_t>(slot)][static_cast<size_t>(knob)];
+    auto& mx = m_linkMaxs[static_cast<size_t>(slot)][static_cast<size_t>(knob)];
+    if (l == linked && mn == rangeMin && mx == rangeMax)
+        return;
+    l = linked;
+    mn = rangeMin;
+    mx = rangeMax;
+    if (auto* pedal = m_pedalComponents[static_cast<size_t>(slot)].get())
+    {
+        pedal->setKnobLinked(knob, linked);
+        pedal->setKnobLinkRange(knob, rangeMin, rangeMax);
+    }
+}
+
+void PedalboardGrid::refreshAfterResize()
+{
+    for (auto& pedal : m_pedalComponents)
+    {
+        pedal->repaint();
+    }
+    repaint();
 }
 
 void PedalboardGrid::mouseDown(const juce::MouseEvent& event)
@@ -437,7 +553,8 @@ void PedalboardGrid::mouseUp(const juce::MouseEvent& event)
                           [this]() {
                               auto routing = m_connectionModel.deriveRoutingOrder();
                               m_routingManager.setRoutingOrder(routing);
-                              m_model.setManualRouting(routing);
+                               if (m_actions.setManualRouting)
+                                   m_actions.setManualRouting(routing);
                           },
                           [this]() { rebuildCableCache(); });
     repaint();

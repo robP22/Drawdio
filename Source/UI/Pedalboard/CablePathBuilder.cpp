@@ -1,4 +1,5 @@
 #include "CablePathBuilder.h"
+#include "Core/EditorDesignMetrics.h"
 #include <algorithm>
 #include <cmath>
 #include <functional>
@@ -26,8 +27,10 @@ std::pair<juce::Point<float>, juce::Point<float>> CablePathBuilder::makeSameRowC
     juce::Point<float> from, juce::Point<float> to)
 {
     const float h = std::abs(to.x - from.x);
-    const float lift = std::min(h * 0.06f, 10.0f);
-    const float curve = std::max(h * 0.28f, 20.0f);
+    const float lift = juce::jlimit(EditorDesignMetrics::Cable::JackRiseMinPx,
+                                    h * EditorDesignMetrics::Cable::JackRiseSpanRatio,
+                                    EditorDesignMetrics::Cable::JackRiseMaxPx);
+    const float curve = std::max(h * 0.28f, EditorDesignMetrics::Cable::CurveMinPx);
     const float clampedCurve = std::min(curve, h * 0.4f);
     const float dir = (from.x < to.x) ? 1.0f : -1.0f;
     return {
@@ -58,14 +61,17 @@ void appendWaypointSegments(const std::vector<juce::Point<float>>& waypoints,
         return v / len;
     };
 
+    std::vector<float> segLens;
+    segLens.reserve(waypoints.size() > 0 ? waypoints.size() - 1 : 0);
+    for (size_t i = 0; i + 1 < waypoints.size(); ++i)
+        segLens.push_back(waypoints[i].getDistanceFrom(waypoints[i + 1]));
+
     for (size_t i = 0; i + 1 < waypoints.size(); ++i)
     {
         const auto& a = waypoints[i];
         const auto& b = waypoints[i + 1];
-        const float segLen = a.getDistanceFrom(b);
+        const float segLen = segLens[i];
 
-        // Tangents are derived from the waypoint segments so the cable leaves
-        // and enters every jack parallel to its first/last run (no hooks).
         juce::Point<float> dirIn;
         if (i == 0)
             dirIn = unit(b - a);
@@ -78,8 +84,17 @@ void appendWaypointSegments(const std::vector<juce::Point<float>>& waypoints,
         else
             dirOut = unit(waypoints[i + 2] - waypoints[i]);
 
-        const float k1 = std::min(segLen * 0.45f, maxCurve);
-        const float k2 = std::min(segLen * 0.45f, maxCurve);
+        float k1;
+        if (i == 0)
+            k1 = std::min(segLen * 0.45f, maxCurve);
+        else
+            k1 = std::min(std::min(segLens[i - 1], segLen) * 0.45f, maxCurve);
+
+        float k2;
+        if (i + 2 == waypoints.size())
+            k2 = std::min(segLen * 0.45f, maxCurve);
+        else
+            k2 = std::min(std::min(segLen, segLens[i + 1]) * 0.45f, maxCurve);
 
         sink({ a, a + dirIn * k1, b - dirOut * k2, b });
     }

@@ -1,46 +1,62 @@
 # Drawdio State Format
 
-## Current Format
+## State Layers
 
-Preset state uses the three-byte `DRD` magic followed by format version `0x05`.
-The serialized state contains:
+Drawdio keeps persistent behavior separate from editor session context.
 
-- 65,536 grid bytes for the 256x256 canvas
-- Six pedal-module slots
-- Variable-length manual-routing data
-- 24 normalized knob values, four per slot
-- A 32-bit manual-override mask
-- Automation bar count
-- Automation section start bar
-- Manual-routing mode flag
+`PresetState` contains the reusable configuration:
 
-The current serializer does not persist input gain, output gain, per-pedal gain,
-undo history, compiled effect payloads, or a separate automation-render cache.
-Those values are reconstructed or remain runtime state.
+- 256x256 canvas data
+- Six pedal slots
+- Manual routing
+- Normalized knob values
+- Manual override mask
+- Automation bar and section settings
+- Manual/canvas mode
+- Input, output, and per-pedal gains
+- Automation-link flags and per-knob link ranges
 
-## Compatibility
+`EditorSessionState` contains stable project UI context:
 
-Older state versions are accepted when their known fields are present:
+- Selected palette colour
+- Selected drawing tool
+- Selected pedal slot
 
-- v2: no knob values
-- v3: no manual-override mask
-- v4: no automation and manual-routing flags
+Transient interaction state is not persisted. This includes hover, focus, active
+drags, meter values, playhead position, compiler work, audio buffers, and undo
+history.
 
-Removed effect IDs are not active implementations. Legacy Analog Octaver ID 26
-is converted to Bypass during validation. Random Modulator ID 22 was converted
-to the HP/LP Filter in v0.2.1 and now loads that filter. Slot 2 is `CHORUS`
-(formerly MicroPitch Chorus; the integer value 2 is unchanged, so older presets
-load the new Chorus). Current factory-backed IDs are 1-25, where 22 is the
-HP/LP Filter and 26 is reserved.
+`ProjectState` contains both layers and is used for host project restoration.
 
-## Serialization Ownership
+## Documents
 
-`StateSerializer` handles the binary representation. `ConfigManager` and the
-processor state own the live values that are passed into serialization. Saved
-state should be treated as a versioned interchange format rather than a dump of
-the in-memory compiled audio graph.
+The serializer stores a versioned JUCE `ValueTree` document (`StateSerializer::SchemaVersion`, currently `2`) in the host state blob and in `.drawdio` files. The historical `DRD 0x05` preset version noted in older changelogs refers to the pre-ValueTree binary format and is not the current schema version; loading migrates from `0x05` where needed.
 
-## Related Documents
+The root node is `DrawdioState` with these properties:
 
-- [`effects.md`](./effects.md) - current effect IDs and parameters
-- [`architecture.md`](./architecture.md) - configuration publication and runtime state
+- `type`: preset or project document
+- `version`: schema version (1..`SchemaVersion`) - documents outside this range are rejected
+
+Preset documents contain a `preset` child. Project documents contain both a
+`preset` child and a `session` child.
+
+Binary data properties are used for the fixed-size canvas, pedal IDs, routing,
+knob values, gain arrays, and automation link ranges. This keeps the runtime model typed while keeping
+the storage boundary independent from UI components.
+
+## Validation
+
+Documents are fully parsed and validated before any live state is changed.
+Checks include finite floats (`inputGain`, `outputGain`, `knobValues`, `pedalGains`, `linkRangeMins/Maxs`), pedal ID range (`<= RESERVED_REMOVED_OCTAVER`, 26 migrates to BYPASS), duplicate-free manual routing slots, `overrideMask`/`linkFlags` bit-width (`<= (1u << TotalKnobs) - 1`), `barCount` 1..8, `sectionStartBar` 0..7, `manualMode` 0/1, `linkRange` clamping to [0,1] with at least `0.05` width, and `session` `selectedColour`/`selectedTool`/`selectedPedal` bounds. Invalid documents leave the current state untouched. Valid documents are
+applied as one configuration transaction and trigger one compiler update.
+
+## Loading Rules
+
+`.drawdio` loading replaces `PresetState` and preserves the current
+`EditorSessionState`. Host project loading replaces both state layers.
+
+## Ownership
+
+`StateSerializer` owns the `ValueTree` representation. `ConfigManager` owns the
+live typed state. `EditorProcessorBridge` is the editor-facing facade. UI
+components never serialize themselves or access the storage tree.

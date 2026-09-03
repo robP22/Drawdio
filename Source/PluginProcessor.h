@@ -48,6 +48,14 @@ public:
 
     void getStateInformation(juce::MemoryBlock& destData) override;
     void setStateInformation(const void* data, int sizeInBytes) override;
+    void getPresetInformation(juce::MemoryBlock& destData) const { m_config.getPresetInformation(destData); }
+    bool setPresetInformation(const void* data, int sizeInBytes) { return m_config.setPresetInformation(data, sizeInBytes); }
+    EditorSessionState getEditorSessionState() const { return m_config.getEditorSessionState(); }
+    void setEditorSessionState(const EditorSessionState& state) { m_config.setEditorSessionState(state); }
+    uint32_t getSessionRevision() const { return m_config.getSessionRevision(); }
+    void addEditorStateListener(juce::ChangeListener* listener) { m_config.addEditorStateListener(listener); }
+    void removeEditorStateListener(juce::ChangeListener* listener) { m_config.removeEditorStateListener(listener); }
+    bool hasPendingConfig() const { return m_config.hasPendingConfig(); }
 
     // --- IPedalboardModel ---
     void setPedalSlot(int slot, DspModuleType type) override { m_config.setPedalSlot(slot, type); }
@@ -61,6 +69,9 @@ public:
     void setKnobParameter(int slot, int knob, float dragStartValue, float newValue) override { m_config.setKnobParameter(slot, knob, dragStartValue, newValue); }
     bool isKnobLinked(int slot, int knob) const override { return m_config.isKnobLinked(slot, knob); }
     void setKnobLink(int slot, int knob, bool linked) override { m_config.setKnobLink(slot, knob, linked); }
+    void setKnobLinkRange(int slot, int knob, float rangeMin, float rangeMax) override { m_config.setKnobLinkRange(slot, knob, rangeMin, rangeMax); }
+    float getKnobLinkRangeMin(int slot, int knob) const override { return m_config.getKnobLinkRangeMin(slot, knob); }
+    float getKnobLinkRangeMax(int slot, int knob) const override { return m_config.getKnobLinkRangeMax(slot, knob); }
     float getPedalPeak(int slot) const override { return m_config.getPedalPeak(slot); }
     float getPedalGain(int slot) const override { return m_config.getPedalGain(slot); }
     void setPedalGain(int slot, float gain) override { m_config.setPedalGain(slot, gain); }
@@ -103,15 +114,40 @@ public:
     void notifyPenDown() { m_config.notifyPenDown(); }
     void notifyPenUp() { m_config.notifyPenUp(); }
     void submitCanvasSnapshot(const std::array<uint8_t, TotalCells>& data) { m_config.submitCanvasSnapshot(data); }
+    void submitCanvasSnapshot(const std::array<uint8_t, TotalCells>& data, const DirtyRowMask& dirtyRows) { m_config.submitCanvasSnapshot(data, dirtyRows); }
     void scheduleReset() { m_dspProcessor.scheduleReset(); }
     void clearParamOffsets() { m_dspProcessor.clearParamOffsets(); }
+    void resetParamDefaults() { m_config.resetParamDefaults(); }
     float getInputMeterLevel() const { return m_processorState.getInputMeterLevel(); }
     float getOutputMeterLevel() const { return m_processorState.getOutputMeterLevel(); }
 
 private:
+    struct CallbackLockHolder
+    {
+        void acquire(const juce::CriticalSection& lock) noexcept
+        {
+            lock.enter();
+            m_lock = &lock;
+        }
+
+        ~CallbackLockHolder()
+        {
+            if (m_lock != nullptr)
+                m_lock->exit();
+        }
+
+        const juce::CriticalSection* m_lock = nullptr;
+    };
+
+    CallbackLockHolder m_callbackLockHolder;
     UnifiedPedalProcessor m_dspProcessor;
     ConfigManager m_config;
     ProcessorState m_processorState;
+
+    std::atomic<bool>* m_shutdown{new std::atomic<bool>(false)};
+    std::atomic<bool> m_processingEnabled{false};
+    std::atomic<int> m_audioCallsInFlight{0};
+    std::atomic<bool> m_imageCacheCleared{false};
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(DrawdioProcessor)
 };

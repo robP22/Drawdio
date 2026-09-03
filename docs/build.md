@@ -4,7 +4,7 @@
 
 - CMake 3.24 or newer
 - A C++20 compiler
-- JUCE 8.0.4
+- JUCE 8.0.15
 - Platform-specific GUI and audio development packages
 
 JUCE is fetched by CMake through `FetchContent` when it is not already
@@ -64,9 +64,7 @@ configurations. MIDI input and output are disabled.
 
 ## Assets
 
-PNG files under `Assets/` are discovered during CMake configuration and embedded
-through the `DrawdioAssets` binary-data target. Adding or removing assets
-requires rerunning CMake configuration before rebuilding.
+PNG and TTF files under `Assets/` are discovered recursively during CMake configuration and embedded through the `DrawdioAssets` binary-data target. The recursive glob covers `Assets/Sprites/*.png` and `Assets/Fonts/*.ttf`; `BinaryData` resource names strip hyphens, so for example `GeistPixelSquare` becomes `GeistPixelSquare_ttf`. `Assets/Fonts/OFL.txt` is not embedded. Adding or removing assets requires rerunning CMake configuration before rebuilding.
 
 ## Release Updater
 

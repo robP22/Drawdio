@@ -12,6 +12,8 @@ public:
     struct Snapshot
     {
         std::array<float, TotalKnobs> values{};
+        std::array<float, TotalKnobs> offsets{};
+        uint32_t mask = 0;
         uint32_t revision = 0;
     };
 

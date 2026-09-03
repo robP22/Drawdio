@@ -143,7 +143,7 @@ void SidechainEffect::processBlock(float** b, int c, int n, const float* params)
     const float shapeParam = params[1];
     const float depth = std::max(0.0f, std::min(1.0f, params[2]));
 
-    const int divIdx = juce::jlimit(0, 4, static_cast<int>(std::lround(rateParam * 4.0f)));
+    const int divIdx = juce::jlimit(0, 4, 4 - static_cast<int>(std::lround(rateParam * 4.0f)));
     const float sr = static_cast<float>(m_sampleRate);
     const float cycleSec = std::max(0.0015f, 60.0f / m_bpm * kDivisions[divIdx]);
     int cycleSamples = static_cast<int>(sr * cycleSec);

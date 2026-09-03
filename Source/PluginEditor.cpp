@@ -1,7 +1,8 @@
 #include "PluginEditor.h"
 #include "PluginProcessor.h"
-#include "GridLayout.h"
+#include "Core/EditorDesignMetrics.h"
 #include "UI/EditorLayout.h"
+#include "Resources/FontManager.h"
 
 #include <array>
 #include <limits>
@@ -22,29 +23,60 @@ juce::File getPresetsDir()
 DrawdioProcessorEditor::DrawdioProcessorEditor(DrawdioProcessor& p)
     : AudioProcessorEditor(p),
       audioProcessor(p),
+      m_processorBridge(p),
+      m_scaledAssets(m_resourceManager),
+      m_themeImpl(),
       m_theme(m_themeImpl),
-      m_woodGrainBackground(m_resourceManager),
-      m_pedalboardBackground(m_resourceManager),
-      m_pixelCanvas(m_resourceManager, m_theme),
-      m_palette(m_resourceManager, m_theme),
-      m_pedalboardGrid(p, m_resourceManager, m_theme, m_routingManager),
-      m_bottomBar(p, m_resourceManager),
-      m_syncController(p, m_pedalboardGrid, m_bottomBar,
-                       m_automationPlayer, m_automationCompiler, m_pixelCanvas)
+      m_woodGrainBackground(m_scaledAssets),
+      m_pedalboardBackground(m_scaledAssets),
+      m_pixelCanvas(m_resourceManager, m_scaledAssets, m_theme),
+      m_palette(m_resourceManager, m_scaledAssets, m_theme),
+      m_pedalboardGrid(m_processorBridge.getUiSnapshot(), m_resourceManager, m_scaledAssets, m_theme,
+                       m_routingManager,
+                       PedalboardGrid::Actions{
+                           [this](int slot, DspModuleType type) { m_processorBridge.setPedalSlot(slot, type); },
+                           [this](int slot, int knob, float start, float value)
+                           { m_processorBridge.setKnobParameter(slot, knob, start, value); },
+                           [this](int slot, int knob, bool linked)
+                           { m_processorBridge.setKnobLink(slot, knob, linked); },
+                           [this](int slot, int knob, float rMin, float rMax)
+                           { m_processorBridge.setKnobLinkRange(slot, knob, rMin, rMax); },
+                           [this](const std::vector<uint8_t>& routing)
+                           { m_processorBridge.setManualRouting(routing); }
+                       }),
+      m_bottomBar(m_scaledAssets,
+                  BottomControlBar::Actions{
+                      [this](float gain) { m_processorBridge.setInputGain(gain); },
+                      [this](float gain) { m_processorBridge.setOutputGain(gain); },
+                      [this](int slot, float gain) { m_processorBridge.setPedalGain(slot, gain); },
+                      [this](int bars) { m_processorBridge.setBarCount(bars); },
+                      [this](int section) { m_processorBridge.setSectionStart(section); }
+                  }),
+      m_pedalboardHeader(),
+      m_syncController(m_processorBridge, m_pedalboardGrid, m_bottomBar, m_pedalboardHeader,
+                       m_automationPlayer, m_automationCompiler, m_pixelCanvas, m_palette)
 {
+    FontManager::initialise();
+    m_processorBridge.onStateChanged = [this]() { m_syncController.requestSync(); };
     addAndMakeVisible(m_woodGrainBackground);
     addAndMakeVisible(m_pedalboardBackground);
     addAndMakeVisible(m_pixelCanvas);
     addAndMakeVisible(m_palette);
     addAndMakeVisible(m_pedalboardGrid);
+    addAndMakeVisible(m_pedalboardHeader);
     addAndMakeVisible(m_bottomBar);
+    m_bottomBar.setViewState(m_processorBridge.getUiSnapshot());
 
-    m_bottomBar.onManualModeToggled = [this](bool manual) {
-        if (manual)
+    m_pedalboardHeader.onModeToggle = [this]() {
+        bool next = !m_processorBridge.getUiSnapshot().manualMode;
+        m_processorBridge.setManualMode(next);
+        m_pedalboardHeader.updateModeButton(next);
+        if (next)
             enterManualMode();
         else
             exitManualMode();
     };
+    m_pedalboardHeader.onReset = [this]() { resetPedalboardState(); };
 
     m_bottomBar.onPresetSave = [this]() { savePreset(); };
     m_bottomBar.onPresetLoad = [this]() { loadPreset(); };
@@ -55,22 +87,30 @@ DrawdioProcessorEditor::DrawdioProcessorEditor(DrawdioProcessor& p)
     };
 
     m_bottomBar.getAutomationDisplay().onSectionChanged = [this](int start) {
-        audioProcessor.setSectionStart(start);
+        m_processorBridge.setSectionStart(start);
         m_automationPlayer.setSectionStartBar(start);
     };
 
     m_palette.setOnColorSelected([this](uint8_t color) {
         m_pixelCanvas.setCurrentColor(static_cast<PixelCanvasComponent::PixelColor>(color));
+        auto session = m_processorBridge.getEditorSessionState();
+        session.selectedColour = color;
+        m_processorBridge.setEditorSessionState(session);
     });
     m_palette.setOnUndo([this]() { m_pixelCanvas.undo(); });
     m_palette.setOnRedo([this]() { m_pixelCanvas.redo(); });
     m_palette.setOnClear([this]() {
-        audioProcessor.scheduleReset();
-        audioProcessor.clearParamOffsets();
+        m_processorBridge.scheduleReset();
+        m_processorBridge.clearParameterOffsets();
         m_pixelCanvas.clearCanvas();
     });
     m_palette.setOnFill([this](bool active) { m_pixelCanvas.setFillMode(active); });
-    m_palette.setOnBrushSize([this](float radius) { m_pixelCanvas.setBrushRadius(radius); });
+    m_palette.setOnBrushSize([this](float radius) {
+        m_pixelCanvas.setBrushRadius(radius);
+        auto session = m_processorBridge.getEditorSessionState();
+        session.brushSizeIndex = m_palette.getBrushSizeIndex();
+        m_processorBridge.setEditorSessionState(session);
+    });
     m_palette.setOnReboundMode([this](bool on) { m_pixelCanvas.setReboundModeEnabled(on); });
     m_palette.setOnEraser([this](bool on) {
         if (on)
@@ -80,12 +120,19 @@ DrawdioProcessorEditor::DrawdioProcessorEditor(DrawdioProcessor& p)
     m_pixelCanvas.setOnColorChanged([this](PixelCanvasComponent::PixelColor color) {
         m_palette.setSelectedColor(static_cast<uint8_t>(color));
     });
-    m_pixelCanvas.setCurrentColor(PixelCanvasComponent::PixelColor::Red);
+    const auto initialSession = m_processorBridge.getEditorSessionState();
+    m_palette.setSelectedColor(initialSession.selectedColour);
+    m_pixelCanvas.setCurrentColor(static_cast<PixelCanvasComponent::PixelColor>(initialSession.selectedColour));
+    m_palette.setBrushSizeIndex(initialSession.brushSizeIndex);
+    m_pixelCanvas.setBrushRadius(m_palette.getBrushRadius());
 
-    m_pixelCanvas.setGridData(audioProcessor.getGridData());
+    m_pixelCanvas.setGridData(m_processorBridge.getGridData(), false);
+    const auto persistedUndo = m_processorBridge.getUndoData();
+    if (!persistedUndo.empty())
+        m_pixelCanvas.applyUndoData(persistedUndo);
 
     {
-        auto knobVals = audioProcessor.getKnobValues();
+        auto knobVals = m_processorBridge.getKnobValues();
         for (int s = 0; s < PedalSlotCount; ++s)
             if (auto* pedal = m_pedalboardGrid.getPedal(s))
                 for (int k = 0; k < KnobsPerPedal; ++k)
@@ -93,30 +140,30 @@ DrawdioProcessorEditor::DrawdioProcessorEditor(DrawdioProcessor& p)
     }
 
     {
-        int bars = audioProcessor.getBarCount();
+        int bars = m_processorBridge.getBarCount();
         m_bottomBar.getAutomationDisplay().setBarCount(bars);
         m_bottomBar.updateBarsButton(bars);
         m_automationPlayer.setBarCount(bars);
     }
 
     {
-        int start = audioProcessor.getSectionStart();
+        int start = m_processorBridge.getSectionStart();
         m_bottomBar.getAutomationDisplay().setSectionStart(start);
         m_automationPlayer.setSectionStartBar(start);
     }
 
     {
-        bool manual = audioProcessor.isManualMode();
-        m_bottomBar.updateManualButton(manual);
+        bool manual = m_processorBridge.isManualMode();
+        m_pedalboardHeader.updateModeButton(manual);
     }
 
     m_pixelCanvas.setOnPenDown([this]()
     {
-        audioProcessor.notifyPenDown();
+        m_processorBridge.notifyPenDown();
     });
     m_pixelCanvas.setOnPenUp([this]()
     {
-        audioProcessor.notifyPenUp();
+        m_processorBridge.notifyPenUp();
     });
     m_pixelCanvas.setOnCanvasSnapshot([this](const auto&)
     {
@@ -124,8 +171,17 @@ DrawdioProcessorEditor::DrawdioProcessorEditor(DrawdioProcessor& p)
     });
 
 
-    setSize(GridLayout::DesignResolution::Width, GridLayout::DesignResolution::Height);
-    startTimerHz(20);
+    setResizable(true, true);
+    setResizeLimits(EditorDesignMetrics::DesignResolution::MinimumWidth,
+                    EditorDesignMetrics::DesignResolution::MinimumHeight,
+                    EditorDesignMetrics::DesignResolution::MaximumWidth,
+                    EditorDesignMetrics::DesignResolution::MaximumHeight);
+    if (auto* constrainer = getConstrainer())
+        constrainer->setFixedAspectRatio(static_cast<double>(EditorDesignMetrics::DesignResolution::Width)
+                                         / static_cast<double>(EditorDesignMetrics::DesignResolution::Height));
+
+    setSize(EditorDesignMetrics::DesignResolution::Width, EditorDesignMetrics::DesignResolution::Height);
+    startTimerHz(60);
 
     juce::MessageManager::callAsync([self = juce::Component::SafePointer<DrawdioProcessorEditor>(this)]()
     {
@@ -136,8 +192,10 @@ DrawdioProcessorEditor::DrawdioProcessorEditor(DrawdioProcessor& p)
 
 DrawdioProcessorEditor::~DrawdioProcessorEditor()
 {
-    audioProcessor.storeUndoData(m_pixelCanvas.captureUndoData());
     stopTimer();
+    m_processorBridge.onStateChanged = {};
+    m_processorBridge.detach();
+    m_processorBridge.storeUndoData(m_pixelCanvas.captureUndoData());
 }
 
 void DrawdioProcessorEditor::paint(juce::Graphics& g)
@@ -147,45 +205,53 @@ void DrawdioProcessorEditor::paint(juce::Graphics& g)
 
 void DrawdioProcessorEditor::resized()
 {
-    auto fullWindow = getLocalBounds();
-    const int bottomBarH = juce::roundToInt(fullWindow.getHeight() * GridLayout::BottomBar::HeightRatio);
-    auto topArea = fullWindow.removeFromTop(fullWindow.getHeight() - bottomBarH);
-    m_bottomBar.setBounds(fullWindow);
-    m_woodGrainBackground.setBounds(topArea);
+    m_scaledAssets.setResizeActive(true);
+    m_lastResizeTimeMs = juce::Time::getMillisecondCounterHiRes();
+    const auto layout = EditorLayout::calculate(getLocalBounds());
+    m_bottomBar.setBounds(layout.bottomBar);
+    m_woodGrainBackground.setBounds(layout.topArea);
 
-    const int pedalW  = juce::roundToInt(topArea.getWidth() * EditorLayout::PedalboardWidthRatio);
-    const int canvasW = topArea.getWidth() - pedalW;
+    m_pedalboardHeader.setBounds(layout.header);
+    const float spriteTopY = layout.pedalboardArea.getHeight() * EditorLayout::topOpaqueRatio(
+        m_resourceManager.getTexture(IResourceProvider::TextureId::PedalboardSprite));
+    m_pedalboardHeader.setButtonCenterY(spriteTopY * 0.5f);
 
-    const auto pedalboardArea = topArea.withTrimmedLeft(canvasW);
-    const auto canvasArea     = topArea.withTrimmedRight(pedalW);
-
-    m_pedalboardBackground.setBounds(pedalboardArea);
-    m_pedalboardGrid.setBounds(pedalboardArea);
-
-    int paletteH = juce::roundToInt(canvasArea.getHeight() * GridLayout::PaletteHeightRatio);
-    const int paletteInset = juce::roundToInt(canvasArea.getWidth() * GridLayout::PaletteColumnInsetRatio);
-
-    auto paletteBounds = canvasArea
-                             .withTrimmedTop(canvasArea.getHeight() - paletteH)
-                             .withTrimmedLeft(paletteInset)
-                             .withTrimmedRight(paletteInset);
-    auto pxCanvasBounds = canvasArea.withTrimmedBottom(paletteH);
-
-    const int squareSize = pxCanvasBounds.getHeight();
-    const auto pixelCanvasBounds = pxCanvasBounds.withSizeKeepingCentre(squareSize, squareSize);
-    m_pixelCanvas.setBounds(pixelCanvasBounds);
-    m_palette.setBounds(paletteBounds);
-    m_palette.setImageCenterX(pixelCanvasBounds.getCentreX() - paletteBounds.getX());
+    m_pedalboardBackground.setBounds(layout.pedalboardArea);
+    m_pedalboardGrid.setBounds(layout.pedalboardArea);
+    m_pixelCanvas.setBounds(layout.pixelCanvas);
+    m_palette.setBounds(layout.palette);
+    m_palette.setImageCenterX(layout.pixelCanvas.getCentreX() - layout.palette.getX());
 }
 
 void DrawdioProcessorEditor::triggerRecompile()
 {
     m_syncController.setAutoEnvelopeDirty();
-    audioProcessor.submitCanvasSnapshot(m_pixelCanvas.getGridData());
+    m_processorBridge.submitCanvasSnapshot(m_pixelCanvas.getGridData(), m_pixelCanvas.getDirtyRows());
+    m_pixelCanvas.clearDirtyRows();
 }
 
 void DrawdioProcessorEditor::timerCallback()
 {
+    if (m_scaledAssets.isResizeActive()
+        && juce::Time::getMillisecondCounterHiRes() - m_lastResizeTimeMs >= 100.0)
+    {
+        m_scaledAssets.setResizeActive(false);
+        m_pixelCanvas.refreshAfterResize();
+        m_pedalboardGrid.refreshAfterResize();
+        m_palette.repaint();
+        m_pedalboardHeader.repaint();
+        m_bottomBar.repaint();
+        m_pedalboardBackground.repaint();
+        m_woodGrainBackground.repaint();
+        repaint();
+    }
+
+    const bool active = m_processorBridge.isPlayHeadPlaying();
+    const bool refreshNow = active || (++m_refreshTick >= 3);
+    if (!refreshNow)
+        return;
+    m_refreshTick = 0;
+
     const bool neededBefore = m_syncController.needsRepaint();
     m_syncController.tick();
     m_bottomBar.tick();
@@ -201,38 +267,45 @@ void DrawdioProcessorEditor::timerCallback()
 
 }
 
-void DrawdioProcessorEditor::clearManualState()
-{
-    m_routingManager.clearManualRouting();
-    m_pedalboardGrid.clearEdges();
-    m_pedalboardGrid.clearInputOutputCables();
-    m_pedalboardGrid.rebuildCableCache();
-}
-
 void DrawdioProcessorEditor::enterManualMode()
 {
-    clearManualState();
+    auto seed = m_processorBridge.getManualRouting();
+    if (seed.empty())
+        seed = m_processorBridge.getLastConfigSync().routingSlotOrder;
+    if (!seed.empty())
+        m_processorBridge.setManualRouting(seed);
     m_syncController.clearRoutingCache();
-    audioProcessor.setManualRouting({});
 }
 
 void DrawdioProcessorEditor::exitManualMode()
 {
-    clearManualState();
+    m_processorBridge.clearParameterOffsets();
     m_syncController.clearRoutingCache();
-    if (auto* config = audioProcessor.getCurrentConfig())
-        m_pedalboardGrid.updateRouting(config->routingSlotOrder);
+}
+
+void DrawdioProcessorEditor::resetPedalboardState()
+{
+    for (int slot = 0; slot < PedalSlotCount; ++slot)
+        m_processorBridge.setPedalSlot(slot, DspModuleType::BYPASS);
+    m_processorBridge.clearParameterOffsets();
+    m_processorBridge.resetParameterDefaults();
+    m_processorBridge.setManualRouting({});
+    m_syncController.clearRoutingCache();
 }
 
 void DrawdioProcessorEditor::savePreset()
 {
+    juce::Component::SafePointer<DrawdioProcessorEditor> safeThis(this);
     m_fileChooser = std::make_unique<juce::FileChooser>(
         "Save Drawdio Preset",
         getPresetsDir().getChildFile("Untitled.drawdio"),
         "*.drawdio");
     m_fileChooser->launchAsync(juce::FileBrowserComponent::saveMode,
-        [this](const juce::FileChooser& fc)
+        [safeThis](const juce::FileChooser& fc)
         {
+            if (safeThis == nullptr)
+                return;
+            auto& editor = *safeThis;
             auto file = fc.getResult();
             if (file == juce::File{})
                 return;
@@ -241,7 +314,7 @@ void DrawdioProcessorEditor::savePreset()
                 file = file.withFileExtension(".drawdio");
 
             juce::MemoryBlock state;
-            audioProcessor.getStateInformation(state);
+            editor.m_processorBridge.getPresetInformation(state);
 
             if (auto stream = std::unique_ptr<juce::FileOutputStream>(file.createOutputStream()))
             {
@@ -253,13 +326,17 @@ void DrawdioProcessorEditor::savePreset()
 
 void DrawdioProcessorEditor::loadPreset()
 {
+    juce::Component::SafePointer<DrawdioProcessorEditor> safeThis(this);
     m_fileChooser = std::make_unique<juce::FileChooser>(
         "Load Drawdio Preset",
         getPresetsDir(),
         "*");
     m_fileChooser->launchAsync(juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
-        [this](const juce::FileChooser& fc)
+        [safeThis](const juce::FileChooser& fc)
         {
+            if (safeThis == nullptr)
+                return;
+            auto& editor = *safeThis;
             auto file = fc.getResult();
             if (file == juce::File{})
                 return;
@@ -268,20 +345,21 @@ void DrawdioProcessorEditor::loadPreset()
             if (!file.loadFileAsData(state))
                 return;
 
-            audioProcessor.setStateInformation(state.getData(), static_cast<int>(state.getSize()));
+            if (!editor.m_processorBridge.setPresetInformation(state.getData(), static_cast<int>(state.getSize())))
+                return;
 
-            m_pixelCanvas.setGridData(audioProcessor.getGridData());
-            m_syncController.setAutoEnvelopeDirty();
-            m_syncController.clearRoutingCache();
+            editor.m_pixelCanvas.setGridData(editor.m_processorBridge.getGridData());
+            editor.m_syncController.setAutoEnvelopeDirty();
+            editor.m_syncController.clearRoutingCache();
 
-            auto knobVals = audioProcessor.getKnobValues();
+            auto knobVals = editor.m_processorBridge.getKnobValues();
             for (int s = 0; s < PedalSlotCount; ++s)
-                if (auto* pedal = m_pedalboardGrid.getPedal(s))
+                if (auto* pedal = editor.m_pedalboardGrid.getPedal(s))
                     for (int k = 0; k < KnobsPerPedal; ++k)
                         pedal->setKnobValue(k, knobVals[static_cast<size_t>(s * KnobsPerPedal + k)]);
 
-            m_pedalboardGrid.syncPedals();
-            m_pedalboardGrid.repaint();
+            editor.m_pedalboardGrid.syncPedals();
+            editor.m_pedalboardGrid.repaint();
         });
 }
 
@@ -398,13 +476,17 @@ void ditherImageToGrid(const juce::Image& source, std::array<uint8_t, TotalCells
 
 void DrawdioProcessorEditor::importImage()
 {
+    juce::Component::SafePointer<DrawdioProcessorEditor> safeThis(this);
     m_fileChooser = std::make_unique<juce::FileChooser>(
         "Import Image to Canvas",
         getPresetsDir(),
         "*");
     m_fileChooser->launchAsync(juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
-        [this](const juce::FileChooser& fc)
+        [safeThis](const juce::FileChooser& fc)
         {
+            if (safeThis == nullptr)
+                return;
+            auto& editor = *safeThis;
             auto file = fc.getResult();
             if (file == juce::File{})
                 return;
@@ -418,8 +500,11 @@ void DrawdioProcessorEditor::importImage()
             std::array<uint8_t, TotalCells> grid{};
             ditherImageToGrid(scaled, grid);
 
-            audioProcessor.submitCanvasSnapshot(grid);
-            m_pixelCanvas.setGridData(grid);
-            m_syncController.setAutoEnvelopeDirty();
+            editor.m_processorBridge.submitCanvasSnapshot(grid);
+            editor.m_pixelCanvas.setGridData(grid);
+            editor.m_syncController.setAutoEnvelopeDirty();
+            editor.m_syncController.clearRoutingCache();
+            editor.m_pedalboardGrid.syncPedals();
+            editor.m_pedalboardGrid.repaint();
         });
 }

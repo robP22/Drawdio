@@ -34,26 +34,26 @@ Tremolo Shape (3: sine/triangle/square). The mix knob never snaps.
 | 1 | `WAVESHAPER_DISTORTION` | Wave Shaper | Mix / - / Drive / - | 0 |
 | 2 | `CHORUS` | Chorus | Mix / Depth / - / Rate | 0 |
 | 3 | `MULTI_MODE_FILTER` | Multi-Mode Filter | Mode / Mix / Cutoff / - | 1 |
-| 4 | `PITCH_SHIFTER_GRANULAR` | Pitch Shifter | Mix / - / Pitch / - | 0 |
+| 4 | `PITCH_SHIFTER` | Pitch Shifter | Mix / - / Pitch / - | 0 |
 | 5 | `ENVELOPE_VCA_COMPRESSOR` | VCA Compressor | Attack / Mix / Thresh / Level | 1 |
-| 6 | `GLITCH_STUTTER` | Glitch Stutter | Intens / Mix / - / - | 1 |
-| 7 | `DIFFUSED_DELAY_NETWORK` | Diffused Reverb | Mix / - / - / Decay | 0 |
+| 6 | `GLITCH_STUTTER` | Glitch Stutter | Intens / Mix / Random / Smooth | 1 |
+| 7 | `DIFFUSED_DELAY_NETWORK` | Diffused Reverb | Mix / Size / - / Decay | 0 |
 | 8 | `MATHEMATICAL_WAVEFOLDER` | Wave Folder | Mix / Fold / - / - | 0 |
 | 9 | `FORMANT_VOCAL_SHIFTER` | Formant Shifter | Mix / Shift / Formant / Q | 0 |
 | 10 | `RETIME` | Re-Time | Mix / Time / Bars / Shift | 0 |
 | 11 | `SIMPLE_DELAY` | Delay | Mix / Time / Feed / Damp | 0 |
-| 12 | `PLATE_REVERB` | Plate Reverb | Mix / - / Decay / - | 0 |
+| 12 | `PLATE_REVERB` | Plate Reverb | Mix / Size / Decay / - | 0 |
 | 13 | `SIDECHAIN` | Sidechain | Rate / Shape / Depth / Mix | 3 |
-| 14 | `GRANULAR_DELAY` | Granular Delay | Mix / Spread / Size / Rate | 0 |
+| 14 | `GRANULAR_DELAY` | Granular Delay | Mix / Spread / Size / Delay | 0 |
 | 15 | `COMB_RESONATOR` | Comb Resonator | Freq / Mix / - / - | 1 |
-| 16 | `SPECTRAL_FREEZE` | Time Freeze | Mix / Freeze / - / - | 0 |
+| 16 | `SPECTRAL_FREEZE` | Time Freeze | Freeze / Mix / Offset / - | 1 |
 | 17 | `FREQ_SHIFTER` | Frequency Shifter | Shift / Mix / - / - | 1 |
-| 18 | `REVERSE_BUFFER` | Reverse Buffer | Mix / - / - / Density | 0 |
+| 18 | `REVERSE_BUFFER` | Reverse Buffer | Mix / - / Smooth / Density | 0 |
 | 19 | `GRAIN_SCRUBBER` | Grain Scrubber | Position / Mix / - / Rate | 1 |
 | 20 | `SPECTRAL_FILTER` | Resonant Filter | Width / Center / Q / Mix | 3 |
 | 21 | `CONVOLUTION_SPACE` | Convolution Space | Mix / Size / Width / Damp | 0 |
 | 22 | `HP_LP_FILTER` | HP/LP Filter | Mix / High / Low / Reso | 0 |
-| 23 | `RESAMPLE_BITCRUSH` | Resampler | Mix / Rate / Bits / Filter | 0 |
+| 23 | `BITCRUSHER` | Bitcrusher | Mix / Rate / Bits / Filter | 0 |
 | 24 | `TREMOLO` | Tremolo | Mix / Rate / Depth / Shape | 0 |
 | 25 | `FLANGER` | Flanger | Mix / Rate / Depth / Feed | 0 |
 
@@ -118,12 +118,20 @@ damping, and `tanh`.
 ring and copies the last `loopLength` samples into a dedicated freeze buffer at
 sync (transport start/jump, loop-length change, or loop-end wrap). Playback
 reads the freeze buffer at a variable speed, so the played loop is never
-overwritten by the advancing record head. Time (`params[1]`) selects the
+overwritten by the advancing record head. On a cold transport start, Re-Time
+passes the input through until enough current-session history exists for a valid
+capture. Time (`params[1]`) selects the
 playback ratio from 0.25x / 0.5x / 0.75x / 1x / 2x (snapped to five detents;
 2x is double time), Bars (`params[2]`) selects a half / 1 / 2 / 4-bar capture
 (snapped to four detents, quantized from BPM/PPQ transport), and Shift
 (`params[3]`) offsets the playback start within the captured loop. The read
-uses linear interpolation plus per-channel smoothing.
+uses linear interpolation; recaptures (timing changes, transport sync, loop
+wrap, or host seek) crossfade from the last output sample into the new capture
+over 40 ms (a held-value cosine blend — no old-loop seam is ever read, so loop
+switches are click-free). When transport stops, the captured output releases to
+silence over 50 ms instead of continuing to loop. A conservative input-silence
+timeout also releases the loop if the host remains marked playing without
+providing audio.
 
 ### Granular Delay
 
@@ -139,10 +147,32 @@ rates where the read head is slower than the write head.
 
 ### Granular Pitch
 
-`PITCH_SHIFTER_GRANULAR` uses the same dual-grain engine as Granular Delay with
-an approximately 0.11-second grain and 1-second buffer. Pitch/rate is read from
-`params[2]` and maps to 0.5x-2x. It is a full-wet effect; the remaining displayed
-positions are unwired.
+`PITCH_SHIFTER` (slot 4, formerly the granular pitch variant) is a classic two-read crossfade pitch shifter (Eventide
+H910/H3000-class), not a granular engine. Per-channel 1s delay line (allocated in
+`prepare`); the primary read advances at `speed = exp2(pitch·2−1)` (0.5x–2x,
+±12 semitones, semitone-snapped in 25 detents) with Catmull-Rom interpolation.
+300ms initial delay. Two fixed latency windows keep the read inside the ring:
+at speed > 1 the gap-to-write-head shrinks and a 120ms equal-power raised-cosine
+crossfade to a secondary read 120ms behind triggers below 180ms (gap cycles
+180–300ms); at speed < 1 the gap grows and the mirror trigger fires above 400ms,
+jumping the read 120ms toward the write head (gap cycles 280–400ms). Latency is
+bounded to ≤400ms in both directions; the read never laps the write head at any
+speed. Back-to-back fade density at octave shifts (~4–8 fades/s) is the accepted
+classic dual-read characteristic; mild comb during fades on dense material is
+inherent to the two-head design (a multi-head or granular-OLA upgrade would be
+the "transparent" option). Unity pitch is a clean fixed-delay copy.
+
+### Glitch Stutter
+
+`GLITCH_STUTTER` captures a slice of the 1s ring into a per-channel freeze
+buffer and repeats it with a trailing gate. Intensity (`params[0]`) maps
+inverted: low = one 0.5s repeat, high = five 0.05s repeats (dense stutter).
+Random (`params[2]`) pulls the capture source from a random window of the ring
+(0 = always the most recent window; stereo-coherent, one draw per capture).
+Smooth (`params[3]`) maps the entry/loop-wrap/exit/gate fade length
+exponentially from ~2ms to ~80ms, clamped to a quarter of the slice length.
+All fades read the frozen slice, so repeats replay the exact captured material;
+the exit fades cleanly to silence (no live bleed-through).
 
 ### Grain Scrubber
 
@@ -157,11 +187,13 @@ output near the top of the Position range.
 ### Reverse Buffer
 
 `REVERSE_BUFFER` records and plays back per-channel slices in reverse. Density
-controls slice duration and repeat count through `params[3]`; mix is external.
-Slice length is bounded to the prepared buffer and entry playback uses a
-32-sample cosine transition from the captured dry signal. Repeat transitions
-re-capture the crossfade source from the last played sample, so every splice is
-click-free.
+controls slice duration and repeat count through `params[3]` (low = sparse:
+long slices, single playback; high = dense: short slices, multiple repeats);
+mix is external. Smooth (`params[2]`) maps the entry/repeat/exit crossfade
+length exponentially from ~2ms (percussive) to ~80ms (swell), clamped to a
+quarter of the slice length. Entry playback transitions from the captured dry
+signal; repeat transitions re-capture the crossfade source from the last played
+sample, so every splice stays click-free.
 
 ## Filters and Pitch
 
@@ -186,10 +218,12 @@ filter state.
 ### Time Freeze
 
 `SPECTRAL_FREEZE` continuously records a 1.5-second per-channel buffer and,
-when Freeze is enabled through `params[1]`, loops a one-second window at a
-0.25x-2x pitch ratio. Mix is external at `params[0]`. Entry, exit, and loop
-transitions use short cosine/raised-cosine fades. The freeze path should be
-treated as a time-domain freeze, not an FFT spectral freeze.
+when Freeze is enabled through `params[0]`, loops a one-second window at
+natural pitch (1.0x). Mix is external at `params[1]`. Offset (`params[2]`)
+sets the playback start inside the captured loop (`readPos = offset *
+freezeLen` at each freeze) with a short entry/exit/offset crossfade that
+avoids clicks. The path should be treated as a time-domain freeze, not an FFT
+spectral freeze.
 
 ### Resonant Filter
 
@@ -202,11 +236,11 @@ automation changes do not step at block boundaries.
 
 ### Frequency Shifter
 
-`FREQ_SHIFTER` uses two three-section allpass cascades to approximate a Hilbert
-quadrature pair, then performs single-sideband frequency shifting. Shift is read
-from `params[0]` with a quadratic map to 0-2 kHz. The allpass coefficients are
-stable, but quadrature accuracy is limited outside the coefficient design band;
-image-sideband leakage is expected near the extreme low and high frequencies.
+`FREQ_SHIFTER` uses two four-section allpass cascades (the classic 8-section
+90-degree phase splitter, coefficients in the `(z^-1 - a)/(1 - a z^-1)` form)
+to approximate a Hilbert quadrature pair, then performs single-sideband
+frequency shifting with a continuous phase accumulator. Shift is read from
+`params[0]` with a linear 0-2 kHz map. Mix is external at `params[1]`.
 
 ## Reverb
 
@@ -226,13 +260,24 @@ mixing matrix. The matrix is stable at the documented parameter ranges.
 
 ### Convolution Space
 
-`CONVOLUTION_SPACE` uses a seeded synthetic exponential-decay impulse response
-and overlap-add FFT convolution. The FFT order is 11, giving a 2048-point FFT;
-the IR is clamped between 16 and 1024 samples. Sixteen damped frequency-domain
-variants are prepared before publication; Damp selects among them. For a host
-block where `n + irLen > 2048`, the implementation uses a brute-force fallback;
-normal blocks use FFT sub-block processing. Mix is external at `params[0]`;
-Size and Width are currently unwired, and Damp is read from `params[3]`.
+`CONVOLUTION_SPACE` is a uniform partitioned convolution reverb. At prepare
+time a seeded synthetic IR is generated (direct impulse + three early
+reflections + an exponentially-decaying diffusive tail), split into 512-sample
+partitions, and each partition's spectrum is FFT'd once (all prepare-time,
+~0.8s tail, 69 partitions at 44.1 kHz). The tail is a one-pole lowpassed noise
+whose cutoff rolls 8 kHz to 1 kHz across the IR (a correlated, darkening wash
+rather than raw white noise, which convolved to a static-like haze); the fixed
+envelope is mild (-7 dB over the IR) so the Size knob's RT60 scale governs the
+decay. Per block the input is FFT'd once and each active partition (decay
+scale > 1e-4, so CPU scales with the decay) is multiplied by its spectrum,
+inverse-FFT'd, and cascade overlap-added with a piecewise-linear decay ramp.
+All four knobs are wired: Mix is external at `params[0]`; Size (`params[1]`)
+maps the tail RT60 from 0.15 s to 1.5 s via per-partition decay scales; Width
+(`params[2]`) decorrelates the stereo tails by blending a second
+(different-seed) IR spectrum set into the right channel (width 0 = identical
+tails); Damp (`params[3]`) is a biquad lowpass on the input (20 kHz to
+1.2 kHz, per-sample coefficient interpolation). No allocations on the audio
+thread.
 
 ### HP/LP Filter
 
@@ -263,7 +308,8 @@ bounded, and gain is clamped non-negative.
 
 `SIDECHAIN` (slot 13, formerly Rhythm Gate) is a volume-envelope shaper with a
 shared phase across channels. Rate (`params[0]`) snaps to five beat divisions:
-1/6, 1/4, 1/3, 1/2, and 1 beat, converted to cycle length from the transport
+1/6, 1/4, 1/3, 1/2, and 1 beat (low knob = 1 beat, high knob = 1/6 beat),
+converted to cycle length from the transport
 BPM (default 120 until the host supplies transport). Shape morphs between
 sine/triangle tremolo, an exponential pump, and a variable-duty square gate -
 this is the attack/decay character control. Depth controls the gain range.
@@ -273,7 +319,7 @@ when the cycle length changes and gain is clamped to [0, 1].
 
 ### Resampler
 
-`RESAMPLE_BITCRUSH` applies a two-pole pre-sample-and-hold filter, sample-rate
+`BITCRUSHER` (display name Bitcrusher) applies a two-pole pre-sample-and-hold filter, sample-rate
 reduction, bit quantization with TPDF dither, and DC blocking. Rate (`params[1]`)
 maps exponentially from the host rate toward 500 Hz, Bits (`params[2]`) selects
 2-16 bits, and Filter (`params[3]`) sets the anti-alias biquad cutoff. Dither

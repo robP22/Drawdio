@@ -29,7 +29,7 @@ private:
         float xfadeFrom = 0.0f;
         int exitFadePos = 32;
         float exitFadeFrom = 0.0f;
-        static constexpr int kXfadeLen = 32;
     };
     std::vector<RevChannel> m_channels;
+    int m_xfadeLen = 32;
 };

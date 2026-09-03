@@ -2,6 +2,7 @@
 #include "Compile/CompilerEngine.h"
 #include "Effects/DspEffect.h"
 #include <chrono>
+#include <utility>
 
 
 CompilerThread::CompilerThread()
@@ -16,13 +17,17 @@ CompilerThread::~CompilerThread()
 
 void CompilerThread::start(CanvasMessageQueue& queue, PenDebouncer& debouncer)
 {
+    std::lock_guard<std::mutex> lock(m_stopMutex);
     if (m_running.load()) return;
+    if (!m_graphAnalyzer)
+        m_graphAnalyzer = std::make_unique<CanvasGraphAnalyzer>();
     m_running.store(true);
     m_thread = std::thread(&CompilerThread::threadFunc, this, std::ref(queue), std::ref(debouncer));
 }
 
 void CompilerThread::stop()
 {
+    std::lock_guard<std::mutex> lock(m_stopMutex);
     m_running.store(false);
     m_cv.notify_one();
     if (m_thread.joinable())
@@ -35,22 +40,10 @@ void CompilerThread::notify()
     m_cv.notify_one();
 }
 
-void CompilerThread::setPedalSlots(const std::vector<DspModuleType>& slots)
+void CompilerThread::setResultAvailableCallback(std::function<void()> callback)
 {
     std::lock_guard<std::mutex> lock(m_configMutex);
-    m_pedalSlots = slots;
-}
-
-void CompilerThread::setManualRouting(const std::vector<uint8_t>& routing)
-{
-    std::lock_guard<std::mutex> lock(m_configMutex);
-    m_manualRouting = routing;
-}
-
-void CompilerThread::setExistingParameters(const std::vector<ParameterDescriptor>& params)
-{
-    std::lock_guard<std::mutex> lock(m_configMutex);
-    m_existingParams = params;
+    m_resultAvailableCallback = std::move(callback);
 }
 
 bool CompilerThread::hasCompiledResult() const noexcept
@@ -80,22 +73,36 @@ void CompilerThread::threadFunc(CanvasMessageQueue& queue, PenDebouncer& debounc
         if (!debouncer.isIdle())
             continue;
 
-        const auto* gridSnapshot = queue.popSnapshot();
-        if (!gridSnapshot)
+        const auto* message = queue.popMessage();
+        if (!message)
             continue;
 
-        std::vector<DspModuleType> slots;
-        std::vector<uint8_t> manualRouting;
-        std::vector<ParameterDescriptor> existingParams;
+        const uint32_t sourceRevision = message->revision;
+        if (sourceRevision != 0 && sourceRevision != queue.latestRevision())
+            continue;
+
+        std::vector<DspModuleType> slots(message->pedalSlots.begin(),
+                                         message->pedalSlots.begin() + message->pedalSlots.size());
+        std::vector<uint8_t> manualRouting(message->manualRouting.begin(),
+                                           message->manualRouting.begin() + message->manualRoutingSize);
+        std::vector<ParameterDescriptor> existingParams(message->existingParams.begin(),
+                                                         message->existingParams.begin() + message->existingParamsSize);
+
+        auto result = compileCanvas(*m_graphAnalyzer, message->gridSnapshot,
+                                    message->dirtyRows, message->revision,
+                                    slots, manualRouting, existingParams);
+        result.sourceRevision = sourceRevision;
+        if (sourceRevision != 0 && sourceRevision != queue.latestRevision())
+            continue;
+
+        delete m_slot.exchange(new PedalAssetPayload(std::move(result)),
+                               std::memory_order_acq_rel);
+        std::function<void()> callback;
         {
             std::lock_guard<std::mutex> lock(m_configMutex);
-            slots = m_pedalSlots;
-            manualRouting = m_manualRouting;
-            existingParams = m_existingParams;
+            callback = m_resultAvailableCallback;
         }
-
-        delete m_slot.exchange(new PedalAssetPayload(
-                                   compileCanvas(*gridSnapshot, slots, manualRouting, existingParams)),
-                               std::memory_order_acq_rel);
+        if (callback)
+            callback();
     }
 }

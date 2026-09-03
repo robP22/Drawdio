@@ -26,5 +26,7 @@ private:
     std::vector<BitcrusherChannel> m_channels;
     float m_lpB0 = 1.0f, m_lpB1 = 0.0f, m_lpB2 = 0.0f;
     float m_lpA1 = 0.0f, m_lpA2 = 0.0f;
+    float m_lpB0Prev = 1.0f, m_lpB1Prev = 0.0f, m_lpB2Prev = 0.0f;
+    float m_lpA1Prev = 0.0f, m_lpA2Prev = 0.0f;
     float m_prevCutoff = -1.0f;
 };
