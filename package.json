@@ -1,0 +1,19 @@
+{
+  "name": "drawdio",
+  "version": "0.2.3",
+  "private": true,
+  "description": "Visual audio effects pedalboard driven by canvas drawings.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/robP22/Drawdio.git"
+  },
+  "license": "UNLICENSED",
+  "engines": {
+    "cmake": ">=3.24",
+    "cxx": "c++20"
+  },
+  "dependencies": {
+    "juce-framework": "github:juce-framework/JUCE#8.0.15",
+    "catch2": "github:catchorg/Catch2#v3.5.2"
+  }
+}
