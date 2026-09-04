@@ -350,6 +350,8 @@ void PedalComponent::onKnobRightClick(int knobIdx)
             if (safeThis == nullptr)
                 return;
             safeThis->m_linked[static_cast<size_t>(knobIdx)] = true;
+            if (safeThis->m_knobs[static_cast<size_t>(knobIdx)])
+                safeThis->m_knobs[static_cast<size_t>(knobIdx)]->setLinked(true);
             if (safeThis->m_actions.setLink) safeThis->m_actions.setLink(safeThis->m_slotIndex, knobIdx, true);
             safeThis->repaint();
         });
@@ -359,6 +361,8 @@ void PedalComponent::onKnobRightClick(int knobIdx)
             if (safeThis == nullptr)
                 return;
             safeThis->m_linked[static_cast<size_t>(knobIdx)] = false;
+            if (safeThis->m_knobs[static_cast<size_t>(knobIdx)])
+                safeThis->m_knobs[static_cast<size_t>(knobIdx)]->setLinked(false);
             if (safeThis->m_actions.setLink) safeThis->m_actions.setLink(safeThis->m_slotIndex, knobIdx, false);
             safeThis->repaint();
         });

@@ -23,7 +23,7 @@ scale changes everything through the same ratios.
    scale with the window; use `EditorLayout::scaledCap(usable, ratio, designPx,
    scale)` (e.g. bottom-bar button caps) or a height-derived ratio
    (`EditorLayout::scaleFromHeight`). Examples: `JackHitMap` radius, DAW jack
-   height (`CableJackHeightRatio`), bottom-bar caps, label fonts.
+   height (`Cable::JackHeightRatio * DawJackScale`, top-flush via `dawJackHeight()*0.5`), bottom-bar caps, label fonts.
 4. **Sprite alignment only through `EditorLayout`.** Sprite opaque-edge scans
    (`topOpaqueRatio` / `bottomOpaqueRatio`) stay in `UI/EditorLayout.h`; a
    component scans its own sprite (e.g. `ColorPalette` scans
@@ -35,6 +35,7 @@ scale changes everything through the same ratios.
 | Setter | Meaning | Consumer computes |
 |---|---|---|
 | `ColorPalette::setImageCenterX(x)` | Canvas centre X (palette-local) | Palette texture horizontal placement |
+| `ColorPalette::setPedalBottomRatio(r)` + `setContentTop(ratio, px)` | Pedal bottom and canvas content top (semantic ratios) | Palette/canvas placement scaled from height (replaces prior `setImageBottomShift` / `setContentCenterOffset` / `setCanvasTopOffset`) |
 
 The editor owns the column layout; each component owns the formulas that map
 its own sprite and the semantic values into pixels. No other cross-component
@@ -47,13 +48,12 @@ Constants that compensate sprite padding or visual centring; keep them next to
 their use and document the intent:
 
 - `KnobCenterYShiftRatio` (-0.02) — knob rows sit slightly above nominal so
-  they read centred on the pedal body mask.
-- `CanvasCenterXShiftRatio` / `CanvasCenterYShiftRatio` — canvas nudged toward
-  the texture content centre, not the raw edges.
+they read centred on the pedal body mask.
+- `PaletteHeightRatio` / `PaletteColumnInsetRatio` / `Palette Blob*` — palette content tuned against the
+palette sprite's own padding.
 - `VerticalGroupOffsetRatio` — pedal group pushed down against the sprite's
-  taller bottom padding.
-- `PaletteHeightRatio`, `PaletteBlob*` — palette content tuned against the
-  palette sprite's own padding.
+taller bottom padding.
+- `DawJackScale` (0.9) — preserves the 10% `input_jack.png` reduction while keeping `dawEntryPos/dawExitPos.y = dawJackHeight()*0.5` top-flush; `dawJackHeight() = H * Cable::JackHeightRatio * DawJackScale` scales with `PedalboardGrid` height (verified: `H 585/780/975 -> 9.45/12.6/15.75`, gap `0` at all scales).
 
 ## Per-component anchors (reference)
 

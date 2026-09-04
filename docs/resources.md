@@ -14,6 +14,7 @@ binary data and loaded by `ResourceManager` and `FontManager`.
 | `abstract_textures.png` | Abstract UI textures - embedded, not yet decoded (reserved for future feature) |
 | `wood_roundover_alpha_fixed.png` | Wood background/roundover artwork |
 | `pedalboard_final.png` | Pedalboard artwork |
+| `bottomcontrolbar.png` | Bottom control bar artwork (`BottomControlBarBg`) |
 | `pedalenclosure_final.png` | Pedal enclosure artwork |
 | `input_jack.png` | Input/output jack artwork |
 | `ledonoff.png` | LED sprite sheet |

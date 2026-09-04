@@ -31,6 +31,7 @@ public:
     void tick();
     void setViewState(const EditorUiSnapshot& state);
     void setPedalPeak(int slot, float peak);
+    void setManualMode(bool manual);
     std::function<void()> onPresetSave;
     std::function<void()> onPresetLoad;
     std::function<void()> onPresetImport;

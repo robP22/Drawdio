@@ -18,3 +18,5 @@ constexpr float PedalGainMax = 1.9952623f;
 constexpr size_t MaxReverbDelayMs = 5000;
 constexpr double MaxGranularDurationSec = 10.0;
 constexpr size_t MaxSimpleDelaySec = 2;
+
+constexpr int EnvelopeSliceCount = 128;

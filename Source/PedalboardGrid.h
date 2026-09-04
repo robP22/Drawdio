@@ -67,16 +67,19 @@ public:
     }
 
 private:
+    float dawJackHeight() const
+    {
+        return static_cast<float>(getHeight()) * EditorDesignMetrics::Cable::JackHeightRatio * EditorDesignMetrics::Cable::DawJackScale;
+    }
+
     juce::Point<float> dawEntryPos() const
     {
-        return {static_cast<float>(getWidth()) * 0.05f,
-                static_cast<float>(getHeight()) * EditorDesignMetrics::Cable::JackHeightRatio * 0.5f};
+        return {static_cast<float>(getWidth()) * 0.05f, dawJackHeight() * 0.5f};
     }
 
     juce::Point<float> dawExitPos() const
     {
-        return {static_cast<float>(getWidth()) * 0.95f,
-                static_cast<float>(getHeight()) * EditorDesignMetrics::Cable::JackHeightRatio * 0.5f};
+        return {static_cast<float>(getWidth()) * 0.95f, dawJackHeight() * 0.5f};
     }
 
     void rebuildConnectionCables();

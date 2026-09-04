@@ -1,5 +1,6 @@
 #pragma once
 #include <JuceHeader.h>
+#include "Core/DrawdioConstants.h"
 #include "State/AutomationEnvelope.h"
 
 class AutomationDisplay : public juce::Component
@@ -27,10 +28,15 @@ public:
     void resized() override;
     void paint(juce::Graphics& g) override;
     void mouseDown(const juce::MouseEvent&) override;
+    void mouseDrag(const juce::MouseEvent& e) override;
+    void mouseUp(const juce::MouseEvent& e) override;
     void tick() { if (m_needsRepaint) { repaint(); m_needsRepaint = false; } }
 
     std::function<void(int)> onBarCountChanged;
     std::function<void(int)> onSectionChanged;
+    std::function<void(int, float)> onEnvelopeEdit;
+
+    void setManualMode(bool manual) { m_manualMode = manual; m_needsRepaint = true; }
 
 private:
     AutomationEnvelope m_envelope;
@@ -38,4 +44,9 @@ private:
     int m_activeBars = 1;
     int m_sectionStartBar = 0;
     bool m_needsRepaint = false;
+    bool m_manualMode = false;
+    bool m_dragging = false;
+    int m_grabbedSlice = -1;
+    float m_prevX = 0.0f;
+    float m_prevY = 0.0f;
 };

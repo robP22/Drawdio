@@ -74,15 +74,15 @@ void CableRenderer::drawGrabbedCable(juce::Graphics& g,
 }
 
 void CableRenderer::drawInputJack(juce::Graphics& g, juce::Point<float> entryPos,
-                                   const juce::Path& path, bool drawPath) const
+                                   const juce::Path& path, bool drawPath, float jackH) const
 {
-    drawJack(g, entryPos, path, true, drawPath);
+    drawJack(g, entryPos, path, true, drawPath, jackH);
 }
 
 void CableRenderer::drawOutputJack(juce::Graphics& g, juce::Point<float> exitPos,
-                                    const juce::Path& path, bool drawPath) const
+                                    const juce::Path& path, bool drawPath, float jackH) const
 {
-    drawJack(g, exitPos, path, false, drawPath);
+    drawJack(g, exitPos, path, false, drawPath, jackH);
 }
 
 void CableRenderer::drawJackHighlight(juce::Graphics& g, juce::Point<float> position) const
@@ -97,9 +97,8 @@ void CableRenderer::drawJackHighlight(juce::Graphics& g, juce::Point<float> posi
 }
 
 void CableRenderer::drawJack(juce::Graphics& g, juce::Point<float> position,
-                              const juce::Path& path, bool isInput, bool drawPath) const
+                              const juce::Path& path, bool isInput, bool drawPath, float jackH) const
 {
-    static constexpr float jackH = 14.0f;
     float jackW = jackH;
 
     if (drawPath && !path.isEmpty())

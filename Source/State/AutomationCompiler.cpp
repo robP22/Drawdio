@@ -6,7 +6,7 @@ AutomationEnvelope AutomationCompiler::compile(
 {
     AutomationEnvelope envelope;
 
-    constexpr int numSlices = 64;
+    constexpr int numSlices = EnvelopeSliceCount;
     const int colsPerSlice = GridSize / numSlices;
 
     for (int slice = 0; slice < numSlices; ++slice)

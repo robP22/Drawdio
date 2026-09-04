@@ -5,6 +5,7 @@
 
 #include "UI/EditorState.h"
 #include "Core/Contracts/IConfigConsumer.h"
+#include "State/AutomationEnvelope.h"
 
 class DrawdioProcessor;
 
@@ -75,6 +76,12 @@ public:
     int getBarCount() const;
     int getSectionStart() const;
     void resetPedalPeaks();
+
+    void setManualEnvelopeSlice(int slice, float value);
+    float getManualEnvelopeSlice(int slice) const;
+    AutomationEnvelope getManualEnvelope() const;
+    bool hasManualEnvelope() const;
+    void setLinkRangeEditEnabled(bool enabled);
 
 private:
     void changeListenerCallback(juce::ChangeBroadcaster*) override;

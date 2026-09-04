@@ -128,18 +128,117 @@ void AutomationDisplay::paint(juce::Graphics& g)
 
 void AutomationDisplay::mouseDown(const juce::MouseEvent& e)
 {
+    if (e.mods.isRightButtonDown())
+    {
+        auto rightBounds = getLocalBounds().toFloat();
+        auto rightGraphArea = rightBounds.reduced(8.0f, 4.0f);
+        if (!rightGraphArea.contains(e.position))
+            return;
+
+        int bar = static_cast<int>((e.position.x - rightGraphArea.getX()) / rightGraphArea.getWidth() * 8.0f);
+        bar = std::max(0, std::min(bar, 8 - m_activeBars));
+        if (bar != m_sectionStartBar)
+        {
+            m_sectionStartBar = bar;
+            m_needsRepaint = true;
+            if (onSectionChanged)
+                onSectionChanged(bar);
+        }
+        return;
+    }
+
     auto bounds = getLocalBounds().toFloat();
     auto graphArea = bounds.reduced(8.0f, 4.0f);
     if (!graphArea.contains(e.position))
         return;
 
-    int bar = static_cast<int>((e.position.x - graphArea.getX()) / graphArea.getWidth() * 8.0f);
-    bar = std::max(0, std::min(bar, 8 - m_activeBars));
-    if (bar != m_sectionStartBar)
+    if (m_manualMode && onEnvelopeEdit)
     {
-        m_sectionStartBar = bar;
-        m_needsRepaint = true;
-        if (onSectionChanged)
-            onSectionChanged(bar);
+        float closestDist = std::numeric_limits<float>::max();
+        int closest = -1;
+        for (int slice = 0; slice < EnvelopeSliceCount; ++slice)
+        {
+            float sliceX = graphArea.getX() + (static_cast<float>(slice) + 0.5f)
+                                              * (graphArea.getWidth() / static_cast<float>(EnvelopeSliceCount));
+            float dist = std::abs(sliceX - e.position.x);
+            if (dist < closestDist)
+            {
+                closestDist = dist;
+                closest = slice;
+            }
+        }
+        if (closest >= 0)
+        {
+            m_grabbedSlice = closest;
+            m_dragging = true;
+            m_prevX = e.position.x;
+            m_prevY = e.position.y;
+            float v = std::clamp(1.0f - (e.position.y - graphArea.getY()) / graphArea.getHeight(), 0.0f, 1.0f);
+            onEnvelopeEdit(m_grabbedSlice, v);
+        }
+        repaint();
+        return;
     }
+}
+
+void AutomationDisplay::mouseDrag(const juce::MouseEvent& e)
+{
+    if (!m_manualMode || !m_dragging || !onEnvelopeEdit)
+        return;
+
+    auto graphArea = getLocalBounds().toFloat().reduced(8.0f, 4.0f);
+    const float curX = e.position.x;
+    const float curY = e.position.y;
+    const float prevX = m_prevX;
+    const float prevY = m_prevY;
+
+    const float dx = curX - prevX;
+    const int numSlices = EnvelopeSliceCount;
+    const float sliceW = graphArea.getWidth() / static_cast<float>(numSlices);
+
+    int startSlice = static_cast<int>(std::floor((std::min(prevX, curX) - graphArea.getX() - 0.5f * sliceW) / sliceW)) + 1;
+    int endSlice = static_cast<int>(std::floor((std::max(prevX, curX) - graphArea.getX() - 0.5f * sliceW) / sliceW));
+
+    if (std::abs(dx) < 0.5f)
+    {
+        float v = std::clamp(1.0f - (curY - graphArea.getY()) / graphArea.getHeight(), 0.0f, 1.0f);
+        float closestDist = std::numeric_limits<float>::max();
+        int closest = -1;
+        for (int slice = 0; slice < numSlices; ++slice)
+        {
+            float sliceX = graphArea.getX() + (static_cast<float>(slice) + 0.5f) * sliceW;
+            float dist = std::abs(sliceX - curX);
+            if (dist < closestDist) { closestDist = dist; closest = slice; }
+        }
+        if (closest >= 0)
+            onEnvelopeEdit(closest, v);
+        m_prevX = curX;
+        m_prevY = curY;
+        repaint();
+        return;
+    }
+
+    startSlice = std::clamp(startSlice, 0, numSlices - 1);
+    endSlice = std::clamp(endSlice, 0, numSlices - 1);
+    if (startSlice > endSlice) std::swap(startSlice, endSlice);
+
+    for (int slice = startSlice; slice <= endSlice; ++slice)
+    {
+        float sliceX = graphArea.getX() + (static_cast<float>(slice) + 0.5f) * sliceW;
+        float t = (sliceX - prevX) / (curX - prevX + 1e-6f);
+        t = std::clamp(t, 0.0f, 1.0f);
+        float lerpY = prevY + t * (curY - prevY);
+        float v = std::clamp(1.0f - (lerpY - graphArea.getY()) / graphArea.getHeight(), 0.0f, 1.0f);
+        onEnvelopeEdit(slice, v);
+    }
+
+    m_prevX = curX;
+    m_prevY = curY;
+    repaint();
+}
+
+void AutomationDisplay::mouseUp(const juce::MouseEvent&)
+{
+    m_dragging = false;
+    m_grabbedSlice = -1;
 }

@@ -10,7 +10,7 @@
 JUCE is fetched by CMake through `FetchContent` when it is not already
 available. Initial configuration therefore requires network access.
 
-The product and plugin version are Drawdio v0.2.2. The installed CMake tool
+The product and plugin version are Drawdio v0.2.4. The installed CMake tool
 version is independent; `cmake_minimum_required(VERSION 3.24)` specifies only
 the oldest supported CMake release. Any current CMake 4.x release, including
 CMake 4.4.2, satisfies this requirement.

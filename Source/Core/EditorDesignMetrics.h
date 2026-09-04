@@ -94,6 +94,7 @@ constexpr float SliderHitExpandRatio = 0.04f;
 namespace Cable
 {
 constexpr float JackHeightRatio = 0.01795f;
+constexpr float DawJackScale = 0.9f;
 constexpr float LaneSpacingPx = 6.0f;
 constexpr float JackRiseMinPx = 30.0f;
 constexpr float JackRiseMaxPx = 45.0f;
