@@ -1,5 +1,25 @@
 # Changelog
 
+## v0.2.4 - Docs Refresh, DAW Jack Scale, and MIT License
+
+### Added
+
+- MIT License (`LICENSE`, `package.json:10` `MIT`).
+- `docs/audits/redundancy-research-2026-09-03.md` on `drawdio_dev` (private).
+
+### Changed
+
+- README rewritten: What is Drawdio, screenshots (`images/screenshot-1.png` + `screenshot-2.png` both real), How to Use (canvas 256x256 12 colors + Transparent, 4 brushes, undo 64/8MB persists, 6 slots 2x3, 25 + BYPASS + reserved, gains, routing Canvas vs Manual, automation 128 slices bar/section Manual drawable, presets/session), Building (CMake 3.24 C++20 JUCE 8.0.15, targets, `updater.sh/ps1/cmd`), and Source Layout per `CMakeLists.txt:59-118`.
+- Docs: `64->128` automation slices (`architecture.md:173`, `ui-controls.md:69`), `SchemaVersion 2->3` (`StateSerializer.h:19`) with `hasManualEnvelope` / `manualEnvelope[128]` and 3->6 session fields (`brushSizeIndex`, `linkRangeEditEnabled`, `isManualEnvelopeOverridden`), `BottomControlBarBg` (`bottomcontrolbar.png`), and positioning `DawJackScale 0.9` top-flush (`PedalboardGrid.h:70`, `CableRenderer.cpp:102`).
+- DAW `IN`/`OUT` jacks scale with board height (`Cable::DawJackScale 0.9`) and sit top-flush at all window sizes (`PedalboardGrid::dawJackHeight()*0.5`, verified `H 585/780/975 -> 9.45/12.6/15.75`).
+- Version `0.2.3->0.2.4` (`CMakeLists.txt:2,33-34`, `package.json:3`, `docs/build.md:13`).
+- `.gitignore`: `Testing/` + `nul`; public release ignores `tests/` and no longer whitelists `docs/audits/**` / `docs/archive/**` (private to `drawdio_dev`).
+
+### Fixed
+
+- Public `release` history no longer contains `docs/audits/**`, `docs/archive/**`, or `tests/**` (history rewrite via `git filter-repo`; core 8 docs only: `effects, architecture, build, ui-controls, state-format, resources, positioning, ui-architecture`).
+- Wood roundover sprite shrunk `2304807->2278147` bytes; `screenshot-2.png` placeholder `7066` replaced with real `6615297`.
+
 ## v0.2.3 — Editor / Buffering / FL Delete Fixes
 
 ### Fixed
