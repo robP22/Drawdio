@@ -14,6 +14,7 @@ public:
     void addPoint(float time, float value);
     float sample(float t) const;
     bool empty() const { return m_points.empty(); }
+    std::vector<AutomationPoint> getPoints() const { return m_points; }
 
 private:
     std::vector<AutomationPoint> m_points;

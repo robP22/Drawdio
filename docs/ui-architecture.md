@@ -21,8 +21,8 @@ but canonical project state is owned by the processor.
 
 ## Persistent State
 
-`PresetState` contains reusable Drawdio behavior. `EditorSessionState` contains
-stable project-specific UI context. Host project state stores both; `.drawdio`
+`PresetState` contains reusable Drawdio behavior (canvas, 6 pedal slots, routing, knob values, override mask, bar/section settings, mode, gains, link flags/ranges, and `hasManualEnvelope` / `manualEnvelope[128]`). `EditorSessionState` contains
+stable project-specific UI context (`selectedColour`, `selectedTool`, `selectedPedal`, `brushSizeIndex`, `linkRangeEditEnabled`, `isManualEnvelopeOverridden`). Host project state stores both; `.drawdio`
 files store only the preset layer. See [`state-format.md`](./state-format.md).
 
 ## Compilation
@@ -55,9 +55,9 @@ through 1750x1125 at a locked 14:9 ratio.
 
 `ResourceManager` loads immutable source assets. `ScaledAssetProvider` owns
 resampling policy and rendered-size caching. Pixel-art assets use nearest
-neighbour scaling; continuous textures use high-quality resampling.
+neighbour scaling; continuous textures use high-quality resampling. `bottomcontrolbar.png` is decoded as `BottomControlBarBg` for the mixer bottom bar; `input_jack.png` DAW jacks scale with `PedalboardGrid::dawJackHeight()` (`Cable::JackHeightRatio * DawJackScale`).
 
 During live editor resizing, cached imagery is reused and the pixel overlay is
 scaled from its last valid render. Exact-size assets and the final canvas
 overlay are refreshed after the 100ms resize-settle interval. Cable geometry
-remains synchronized with the current pedal bounds throughout resizing.
+remains synchronized with the current pedal bounds throughout resizing. DAW jack hit-testing via `JackHitMap` uses the same `dawEntryPos/dawExitPos` helper as rendering.

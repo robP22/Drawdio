@@ -91,6 +91,21 @@ DrawdioProcessorEditor::DrawdioProcessorEditor(DrawdioProcessor& p)
         m_automationPlayer.setSectionStartBar(start);
     };
 
+    m_bottomBar.getAutomationDisplay().onEnvelopeEdit = [this](int slice, float value) {
+        if (!m_processorBridge.isManualMode())
+            return;
+        m_processorBridge.setManualEnvelopeSlice(slice, value);
+        AutomationEnvelope env;
+        for (int i = 0; i < EnvelopeSliceCount; ++i)
+        {
+            float t = static_cast<float>(i) / static_cast<float>(EnvelopeSliceCount - 1);
+            auto stored = m_processorBridge.getManualEnvelopeSlice(i);
+            env.addPoint(t, stored);
+        }
+        m_automationPlayer.setEnvelope(env);
+        m_bottomBar.getAutomationDisplay().setEnvelope(env);
+    };
+
     m_palette.setOnColorSelected([this](uint8_t color) {
         m_pixelCanvas.setCurrentColor(static_cast<PixelCanvasComponent::PixelColor>(color));
         auto session = m_processorBridge.getEditorSessionState();
@@ -285,6 +300,9 @@ void DrawdioProcessorEditor::exitManualMode()
 
 void DrawdioProcessorEditor::resetPedalboardState()
 {
+    for (int slot = 0; slot < PedalSlotCount; ++slot)
+        for (int k = 0; k < KnobsPerPedal; ++k)
+            m_processorBridge.setKnobLink(slot, k, false);
     for (int slot = 0; slot < PedalSlotCount; ++slot)
         m_processorBridge.setPedalSlot(slot, DspModuleType::BYPASS);
     m_processorBridge.clearParameterOffsets();

@@ -149,15 +149,29 @@ void BottomControlBar::resized()
 void BottomControlBar::paint(juce::Graphics& g)
 {
     auto b = getLocalBounds().toFloat();
+
+    const float scale = g.getInternalContext().getPhysicalPixelScaleFactor();
+    const int wPx = juce::jmax(1, juce::roundToInt(b.getWidth() * scale));
+    const int hPx = juce::jmax(1, juce::roundToInt(b.getHeight() * scale));
+    const auto bg = m_assets.getScaledImage(IResourceProvider::ImageId::BottomControlBarBg, wPx, hPx,
+                                            ScaledAssetProvider::ResamplingPolicy::Continuous);
+    if (bg.isValid())
+    {
+        g.drawImageWithin(bg, 0, 0, b.getWidth(), b.getHeight(),
+                          juce::RectanglePlacement::fillDestination | juce::RectanglePlacement::onlyReduceInSize, false);
+    }
+    else
+    {
+        g.setColour(juce::Colours::black.withAlpha(0.35f));
+        g.fillRect(b);
+    }
+
     const float h = b.getHeight();
     const float pad = h * EditorDesignMetrics::BottomBar::PadRatio;
     const float usableH = h - pad * 2.0f;
     const float knobSize = std::min(usableH * EditorDesignMetrics::BottomBar::KnobMaxSizeRatio, usableH);
     const float btnW = std::min(usableH * EditorDesignMetrics::BottomBar::BtnWidthRatio,
                                 EditorDesignMetrics::BottomBar::BtnMaxWidth);
-
-    g.setColour(juce::Colours::black.withAlpha(0.35f));
-    g.fillRect(b);
 
     g.setColour(juce::Colours::white.withAlpha(0.5f));
     g.setFont(juce::Font(juce::FontOptions(juce::jlimit(10.0f, 14.0f, usableH * 0.12f))));
@@ -216,6 +230,11 @@ void BottomControlBar::tick()
     m_automationDisplay.tick();
     for (auto& strip : m_mixerStrips)
         strip->tick();
+}
+
+void BottomControlBar::setManualMode(bool manual)
+{
+    m_automationDisplay.setManualMode(manual);
 }
 
 void BottomControlBar::setViewState(const EditorUiSnapshot& state)

@@ -22,6 +22,7 @@ public:
         ColorWell,
         JapanesePedalSheet,
         InputJack,
+        BottomControlBarBg,
         Count
     };
 
@@ -36,7 +37,8 @@ public:
         CanvasTexture = static_cast<size_t>(ImageId::CanvasTexture),
         ColorWell = static_cast<size_t>(ImageId::ColorWell),
         JapanesePedalSheet = static_cast<size_t>(ImageId::JapanesePedalSheet),
-        InputJack = static_cast<size_t>(ImageId::InputJack)
+        InputJack = static_cast<size_t>(ImageId::InputJack),
+        BottomControlBarBg = static_cast<size_t>(ImageId::BottomControlBarBg)
     };
 
     enum class SpriteSheetId : size_t

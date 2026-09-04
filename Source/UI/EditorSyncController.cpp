@@ -112,12 +112,28 @@ void EditorSyncController::syncCompiledKnobs(bool& needsRepaint)
 
 void EditorSyncController::syncAutomation()
 {
-    if (m_autoEnvelopeDirty)
+    m_bottomBar.getAutomationDisplay().setManualMode(m_processor.isManualMode());
+    if (m_processor.isManualMode() && m_processor.hasManualEnvelope())
+    {
+        auto envelope = m_processor.getManualEnvelope();
+        m_automationPlayer.setEnvelope(envelope);
+        m_bottomBar.getAutomationDisplay().setEnvelope(envelope);
+    }
+    else if (m_autoEnvelopeDirty)
     {
         m_autoEnvelopeDirty = false;
         auto envelope = m_automationCompiler.compile(m_pixelCanvas.getGridData());
         m_automationPlayer.setEnvelope(envelope);
         m_bottomBar.getAutomationDisplay().setEnvelope(envelope);
+    }
+    else if (m_processor.isManualMode())
+    {
+        auto envelope = m_processor.getManualEnvelope();
+        if (!envelope.empty())
+        {
+            m_automationPlayer.setEnvelope(envelope);
+            m_bottomBar.getAutomationDisplay().setEnvelope(envelope);
+        }
     }
 
     float bpm = m_processor.getPlayHeadBpm();

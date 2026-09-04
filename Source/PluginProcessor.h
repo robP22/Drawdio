@@ -109,6 +109,10 @@ public:
     bool isPlayHeadPlaying() const override { return m_config.isPlayHeadPlaying(); }
     void storeUndoData(std::vector<uint8_t> data) override { m_config.storeUndoData(std::move(data)); }
     const std::vector<uint8_t>& getUndoData() const override { return m_config.getUndoData(); }
+    void setManualEnvelopeSlice(int slot, float value) override { m_config.setManualEnvelopeSlice(slot, value); }
+    float getManualEnvelopeSlice(int slot) const override { return m_config.getManualEnvelopeSlice(slot); }
+    AutomationEnvelope getManualEnvelope() const override { return m_config.getManualEnvelope(); }
+    bool hasManualEnvelope() const override { return m_config.hasManualEnvelope(); }
 
     // --- UI Facade ---
     void notifyPenDown() { m_config.notifyPenDown(); }
@@ -144,7 +148,7 @@ private:
     ConfigManager m_config;
     ProcessorState m_processorState;
 
-    std::atomic<bool>* m_shutdown{new std::atomic<bool>(false)};
+    std::atomic<bool> m_shutdown{false};
     std::atomic<bool> m_processingEnabled{false};
     std::atomic<int> m_audioCallsInFlight{0};
     std::atomic<bool> m_imageCacheCleared{false};

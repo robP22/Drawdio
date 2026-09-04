@@ -23,6 +23,8 @@ struct PresetState
     uint32_t linkFlags = 0;
     std::array<float, TotalKnobs> linkRangeMins{};
     std::array<float, TotalKnobs> linkRangeMaxs{};
+    bool hasManualEnvelope = false;
+    std::array<float, EnvelopeSliceCount> manualEnvelope{};
 
     PresetState()
     {
@@ -31,6 +33,7 @@ struct PresetState
         pedalGains.fill(1.0f);
         linkRangeMins.fill(0.0f);
         linkRangeMaxs.fill(1.0f);
+        manualEnvelope.fill(0.5f);
     }
 };
 
@@ -40,6 +43,8 @@ struct EditorSessionState
     uint8_t selectedTool = 0;
     int8_t selectedPedal = -1;
     uint8_t brushSizeIndex = 0;
+    bool linkRangeEditEnabled = false;
+    bool isManualEnvelopeOverridden = false;
 };
 
 struct ProjectState
