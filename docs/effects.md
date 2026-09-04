@@ -71,14 +71,14 @@ input samples, with a derivative fallback when the sample difference is near
 zero. Drive is read from `params[2]`; the other displayed positions are not
 wired. Input samples are sanitized and the drive bypass window avoids the
 nonlinearity at very low drive. First-order ADAA reduces aliasing but does not
-eliminate it at extreme drive levels.
+eliminate it at extreme drive levels. Also provides a tight `processBlock` inner loop (stateless override of `DspEffect::processBlock`).
 
 ### Wave Folder
 
 `MATHEMATICAL_WAVEFOLDER` uses a sine-fold curve with first-order ADAA. Fold is
 read from `params[1]`, with the fold multiplier capped at 4.0. Input and sample
-difference guards protect the antiderivative calculation. Higher fold settings
-remain intentionally colored and can generate aliasing.
+difference guards protect the antiderivative calculation; the secant form is stabilized via `sin(a*(x1+x2)/2)*sinc(a*dx/2)/norm` to avoid roundoff pops on quiet material at high fold. Higher fold settings
+remain intentionally colored and can generate aliasing. Also provides a tight `processBlock` inner loop.
 
 ### Comb Resonator
 
@@ -323,7 +323,8 @@ when the cycle length changes and gain is clamped to [0, 1].
 reduction, bit quantization with TPDF dither, and DC blocking. Rate (`params[1]`)
 maps exponentially from the host rate toward 500 Hz, Bits (`params[2]`) selects
 2-16 bits, and Filter (`params[3]`) sets the anti-alias biquad cutoff. Dither
-is always enabled, scaled by the signal envelope so silent input stays silent.
+is always enabled, scaled by the signal envelope so silent input stays silent
+(TPDF magnitude fades to zero at digital silence). `silenceInProducesSilenceOut()` is `false` only for the Bitcrusher chain.
 The anti-alias filter is deliberately modest rather than a steep decimator
 filter; the sample-rate reduction retains intentional lo-fi aliasing.
 
@@ -341,6 +342,10 @@ bypass of the gain modulation.
 0.1-5 Hz), Depth (`params[2]`), and Feed (`params[3]`) sweep the delay roughly
 0.5-10 ms inside a 15 ms prepared buffer. Through-zero flanging is not
 implemented.
+
+### Drift and Unstable
+
+Per-slot dual-rate random-walk modulators apply to non-mix parameters after smoothing and before snap: slow drift (0.3-3 Hz, tau 0.5-2 s, +-2%) plus fast unstable (6-15 Hz, tau 80 ms, +-0.8%). Amounts are atomic per slot (`UnifiedPedalProcessor::setDriftAmount/getDriftAmount`). The mix knob is excluded.
 
 ## Bypass
 

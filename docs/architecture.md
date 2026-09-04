@@ -170,10 +170,10 @@ compiled descriptor
     -> effect processBlock
 ```
 
-Automation is compiled from 64 horizontal canvas slices and uses the DAW PPQ
+Automation is compiled from 128 horizontal canvas slices (two canvas columns per slice, weighted Y average ignoring transparent cells) and uses the DAW PPQ
 position when available (fallback 120 BPM / 0 PPQ). The display shows an
 eight-bar envelope and highlights the selected active section. Bar counts are
-1, 2, 4, or 8. Knob links support an adjustable automation range with a minimum
+1, 2, 4, or 8. In Manual mode the 128-slice envelope is directly drawable (left-drag paints values lerped across slices, right-drag repositions the section window) and persisted via `hasManualEnvelope` / `manualEnvelope[128]` in `PresetState` (`ProjectState.h:26-27`, `StateSerializer.cpp:33`); Canvas mode uses the compiled envelope. Knob links support an adjustable automation range with a minimum
 0.05 width; moving a linked knob still creates an override and removes that link
 (and resets its range to 0..1).
 

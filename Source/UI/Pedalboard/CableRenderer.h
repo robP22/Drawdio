@@ -28,16 +28,16 @@ public:
                           juce::Point<float> fromPos, juce::Point<float> toPos) const;
 
     void drawInputJack(juce::Graphics& g, juce::Point<float> entryPos,
-                       const juce::Path& path, bool drawPath) const;
+                       const juce::Path& path, bool drawPath, float jackH) const;
 
     void drawOutputJack(juce::Graphics& g, juce::Point<float> exitPos,
-                        const juce::Path& path, bool drawPath) const;
+                        const juce::Path& path, bool drawPath, float jackH) const;
 
     void drawJackHighlight(juce::Graphics& g, juce::Point<float> position) const;
 
 private:
     void drawJack(juce::Graphics& g, juce::Point<float> position,
-                  const juce::Path& path, bool isInput, bool drawPath) const;
+                  const juce::Path& path, bool isInput, bool drawPath, float jackH) const;
 
     const IThemeProvider& m_theme;
     const IResourceProvider& m_resources;

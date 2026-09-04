@@ -30,6 +30,9 @@ const juce::Identifier kSelectedColour("selectedColour");
 const juce::Identifier kSelectedTool("selectedTool");
 const juce::Identifier kSelectedPedal("selectedPedal");
 const juce::Identifier kBrushSizeIndex("brushSizeIndex");
+const juce::Identifier kLinkRangeEditEnabled("linkRangeEditEnabled");
+const juce::Identifier kManualEnvelope("manualEnvelope");
+const juce::Identifier kHasManualEnvelope("hasManualEnvelope");
 
 juce::MemoryBlock makeBytes(const void* data, size_t size)
 {
@@ -55,15 +58,8 @@ bool readArrayBytes(const juce::var& value, std::array<T, N>& output)
     return true;
 }
 
-bool finiteArray(const std::array<float, TotalKnobs>& values)
-{
-    for (const auto value : values)
-        if (!std::isfinite(value))
-            return false;
-    return true;
-}
-
-bool finiteArray(const std::array<float, PedalSlotCount>& values)
+template <typename T, size_t N>
+bool finiteArray(const std::array<T, N>& values)
 {
     for (const auto value : values)
         if (!std::isfinite(value))
@@ -93,6 +89,8 @@ juce::ValueTree makePresetTree(const PresetState& state)
     tree.setProperty(kLinkFlags, static_cast<int64_t>(state.linkFlags), nullptr);
     tree.setProperty(kLinkRangeMins, juce::var(makeArrayBytes(state.linkRangeMins)), nullptr);
     tree.setProperty(kLinkRangeMaxs, juce::var(makeArrayBytes(state.linkRangeMaxs)), nullptr);
+    tree.setProperty(kHasManualEnvelope, state.hasManualEnvelope ? 1 : 0, nullptr);
+    tree.setProperty(kManualEnvelope, juce::var(makeArrayBytes(state.manualEnvelope)), nullptr);
     return tree;
 }
 
@@ -113,6 +111,8 @@ bool readPresetTree(const juce::ValueTree& tree, PresetState& state)
         return false;
     state.linkRangeMins.fill(0.0f);
     state.linkRangeMaxs.fill(1.0f);
+    state.hasManualEnvelope = false;
+    state.manualEnvelope.fill(0.5f);
     if (tree.hasProperty(kLinkRangeMins))
     {
         if (!readArrayBytes(tree[kLinkRangeMins], state.linkRangeMins))
@@ -121,6 +121,13 @@ bool readPresetTree(const juce::ValueTree& tree, PresetState& state)
     if (tree.hasProperty(kLinkRangeMaxs))
     {
         if (!readArrayBytes(tree[kLinkRangeMaxs], state.linkRangeMaxs))
+            return false;
+    }
+    if (tree.hasProperty(kHasManualEnvelope))
+        state.hasManualEnvelope = static_cast<int>(tree[kHasManualEnvelope]) != 0;
+    if (tree.hasProperty(kManualEnvelope))
+    {
+        if (!readArrayBytes(tree[kManualEnvelope], state.manualEnvelope))
             return false;
     }
 
@@ -182,7 +189,8 @@ bool readPresetTree(const juce::ValueTree& tree, PresetState& state)
 
     if (!std::isfinite(state.inputGain) || !std::isfinite(state.outputGain)
         || !finiteArray(state.knobValues) || !finiteArray(state.pedalGains)
-        || !finiteArray(state.linkRangeMins) || !finiteArray(state.linkRangeMaxs))
+        || !finiteArray(state.linkRangeMins) || !finiteArray(state.linkRangeMaxs)
+        || !finiteArray(state.manualEnvelope))
         return false;
     for (size_t i = 0; i < state.linkRangeMins.size(); ++i)
     {
@@ -247,6 +255,7 @@ bool StateSerializer::serializeProject(const ProjectState& state, juce::MemoryBl
     session.setProperty(kSelectedTool, static_cast<int>(state.session.selectedTool), nullptr);
     session.setProperty(kSelectedPedal, static_cast<int>(state.session.selectedPedal), nullptr);
     session.setProperty(kBrushSizeIndex, static_cast<int>(state.session.brushSizeIndex), nullptr);
+    session.setProperty(kLinkRangeEditEnabled, state.session.linkRangeEditEnabled ? 1 : 0, nullptr);
     root.addChild(session, -1, nullptr);
     return serializeTree(root, outBlob);
 }
@@ -274,5 +283,7 @@ bool StateSerializer::deserializeProject(const void* data, size_t sizeInBytes, P
     outState.session.selectedTool = static_cast<uint8_t>(juce::jlimit(0, 255, static_cast<int>(session[kSelectedTool])));
     outState.session.selectedPedal = static_cast<int8_t>(juce::jlimit(-1, PedalSlotCount - 1, static_cast<int>(session[kSelectedPedal])));
     outState.session.brushSizeIndex = static_cast<uint8_t>(juce::jlimit(0, 3, static_cast<int>(session[kBrushSizeIndex])));
+    outState.session.linkRangeEditEnabled = session.hasProperty(kLinkRangeEditEnabled)
+        ? static_cast<int>(session[kLinkRangeEditEnabled]) != 0 : false;
     return true;
 }

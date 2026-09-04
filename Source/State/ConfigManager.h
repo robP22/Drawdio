@@ -18,6 +18,7 @@
 #include "State/ReleaseQueue.h"
 #include "Effects/DspEffect.h"
 #include "UnifiedPedalProcessor.h"
+#include "State/AutomationEnvelope.h"
 
 struct ConfigAudioView
 {
@@ -51,8 +52,13 @@ public:
         m_dsp.pedalState().setKnobLink(slot, knob, linked, 1.0f);
         if (linked)
             m_dsp.pedalState().setKnobLinkRange(slot, knob, 0.0f, 1.0f);
+        triggerUINotification();
     }
-    void setKnobLinkRange(int slot, int knob, float rangeMin, float rangeMax) override { m_dsp.pedalState().setKnobLinkRange(slot, knob, rangeMin, rangeMax); }
+    void setKnobLinkRange(int slot, int knob, float rangeMin, float rangeMax) override
+    {
+        m_dsp.pedalState().setKnobLinkRange(slot, knob, rangeMin, rangeMax);
+        triggerUINotification();
+    }
     float getKnobLinkRangeMin(int slot, int knob) const override { return m_dsp.pedalState().getKnobLinkRangeMin(slot, knob); }
     float getKnobLinkRangeMax(int slot, int knob) const override { return m_dsp.pedalState().getKnobLinkRangeMax(slot, knob); }
     float getPedalPeak(int slot) const override { return m_dsp.pedalState().getPedalPeak(slot); }
@@ -70,6 +76,11 @@ public:
     int getSectionStart() const override { return m_sectionStartBar; }
     void setManualMode(bool m) override;
     bool isManualMode() const override { return m_manualMode; }
+
+    void setManualEnvelopeSlice(int slice, float value);
+    float getManualEnvelopeSlice(int slice) const;
+    AutomationEnvelope getManualEnvelope() const override { return m_manualEnvelope; }
+    bool hasManualEnvelope() const override { return m_hasManualEnvelope; }
 
     // --- IConfigConsumer ---
     bool consumeCompiledResultIfAvailable() override;
@@ -123,7 +134,8 @@ public:
         if (m_sessionState.selectedColour == state.selectedColour
             && m_sessionState.selectedTool == state.selectedTool
             && m_sessionState.selectedPedal == state.selectedPedal
-            && m_sessionState.brushSizeIndex == state.brushSizeIndex)
+            && m_sessionState.brushSizeIndex == state.brushSizeIndex
+            && m_sessionState.linkRangeEditEnabled == state.linkRangeEditEnabled)
             return;
         m_sessionState = state;
         m_sessionRevision.fetch_add(1, std::memory_order_acq_rel);
@@ -163,6 +175,8 @@ private:
     int m_barCount = 1;
     int m_sectionStartBar = 0;
     bool m_manualMode = false;
+    AutomationEnvelope m_manualEnvelope;
+    bool m_hasManualEnvelope = false;
     EditorSessionState m_sessionState;
     std::vector<uint8_t> m_undoData;
     std::atomic<float> m_playHeadBpm{120.0f};

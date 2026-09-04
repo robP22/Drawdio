@@ -5,6 +5,7 @@
 #include "Core/DrawdioConstants.h"
 #include "Core/CompiledPedalConfig.h"
 #include "Core/DspModuleType.h"
+#include "State/AutomationEnvelope.h"
 
 struct ConfigSyncData
 {
@@ -44,4 +45,8 @@ public:
     virtual const std::vector<uint8_t>& getUndoData() const = 0;
     virtual int getBarCount() const = 0;
     virtual int getSectionStart() const = 0;
+    virtual void setManualEnvelopeSlice(int slice, float value) = 0;
+    virtual float getManualEnvelopeSlice(int slice) const = 0;
+    virtual AutomationEnvelope getManualEnvelope() const = 0;
+    virtual bool hasManualEnvelope() const = 0;
 };

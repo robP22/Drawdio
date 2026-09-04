@@ -36,6 +36,8 @@ public:
         repaint();
     }
 
+    juce::String getPillValue() const { return m_value; }
+
     void setValueDestructive(bool destructive)
     {
         m_destructiveValue = destructive;

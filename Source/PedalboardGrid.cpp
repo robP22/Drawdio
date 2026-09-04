@@ -80,9 +80,10 @@ void PedalboardGrid::paintOverChildren(juce::Graphics& g)
     const bool isDragging = m_routingCtrl.isDragging();
     const int grabbedIdx = m_routingCtrl.grabbedEdgeIndex();
     const bool isGrabDrag = m_routingCtrl.isGrabDrag();
+    const float jackH = dawJackHeight();
 
     m_renderer.drawInputJack(g, dawEntryPos(), m_cachedInputPath,
-                              !(isGrabDrag && grabbedIdx == -1));
+                              !(isGrabDrag && grabbedIdx == -1), jackH);
 
     m_renderer.drawRoutingCables(g, m_cachedConnectionPaths,
                                   isGrabDrag && grabbedIdx >= 0
@@ -93,7 +94,7 @@ void PedalboardGrid::paintOverChildren(juce::Graphics& g)
                                      m_routingCtrl.dragCurrentPos());
 
     m_renderer.drawOutputJack(g, dawExitPos(), m_cachedOutputPath,
-                              !(isGrabDrag && grabbedIdx == -2));
+                              !(isGrabDrag && grabbedIdx == -2), jackH);
 
     if (isDragging && m_routingCtrl.isNewCableDrag())
         m_renderer.drawActiveDraggingCable(g, m_routingCtrl.dragStartPos(),

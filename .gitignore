@@ -47,3 +47,9 @@ tokoe.graph.json.*
 
 # Accidental artifact directory
 %SystemDrive%/
+
+# Test output
+Testing/
+
+# Windows nul redirection artifact
+nul

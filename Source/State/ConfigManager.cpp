@@ -93,12 +93,67 @@ void ConfigManager::setManualMode(bool m)
     if (m)
     {
         seedCacheFromCurrentConfig();
+        const auto snapshot = capturePresetState();
+        if (snapshot.hasManualEnvelope)
+        {
+            AutomationEnvelope env;
+            for (int i = 0; i < EnvelopeSliceCount; ++i)
+                env.addPoint(static_cast<float>(i) / static_cast<float>(EnvelopeSliceCount - 1),
+                             snapshot.manualEnvelope[static_cast<size_t>(i)]);
+            m_manualEnvelope = std::move(env);
+            m_hasManualEnvelope = true;
+            m_sessionState.isManualEnvelopeOverridden = true;
+        }
     }
     else
     {
         m_manualRouting.clear();
         syncCompilerConfig();
     }
+}
+
+void ConfigManager::setManualEnvelopeSlice(int slice, float value)
+{
+    if (slice < 0 || slice >= EnvelopeSliceCount)
+        return;
+    value = std::clamp(value, 0.0f, 1.0f);
+    if (m_manualEnvelope.empty())
+    {
+        for (int i = 0; i < EnvelopeSliceCount; ++i)
+            m_manualEnvelope.addPoint(static_cast<float>(i) / static_cast<float>(EnvelopeSliceCount - 1), 0.5f);
+    }
+    float t = static_cast<float>(slice) / static_cast<float>(EnvelopeSliceCount - 1);
+    auto points = m_manualEnvelope.getPoints();
+    bool found = false;
+    for (auto& p : points)
+        if (std::abs(p.time - t) < 1e-6f) { p.value = value; found = true; break; }
+    if (!found)
+    {
+        m_manualEnvelope.addPoint(t, value);
+        points = m_manualEnvelope.getPoints();
+    }
+    if (found)
+    {
+        AutomationEnvelope rebuilt;
+        for (const auto& p : points)
+            rebuilt.addPoint(p.time, p.time == t ? value : p.value);
+        m_manualEnvelope = std::move(rebuilt);
+    }
+    m_hasManualEnvelope = true;
+    m_sessionState.isManualEnvelopeOverridden = true;
+    triggerUINotification();
+}
+
+float ConfigManager::getManualEnvelopeSlice(int slice) const
+{
+    if (slice < 0 || slice >= EnvelopeSliceCount)
+        return 0.5f;
+    float t = static_cast<float>(slice) / static_cast<float>(EnvelopeSliceCount - 1);
+    const auto points = m_manualEnvelope.getPoints();
+    for (const auto& p : points)
+        if (std::abs(p.time - t) < 1e-6f)
+            return p.value;
+    return m_manualEnvelope.empty() ? 0.5f : m_manualEnvelope.sample(t);
 }
 
 void ConfigManager::seedCacheFromCurrentConfig()

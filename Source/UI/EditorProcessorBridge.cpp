@@ -157,3 +157,13 @@ const std::array<uint8_t, TotalCells>& EditorProcessorBridge::getGridData() cons
 int EditorProcessorBridge::getBarCount() const { return m_processor.getBarCount(); }
 int EditorProcessorBridge::getSectionStart() const { return m_processor.getSectionStart(); }
 void EditorProcessorBridge::resetPedalPeaks() { m_processor.resetPedalPeaks(); }
+void EditorProcessorBridge::setManualEnvelopeSlice(int slice, float value) { static_cast<IConfigConsumer&>(m_processor).setManualEnvelopeSlice(slice, value); }
+float EditorProcessorBridge::getManualEnvelopeSlice(int slice) const { return static_cast<const IConfigConsumer&>(m_processor).getManualEnvelopeSlice(slice); }
+AutomationEnvelope EditorProcessorBridge::getManualEnvelope() const { return static_cast<const IConfigConsumer&>(m_processor).getManualEnvelope(); }
+bool EditorProcessorBridge::hasManualEnvelope() const { return static_cast<const IConfigConsumer&>(m_processor).hasManualEnvelope(); }
+void EditorProcessorBridge::setLinkRangeEditEnabled(bool enabled)
+{
+    auto s = m_processor.getEditorSessionState();
+    s.linkRangeEditEnabled = enabled;
+    m_processor.setEditorSessionState(s);
+}

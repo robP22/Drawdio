@@ -11,8 +11,8 @@ pending image-import plan and separates current behavior from future ideas.
 - Transparent cells are empty and show the canvas texture.
 - Four brush sizes are available.
 - Flood fill, erasing, rebound drawing, and undo/redo are supported.
-- Undo history is bounded by the implemented level and byte limits.
-- Importing an image or replacing the grid clears the current undo history.
+- Undo history is capped at 64 levels / 8 MB combined (shared between undo and redo) and persists across editor minimize/maximize; importing an image or replacing the grid clears the current undo history.
+- Brush size and color persist across minimize/maximize and save/restore (`brushSizeIndex`, `selectedColour` in `EditorSessionState`).
 
 The compiler converts color-weighted cell coverage into normalized effect
 parameters. Detailed color weights and routing behavior are in
@@ -66,17 +66,18 @@ components. It uses cached paths and gap-aware lane placement for the current pe
 
 ## Automation
 
-Automation is compiled from 64 horizontal canvas slices. Each slice produces a
+Automation is compiled from 128 horizontal canvas slices (two columns per slice, weighted Y average ignoring transparent cells). Each slice produces a
 weighted Y-position value. Playback uses DAW PPQ position when available and
 falls back to the processor's default transport values when it is not.
 
 The editor displays an eight-bar timeline. Bar-count choices are 1, 2, 4, and 8;
-shorter active windows can be repositioned within the displayed timeline. The
+shorter active windows can be repositioned within the displayed timeline via
+`sectionStartBar` (right-drag on the automation display). The
 audio path smooths automation before applying it to linked parameters. BPM from
 the host transport drives time-quantized parameters (Re-Time loop length and
 Sidechain divisions, default 120 BPM until transport is available).
 
-Manual automation point editing is not implemented.
+In Manual mode the 128-slice envelope is directly drawable: left-drag paints values (lerped across intermediate slices between the previous and current X) and persisting via `ConfigManager::setManualEnvelopeSlice` / `hasManualEnvelope` + `manualEnvelope[128]` serialized in the preset. In Canvas mode the envelope is compiled from the drawing and read-only.
 
 ## Mixer and Metering
 

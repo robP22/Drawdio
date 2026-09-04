@@ -53,7 +53,7 @@ DrawdioProcessor::~DrawdioProcessor()
         juce::Typeface::clearTypefaceCache();
     }
 #endif
-    m_shutdown->store(true, std::memory_order_release);
+    m_shutdown.store(true, std::memory_order_release);
     m_processingEnabled.store(false, std::memory_order_release);
     m_callbackLockHolder.acquire(getCallbackLock());
     for (int i = 0; i < 200 && m_audioCallsInFlight.load(std::memory_order_acquire) > 0; ++i)
@@ -65,7 +65,7 @@ void DrawdioProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
     m_imageCacheCleared.store(false, std::memory_order_relaxed);
     const juce::ScopedLock callbackLock(getCallbackLock());
     m_processingEnabled.store(false, std::memory_order_release);
-    m_shutdown->store(false, std::memory_order_relaxed);
+    m_shutdown.store(false, std::memory_order_relaxed);
 
     const int maxChannels = getTotalNumOutputChannels();
     m_dspProcessor.prepareToPlay(sampleRate, samplesPerBlock, maxChannels);
@@ -101,7 +101,7 @@ void DrawdioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
         ~InFlightGuard() { count.fetch_sub(1, std::memory_order_release); }
     } guard{m_audioCallsInFlight};
 
-    if (m_shutdown->load(std::memory_order_acquire)
+    if (m_shutdown.load(std::memory_order_acquire)
         || !m_processingEnabled.load(std::memory_order_acquire))
     {
         buffer.clear();
@@ -167,7 +167,7 @@ bool DrawdioProcessor::isMidiEffect() const { return false; }
 
 double DrawdioProcessor::getTailLengthSeconds() const
 {
-    if (m_shutdown->load(std::memory_order_acquire))
+    if (m_shutdown.load(std::memory_order_acquire))
         return 0.0;
     if (const auto* config = m_config.getCurrentConfig())
     {
@@ -182,7 +182,7 @@ double DrawdioProcessor::getTailLengthSeconds() const
 
 bool DrawdioProcessor::silenceInProducesSilenceOut() const
 {
-    if (m_shutdown->load(std::memory_order_acquire))
+    if (m_shutdown.load(std::memory_order_acquire))
         return true;
     if (const auto* config = m_config.getCurrentConfig())
         for (const auto& type : config->activeRoutingChain)

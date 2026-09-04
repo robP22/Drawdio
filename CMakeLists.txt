@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(Drawdio VERSION 0.2.3 LANGUAGES C CXX)
+project(Drawdio VERSION 0.2.4 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -30,8 +30,8 @@ juce_add_binary_data(DrawdioAssets SOURCES ${ASSET_FILES})
 juce_add_plugin(Drawdio
     PRODUCT_NAME              "Drawdio"
     PLUGIN_NAME               "Drawdio"
-    VERSION                   "0.2.3"
-    BUILD_VERSION             "0.2.3"
+    VERSION                   "0.2.4"
+    BUILD_VERSION             "0.2.4"
     COMPANY_NAME              "robP"
     COMPANY_WEBSITE           "https://github.com/robP22/Drawdio"
     COMPANY_EMAIL             "drawdio@proton.me"
@@ -190,6 +190,9 @@ if(DRAWDIO_BUILD_TESTS)
         "${CMAKE_CURRENT_SOURCE_DIR}/Source/State/PedalState.cpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/Source/State/ReleaseQueue.cpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/Source/State/StateSerializer.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/Source/State/AutomationEnvelope.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/Source/State/AutomationCompiler.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/Source/State/AutomationPlayer.cpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/Source/Compile/CompilerEngine.cpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/Source/Compile/CanvasGraphAnalyzer.cpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/Source/Resources/ScaledAssetProvider.cpp"

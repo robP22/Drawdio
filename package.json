@@ -1,13 +1,13 @@
 {
   "name": "drawdio",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "private": true,
   "description": "Visual audio effects pedalboard driven by canvas drawings.",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/robP22/Drawdio.git"
   },
-  "license": "UNLICENSED",
+  "license": "MIT",
   "engines": {
     "cmake": ">=3.24",
     "cxx": "c++20"
