@@ -32,10 +32,9 @@ docs/*
 !docs/resources.md
 !docs/positioning.md
 !docs/ui-architecture.md
-!docs/audits/
-!docs/audits/**
-!docs/archive/
-!docs/archive/**
+
+# Tests are private to drawdio_dev
+tests/
 
 # Node tooling (unused auto-updater stubs)
 node_modules/
