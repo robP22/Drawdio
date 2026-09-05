@@ -16,7 +16,7 @@ public:
         Project = 2
     };
 
-    static constexpr int SchemaVersion = 3;
+    static constexpr int SchemaVersion = 4;
 
     static bool serializePreset(const PresetState& state, juce::MemoryBlock& outBlob);
     static bool serializeProject(const ProjectState& state, juce::MemoryBlock& outBlob);

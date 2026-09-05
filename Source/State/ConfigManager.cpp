@@ -41,13 +41,20 @@ void ConfigManager::setPedalSlot(int slot, DspModuleType type)
     DspModuleType oldType = m_pedalSlots[static_cast<size_t>(slot)];
     m_pedalSlots[static_cast<size_t>(slot)] = type;
 
-    if (type == DspModuleType::BYPASS)
+    if (type != oldType)
     {
         std::vector<uint8_t> filtered;
         for (auto s : m_manualRouting)
             if (s != static_cast<uint8_t>(slot))
                 filtered.push_back(s);
         m_manualRouting = filtered;
+
+        auto& ps = m_dsp.pedalState();
+        for (int k = 0; k < KnobsPerPedal; ++k)
+        {
+            ps.setKnobLink(slot, k, false);
+            ps.setKnobLinkRange(slot, k, 0.0f, 1.0f);
+        }
     }
     else if (oldType == DspModuleType::BYPASS && !m_manualRouting.empty())
     {
@@ -57,7 +64,6 @@ void ConfigManager::setPedalSlot(int slot, DspModuleType type)
     }
 
     m_dsp.invalidateParamCacheForSlot(slot);
-    if (type != DspModuleType::BYPASS)
     {
         const auto& def = PedalDefinitions::get(type);
         for (int k = 0; k < KnobsPerPedal; ++k)
@@ -93,7 +99,8 @@ void ConfigManager::setManualMode(bool m)
     if (m)
     {
         seedCacheFromCurrentConfig();
-        const auto snapshot = capturePresetState();
+        PresetState snapshot;
+        capturePresetState(snapshot);
         if (snapshot.hasManualEnvelope)
         {
             AutomationEnvelope env;
@@ -434,9 +441,18 @@ void ConfigManager::tryApplyDeferredConfig()
 std::vector<ParameterDescriptor> ConfigManager::getCurrentParams() const
 {
     const auto* current = m_currentConfig.load(std::memory_order_acquire);
-    if (current)
-        return current->parameters;
-    return {};
+    if (!current)
+        return {};
+    std::vector<ParameterDescriptor> filtered;
+    filtered.reserve(current->parameters.size());
+    for (const auto& p : current->parameters)
+    {
+        if (p.isManualOverride
+            && !m_dsp.pedalState().isKnobLinked(p.physicalSlot, static_cast<int>(p.parameterToken)))
+            continue;
+        filtered.push_back(p);
+    }
+    return filtered;
 }
 
 void ConfigManager::submitCanvasSnapshot(const std::array<uint8_t, TotalCells>& data)
@@ -480,10 +496,10 @@ void ConfigManager::submitCanvasSnapshot(const std::array<uint8_t, TotalCells>& 
 
 void ConfigManager::getStateInformation(juce::MemoryBlock& destData)
 {
-    ProjectState state;
-    state.preset = capturePresetState();
-    state.session = m_sessionState;
-    StateSerializer::serializeProject(state, destData);
+    auto state = std::make_unique<ProjectState>();
+    capturePresetState(state->preset);
+    state->session = m_sessionState;
+    StateSerializer::serializeProject(*state, destData);
 }
 
 void ConfigManager::setStateInformation(const void* data, int sizeInBytes)
@@ -491,12 +507,12 @@ void ConfigManager::setStateInformation(const void* data, int sizeInBytes)
     if (data == nullptr || sizeInBytes <= 0)
         return;
 
-    ProjectState state;
-    if (!StateSerializer::deserializeProject(data, static_cast<size_t>(sizeInBytes), state))
+    auto state = std::make_unique<ProjectState>();
+    if (!StateSerializer::deserializeProject(data, static_cast<size_t>(sizeInBytes), *state))
         return;
 
-    applyPresetState(state.preset);
-    setEditorSessionState(state.session);
+    applyPresetState(state->preset);
+    setEditorSessionState(state->session);
 }
 
 void ConfigManager::getPresetInformation(juce::MemoryBlock& destData) const
@@ -509,17 +525,24 @@ bool ConfigManager::setPresetInformation(const void* data, int sizeInBytes)
     if (data == nullptr || sizeInBytes <= 0)
         return false;
 
-    PresetState state;
-    if (!StateSerializer::deserializePreset(data, static_cast<size_t>(sizeInBytes), state))
+    auto state = std::make_unique<PresetState>();
+    if (!StateSerializer::deserializePreset(data, static_cast<size_t>(sizeInBytes), *state))
         return false;
 
-    applyPresetState(state);
+    applyPresetState(*state);
     return true;
 }
 
 PresetState ConfigManager::capturePresetState() const
 {
     PresetState state;
+    capturePresetState(state);
+    return state;
+}
+
+void ConfigManager::capturePresetState(PresetState& state) const
+{
+    state = PresetState{};
     state.gridData = m_gridData;
     state.pedalSlots = m_pedalSlots;
     state.manualRoutingSize = static_cast<uint8_t>(std::min(m_manualRouting.size(), state.manualRouting.size()));
@@ -548,7 +571,6 @@ PresetState ConfigManager::capturePresetState() const
             state.linkRangeMaxs[idx] = ps.getKnobLinkRangeMax(s, k);
         }
     }
-    return state;
 }
 
 void ConfigManager::applyPresetState(const PresetState& state)

@@ -1,8 +1,10 @@
 #include "Compile/CanvasMessageQueue.h"
 #include <cstring>
 
-CanvasMessageQueue::CanvasMessageQueue() noexcept
-    : m_writeIndex(0),
+CanvasMessageQueue::CanvasMessageQueue()
+    : m_queue(std::make_unique<std::array<CanvasMessage, QueueCapacity>>()),
+      m_cachedMessage(std::make_unique<CanvasMessage>()),
+      m_writeIndex(0),
       m_readIndex(0)
 {
 }
@@ -38,10 +40,10 @@ bool CanvasMessageQueue::pushSnapshot(const uint8_t* gridData,
         return false;
 
     m_latestRevision.store(revision, std::memory_order_release);
-    std::memcpy(m_queue[writeIdx].gridSnapshot.data(), gridData, PayloadSize);
-    m_queue[writeIdx].dirtyRows = dirtyRows;
-    m_queue[writeIdx].revision = revision;
-    auto& message = m_queue[writeIdx];
+    std::memcpy((*m_queue)[writeIdx].gridSnapshot.data(), gridData, PayloadSize);
+    (*m_queue)[writeIdx].dirtyRows = dirtyRows;
+    (*m_queue)[writeIdx].revision = revision;
+    auto& message = (*m_queue)[writeIdx];
     message.pedalSlots.fill(DspModuleType::BYPASS);
     message.manualRouting.fill(0);
     message.existingParams = {};
@@ -65,10 +67,10 @@ const CanvasMessageQueue::CanvasMessage* CanvasMessageQueue::popMessage() noexce
     if (readIdx == m_writeIndex.load(std::memory_order_acquire))
         return nullptr;
 
-    m_cachedMessage = m_queue[readIdx];
+    *m_cachedMessage = (*m_queue)[readIdx];
     m_readIndex.store((readIdx + 1) % QueueCapacity, std::memory_order_release);
 
-    return &m_cachedMessage;
+    return m_cachedMessage.get();
 }
 
 const std::array<uint8_t, CanvasMessageQueue::PayloadSize>* CanvasMessageQueue::popSnapshot() noexcept

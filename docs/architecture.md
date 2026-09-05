@@ -27,7 +27,7 @@ callback to exit.
 
 ## 2. Canvas Compilation
 
-The canvas is a 256x256 grid containing 65,536 cells. Each completed UI stroke
+The canvas is a 512x512 grid containing 262,144 cells. Each completed UI stroke
 submits a full grid snapshot, a dirty-row mask, and a monotonically increasing
 `m_canvasRevision` to `CanvasMessageQueue`. The message also carries the current
 pedal slots, manual routing, and existing parameter descriptors as a fixed-state
@@ -170,7 +170,7 @@ compiled descriptor
     -> effect processBlock
 ```
 
-Automation is compiled from 128 horizontal canvas slices (two canvas columns per slice, weighted Y average ignoring transparent cells) and uses the DAW PPQ
+Automation is compiled from 128 horizontal canvas slices (four canvas columns per slice, weighted Y average ignoring transparent cells) and uses the DAW PPQ
 position when available (fallback 120 BPM / 0 PPQ). The display shows an
 eight-bar envelope and highlights the selected active section. Bar counts are
 1, 2, 4, or 8. In Manual mode the 128-slice envelope is directly drawable (left-drag paints values lerped across slices, right-drag repositions the section window) and persisted via `hasManualEnvelope` / `manualEnvelope[128]` in `PresetState` (`ProjectState.h:26-27`, `StateSerializer.cpp:33`); Canvas mode uses the compiled envelope. Knob links support an adjustable automation range with a minimum

@@ -18,6 +18,23 @@ juce::File getPresetsDir()
     dir.createDirectory();
     return dir;
 }
+
+juce::File getImagesDir()
+{
+    auto dir = juce::File::getSpecialLocation(juce::File::userPicturesDirectory)
+                   .getChildFile("Drawdio");
+    if (!dir.isDirectory() && !dir.createDirectory().wasOk())
+    {
+        dir = juce::File::getSpecialLocation(juce::File::userDocumentsDirectory)
+                  .getChildFile("Drawdio");
+        dir.createDirectory();
+    }
+    else
+    {
+        dir.createDirectory();
+    }
+    return dir;
+}
 }
 
 DrawdioProcessorEditor::DrawdioProcessorEditor(DrawdioProcessor& p)
@@ -79,8 +96,9 @@ DrawdioProcessorEditor::DrawdioProcessorEditor(DrawdioProcessor& p)
     m_pedalboardHeader.onReset = [this]() { resetPedalboardState(); };
 
     m_bottomBar.onPresetSave = [this]() { savePreset(); };
-    m_bottomBar.onPresetLoad = [this]() { loadPreset(); };
-    m_bottomBar.onPresetImport = [this]() { importImage(); };
+    m_bottomBar.onPresetImport = [this]() { importPreset(); };
+    m_bottomBar.onImageImport = [this]() { importImage(); };
+    m_bottomBar.onImageExport = [this]() { exportImage(); };
 
     m_bottomBar.getAutomationDisplay().onBarCountChanged = [this](int bars) {
         m_automationPlayer.setBarCount(bars);
@@ -314,11 +332,12 @@ void DrawdioProcessorEditor::resetPedalboardState()
 void DrawdioProcessorEditor::savePreset()
 {
     juce::Component::SafePointer<DrawdioProcessorEditor> safeThis(this);
-    m_fileChooser = std::make_unique<juce::FileChooser>(
+    m_presetChooser = std::make_unique<juce::FileChooser>(
         "Save Drawdio Preset",
         getPresetsDir().getChildFile("Untitled.drawdio"),
         "*.drawdio");
-    m_fileChooser->launchAsync(juce::FileBrowserComponent::saveMode,
+    m_presetChooser->launchAsync(juce::FileBrowserComponent::saveMode
+                                     | juce::FileBrowserComponent::warnAboutOverwriting,
         [safeThis](const juce::FileChooser& fc)
         {
             if (safeThis == nullptr)
@@ -342,14 +361,14 @@ void DrawdioProcessorEditor::savePreset()
         });
 }
 
-void DrawdioProcessorEditor::loadPreset()
+void DrawdioProcessorEditor::importPreset()
 {
     juce::Component::SafePointer<DrawdioProcessorEditor> safeThis(this);
-    m_fileChooser = std::make_unique<juce::FileChooser>(
-        "Load Drawdio Preset",
+    m_presetChooser = std::make_unique<juce::FileChooser>(
+        "Import Drawdio Preset",
         getPresetsDir(),
-        "*");
-    m_fileChooser->launchAsync(juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
+        "*.drawdio");
+    m_presetChooser->launchAsync(juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
         [safeThis](const juce::FileChooser& fc)
         {
             if (safeThis == nullptr)
@@ -495,11 +514,11 @@ void ditherImageToGrid(const juce::Image& source, std::array<uint8_t, TotalCells
 void DrawdioProcessorEditor::importImage()
 {
     juce::Component::SafePointer<DrawdioProcessorEditor> safeThis(this);
-    m_fileChooser = std::make_unique<juce::FileChooser>(
+    m_imageChooser = std::make_unique<juce::FileChooser>(
         "Import Image to Canvas",
-        getPresetsDir(),
-        "*");
-    m_fileChooser->launchAsync(juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
+        getImagesDir(),
+        "*.png;*.jpg;*.jpeg;*.bmp;*.gif");
+    m_imageChooser->launchAsync(juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
         [safeThis](const juce::FileChooser& fc)
         {
             if (safeThis == nullptr)
@@ -515,14 +534,55 @@ void DrawdioProcessorEditor::importImage()
 
             auto scaled = image.rescaled(GridSize, GridSize, juce::Graphics::highResamplingQuality);
 
-            std::array<uint8_t, TotalCells> grid{};
-            ditherImageToGrid(scaled, grid);
+            auto grid = std::make_unique<std::array<uint8_t, TotalCells>>();
+            ditherImageToGrid(scaled, *grid);
 
-            editor.m_processorBridge.submitCanvasSnapshot(grid);
-            editor.m_pixelCanvas.setGridData(grid);
+            editor.m_processorBridge.submitCanvasSnapshot(*grid);
+            editor.m_pixelCanvas.setGridData(*grid);
             editor.m_syncController.setAutoEnvelopeDirty();
             editor.m_syncController.clearRoutingCache();
             editor.m_pedalboardGrid.syncPedals();
             editor.m_pedalboardGrid.repaint();
+        });
+}
+
+void DrawdioProcessorEditor::exportImage()
+{
+    juce::Component::SafePointer<DrawdioProcessorEditor> safeThis(this);
+    m_imageChooser = std::make_unique<juce::FileChooser>(
+        "Export Canvas Image",
+        getImagesDir().getChildFile("DrawdioCanvas.png"),
+        "*.png");
+    m_imageChooser->launchAsync(
+        juce::FileBrowserComponent::saveMode | juce::FileBrowserComponent::warnAboutOverwriting,
+        [safeThis](const juce::FileChooser& fc)
+        {
+            if (safeThis == nullptr)
+                return;
+            auto& editor = *safeThis;
+            auto file = fc.getResult();
+            if (file == juce::File{})
+                return;
+
+            if (file.getFileExtension().isEmpty())
+                file = file.withFileExtension(".png");
+
+            const auto& grid = editor.m_processorBridge.getGridData();
+            juce::Image img(juce::Image::ARGB, GridSize, GridSize, true);
+            for (int y = 0; y < GridSize; ++y)
+                for (int x = 0; x < GridSize; ++x)
+                {
+                    const uint8_t v = grid[static_cast<size_t>(y) * GridSize + x];
+                    juce::Colour c = (v == 0) ? juce::Colours::transparentBlack
+                                              : editor.m_themeImpl.canvasPixelColour(v);
+                    img.setPixelAt(x, y, c);
+                }
+
+            if (auto stream = std::unique_ptr<juce::FileOutputStream>(file.createOutputStream()))
+            {
+                juce::PNGImageFormat png;
+                png.writeImageToStream(img, *stream);
+                stream->flush();
+            }
         });
 }

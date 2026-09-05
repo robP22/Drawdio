@@ -70,10 +70,6 @@ static void drawBrushCircle(juce::Graphics& g, juce::Rectangle<float> r, float b
     float cx = r.getCentreX(), cy = r.getCentreY();
     float s = std::min(r.getWidth(), r.getHeight()) * 0.5f;
 
-    juce::Path ring;
-    ring.addEllipse(cx - s * 0.36f, cy - s * 0.36f, s * 0.72f, s * 0.72f);
-    g.strokePath(ring, juce::PathStrokeType(s * 0.10f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
-
     const float normalizedRadius = juce::jlimit(0.0f, 1.0f, brushRadius / 4.0f);
     const float dotR = s * (0.10f + 0.28f * normalizedRadius);
     g.fillEllipse(cx - dotR, cy - dotR, dotR * 2.0f, dotR * 2.0f);
@@ -536,7 +532,7 @@ int ColorPalette::hitTestBlob(juce::Point<float> position) const
 
 void ColorPalette::cycleBrushSize()
 {
-    m_currentBrushIndex = (m_currentBrushIndex + 1) % 4;
+    m_currentBrushIndex = (m_currentBrushIndex + 1) % 5;
     float radius = m_brushSizes[m_currentBrushIndex];
     m_sizeButton.repaint();
     if (m_onBrushSize)

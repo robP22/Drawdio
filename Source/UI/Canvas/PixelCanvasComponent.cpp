@@ -57,7 +57,7 @@ const juce::Image& PixelCanvasComponent::getGrainOverlay()
 {
     static const juce::Image grain = []()
     {
-        constexpr int gs = 256;
+        constexpr int gs = 256; // grain texture size decoupled from GridSize
         juce::Image img(juce::Image::ARGB, gs, gs, true);
         if (img.isValid())
         {
@@ -314,7 +314,7 @@ void PixelCanvasComponent::setPixel(int gridX, int gridY, PixelColor color)
     m_dirtyRows[static_cast<size_t>(gridY / 64)] |= uint64_t{ 1 } << (gridY % 64);
 
     if (m_activeStrokeOpen)
-        m_activeStroke.push_back({ static_cast<uint16_t>(index), previous, color });
+        m_activeStroke.push_back({ static_cast<uint32_t>(index), previous, color });
 
     applyPixelValue(index, color);
     repaint(cellBoundsForIndex(index).expanded(1));
@@ -408,7 +408,7 @@ void PixelCanvasComponent::clearCanvas()
         if (previous == PixelColor::Transparent)
             continue;
 
-        m_activeStroke.push_back({ static_cast<uint16_t>(i), previous, PixelColor::Transparent });
+        m_activeStroke.push_back({ static_cast<uint32_t>(i), previous, PixelColor::Transparent });
         applyPixelValue(i, PixelColor::Transparent);
     }
 
@@ -484,6 +484,7 @@ std::vector<uint8_t> PixelCanvasComponent::captureUndoData() const
 {
     if (m_undoStack.empty() && m_redoStack.empty()) return {};
 
+    constexpr uint32_t kMagic = 0x44553230u; // 'DU20' new 6B/change wire
     std::vector<uint8_t> data;
     auto writeU32 = [&](uint32_t v) {
         data.push_back(static_cast<uint8_t>(v));
@@ -492,6 +493,7 @@ std::vector<uint8_t> PixelCanvasComponent::captureUndoData() const
         data.push_back(static_cast<uint8_t>(v >> 24));
     };
 
+    writeU32(kMagic);
     writeU32(static_cast<uint32_t>(m_undoStack.size()));
     writeU32(static_cast<uint32_t>(m_redoStack.size()));
     for (auto& transaction : m_undoStack)
@@ -501,6 +503,8 @@ std::vector<uint8_t> PixelCanvasComponent::captureUndoData() const
         {
             data.push_back(static_cast<uint8_t>(change.index));
             data.push_back(static_cast<uint8_t>(change.index >> 8));
+            data.push_back(static_cast<uint8_t>(change.index >> 16));
+            data.push_back(static_cast<uint8_t>(change.index >> 24));
             data.push_back(static_cast<uint8_t>(change.previous));
             data.push_back(static_cast<uint8_t>(change.current));
         }
@@ -512,6 +516,8 @@ std::vector<uint8_t> PixelCanvasComponent::captureUndoData() const
         {
             data.push_back(static_cast<uint8_t>(change.index));
             data.push_back(static_cast<uint8_t>(change.index >> 8));
+            data.push_back(static_cast<uint8_t>(change.index >> 16));
+            data.push_back(static_cast<uint8_t>(change.index >> 24));
             data.push_back(static_cast<uint8_t>(change.previous));
             data.push_back(static_cast<uint8_t>(change.current));
         }
@@ -538,7 +544,44 @@ void PixelCanvasComponent::applyUndoData(const std::vector<uint8_t>& data)
         return v;
     };
 
-    auto readTransaction = [&](std::vector<std::vector<PixelChange>>& stack) -> bool {
+    const bool hasMagic = data.size() >= 4
+        && data[0]==0x30 && data[1]==0x32 && data[2]==0x55 && data[3]==0x44;
+
+    if (hasMagic)
+    {
+        readU32();
+        const uint32_t numUndo = readU32();
+        if (pos + 4 > data.size()) return;
+        const uint32_t numRedo = readU32();
+        auto readNew = [&](std::vector<std::vector<PixelChange>>& stack, uint32_t count) -> bool {
+            for (uint32_t t = 0; t < count; ++t)
+            {
+                if (pos + 4 > data.size()) return false;
+                const uint32_t nc = readU32();
+                std::vector<PixelChange> tx; tx.reserve(nc);
+                for (uint32_t c = 0; c < nc; ++c)
+                {
+                    if (pos + 6 > data.size()) return false;
+                    const uint32_t idx = data[pos] | (static_cast<uint32_t>(data[pos+1])<<8)
+                        | (static_cast<uint32_t>(data[pos+2])<<16) | (static_cast<uint32_t>(data[pos+3])<<24);
+                    pos += 4;
+                    const auto prev = static_cast<PixelColor>(data[pos++]);
+                    const auto cur = static_cast<PixelColor>(data[pos++]);
+                    tx.push_back({ idx, prev, cur });
+                }
+                stack.push_back(std::move(tx));
+            }
+            return true;
+        };
+        if (!readNew(m_undoStack, numUndo)) return;
+        if (!readNew(m_redoStack, numRedo)) return;
+        m_undoBytes = 0; m_redoBytes = 0;
+        for (auto& t : m_undoStack) m_undoBytes += t.size()*sizeof(PixelChange);
+        for (auto& t : m_redoStack) m_redoBytes += t.size()*sizeof(PixelChange);
+        return;
+    }
+
+    auto readOldTransaction = [&](std::vector<std::vector<PixelChange>>& stack) -> bool {
         if (pos + 4 > data.size()) return false;
         uint32_t numChanges = readU32();
         std::vector<PixelChange> transaction;
@@ -550,7 +593,7 @@ void PixelCanvasComponent::applyUndoData(const std::vector<uint8_t>& data)
             pos += 2;
             auto previous = static_cast<PixelColor>(data[pos++]);
             auto current  = static_cast<PixelColor>(data[pos++]);
-            transaction.push_back({ index, previous, current });
+            transaction.push_back({ static_cast<uint32_t>(index), previous, current });
         }
         stack.push_back(std::move(transaction));
         return true;
@@ -578,7 +621,7 @@ void PixelCanvasComponent::applyUndoData(const std::vector<uint8_t>& data)
     if (legacyFits)
     {
         for (uint32_t t = 0; t < firstCount; ++t)
-            if (!readTransaction(m_undoStack)) return;
+            if (!readOldTransaction(m_undoStack)) return;
         m_undoBytes = 0;
         m_redoBytes = 0;
         for (const auto& t : m_undoStack) m_undoBytes += t.size() * sizeof(PixelChange);
@@ -589,9 +632,9 @@ void PixelCanvasComponent::applyUndoData(const std::vector<uint8_t>& data)
     if (pos + 4 > data.size()) return;
     uint32_t numRedo = readU32();
     for (uint32_t t = 0; t < numUndo; ++t)
-        if (!readTransaction(m_undoStack)) return;
+        if (!readOldTransaction(m_undoStack)) return;
     for (uint32_t t = 0; t < numRedo; ++t)
-        if (!readTransaction(m_redoStack)) return;
+        if (!readOldTransaction(m_redoStack)) return;
     m_undoBytes = 0;
     m_redoBytes = 0;
     for (const auto& t : m_undoStack) m_undoBytes += t.size() * sizeof(PixelChange);
@@ -682,7 +725,7 @@ void PixelCanvasComponent::updateOverlayPixel(int index)
         return;
     }
 
-    if (m_pendingOverlayIndices.size() >= 4096)
+    if (m_pendingOverlayIndices.size() >= 16384)
     {
         m_pendingOverlayIndices.clear();
         m_overlayDirty = true;
@@ -787,7 +830,7 @@ void PixelCanvasComponent::floodFill(int startX, int startY)
     while (head < m_fillQueue.size())
     {
         int idx = m_fillQueue[head++];
-        m_fillChanges.push_back({static_cast<uint16_t>(idx), targetColor, fillColor});
+        m_fillChanges.push_back({static_cast<uint32_t>(idx), targetColor, fillColor});
 
         int x = idx % GridSize;
         int y = idx / GridSize;

@@ -36,8 +36,9 @@ public:
     void exitManualMode();
     void resetPedalboardState();
     void savePreset();
-    void loadPreset();
+    void importPreset();
     void importImage();
+    void exportImage();
 
 private:
     void triggerRecompile();
@@ -63,6 +64,7 @@ private:
     int m_lastPedalboardWidth = -1;
     int m_refreshTick = 0;
     double m_lastResizeTimeMs = 0.0;
-    std::unique_ptr<juce::FileChooser> m_fileChooser;
+    std::unique_ptr<juce::FileChooser> m_presetChooser;
+    std::unique_ptr<juce::FileChooser> m_imageChooser;
     juce::TooltipWindow m_tooltipWindow;
 };

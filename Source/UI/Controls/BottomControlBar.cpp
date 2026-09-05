@@ -8,9 +8,8 @@ BottomControlBar::BottomControlBar(const ScaledAssetProvider& assets,
     : m_assets(assets), m_actions(std::move(actions))
 {
     addAndMakeVisible(m_barsPill);
-    addAndMakeVisible(m_savePill);
-    addAndMakeVisible(m_loadPill);
-    addAndMakeVisible(m_importPill);
+    addAndMakeVisible(m_presetPill);
+    addAndMakeVisible(m_imagePill);
 
     m_inputKnob = std::make_unique<SpriteKnob>(m_assets, IResourceProvider::ImageId::PedalKnobImage, 0.0f, 2.0f);
     m_inputKnob->setValue(1.0f);
@@ -41,32 +40,35 @@ BottomControlBar::BottomControlBar(const ScaledAssetProvider& assets,
             m_automationDisplay.onBarCountChanged(next);
     };
 
-    auto styleSolidPill = [this](HeaderPill& pill) {
-        pill.setSolidBackfill(true);
+    auto styleSplitPill = [this](SplitPill& pill) {
         pill.setFontScales(0.55f, 0.60f);
         pill.setPadScale(0.25f);
     };
-    m_savePill.setPillTexts("SAVE", "");
-    m_loadPill.setPillTexts("LOAD", "");
-    m_importPill.setPillTexts("IMPORT", "");
-    styleSolidPill(m_savePill);
-    styleSolidPill(m_loadPill);
-    styleSolidPill(m_importPill);
+    m_presetPill.setTexts("SAVE", "IMPORT");
+    m_imagePill.setTexts("IMPORT", "EXPORT");
+    m_presetPill.setTooltips("Save preset to .drawdio", "Import preset from .drawdio");
+    m_imagePill.setTooltips("Import image to canvas (dithered to palette)", "Export canvas to PNG");
+    styleSplitPill(m_presetPill);
+    styleSplitPill(m_imagePill);
 
     m_automationDisplay.onSectionChanged = [this](int start) {
         if (m_actions.setSectionStart) m_actions.setSectionStart(start);
     };
-    m_savePill.onClick = [this]() {
+    m_presetPill.onLeftClick = [this]() {
         if (onPresetSave)
             onPresetSave();
     };
-    m_loadPill.onClick = [this]() {
-        if (onPresetLoad)
-            onPresetLoad();
-    };
-    m_importPill.onClick = [this]() {
+    m_presetPill.onRightClick = [this]() {
         if (onPresetImport)
             onPresetImport();
+    };
+    m_imagePill.onLeftClick = [this]() {
+        if (onImageImport)
+            onImageImport();
+    };
+    m_imagePill.onRightClick = [this]() {
+        if (onImageExport)
+            onImageExport();
     };
 
     for (int i = 0; i < PedalSlotCount; ++i)
@@ -99,7 +101,7 @@ void BottomControlBar::resized()
 
     m_inputKnob->setBounds(padPx, knobYPx, knobSizePx, knobSizePx);
 
-    // Button stack: Length button, then Save/Load/Import grouped below
+    // Button stack: Length pill, then Preset split + Image split
     const float btnW = EditorLayout::scaledCap(usableH, EditorDesignMetrics::BottomBar::BtnWidthRatio,
                                                EditorDesignMetrics::BottomBar::BtnMaxWidth, scale);
     const float btnH = EditorLayout::scaledCap(usableH, EditorDesignMetrics::BottomBar::BtnHeightRatio,
@@ -108,18 +110,16 @@ void BottomControlBar::resized()
     const int btnHPx = juce::roundToInt(btnH);
     const int labelGapPx = juce::roundToInt(usableH * EditorDesignMetrics::BottomBar::BtnLabelGapRatio);
     const int groupGapPx = juce::roundToInt(usableH * EditorDesignMetrics::BottomBar::BtnGroupGapRatio);
-    const int stackH = btnHPx * 4 + labelGapPx + groupGapPx * 2;
+    const int stackH = btnHPx * 3 + labelGapPx * 2;
     const int btnXPx = juce::roundToInt(pad + static_cast<float>(knobSizePx) + pad + pad * 0.5f);
     int btnYPx = juce::roundToInt(pad + (usableH - static_cast<float>(stackH)) * 0.5f
-                                  + btnH * EditorDesignMetrics::BottomBar::BtnVerticalShiftRatio);
+                                   + btnH * EditorDesignMetrics::BottomBar::BtnVerticalShiftRatio);
 
     m_barsPill.setBounds(btnXPx, btnYPx, btnWPx, btnHPx);
     btnYPx += btnHPx + labelGapPx;
-    m_savePill.setBounds(btnXPx, btnYPx, btnWPx, btnHPx);
-    btnYPx += btnHPx + groupGapPx;
-    m_loadPill.setBounds(btnXPx, btnYPx, btnWPx, btnHPx);
-    btnYPx += btnHPx + groupGapPx;
-    m_importPill.setBounds(btnXPx, btnYPx, btnWPx, btnHPx);
+    m_presetPill.setBounds(btnXPx, btnYPx, btnWPx, btnHPx);
+    btnYPx += btnHPx + labelGapPx;
+    m_imagePill.setBounds(btnXPx, btnYPx, btnWPx, btnHPx);
 
     // Automation: fills space between buttons and mixer strips
     const int autoXPx = btnXPx + btnWPx + padPx;
@@ -188,7 +188,7 @@ void BottomControlBar::paint(juce::Graphics& g)
                    sb.getY() - static_cast<int>(pad), juce::Justification::centredTop, false);
     }
 
-    const auto drawCaptionLabel = [&](const juce::TextButton& b, const char* text, int y, int height)
+    const auto drawCaptionLabel = [&](const juce::Component& b, const char* text, int y, int height)
     {
         const auto labelRect = juce::Rectangle<int>(b.getX(), y, b.getWidth(), height).reduced(1);
         if (labelRect.getHeight() < 6)
@@ -199,8 +199,10 @@ void BottomControlBar::paint(juce::Graphics& g)
     };
     const int labelH = juce::jlimit(12, 18, static_cast<int>(usableH * 0.16f));
     drawCaptionLabel(m_barsPill, "Automation", m_barsPill.getY() - labelH, labelH);
-    drawCaptionLabel(m_savePill, "Preset", m_barsPill.getBottom(),
-                     m_savePill.getY() - m_barsPill.getBottom() - 1);
+    drawCaptionLabel(m_presetPill, "Preset", m_barsPill.getBottom(),
+                     m_presetPill.getY() - m_barsPill.getBottom() - 1);
+    drawCaptionLabel(m_imagePill, "Image", m_presetPill.getBottom(),
+                     m_imagePill.getY() - m_presetPill.getBottom() - 1);
 
     const float dividerAlpha = 0.08f;
     g.setColour(juce::Colours::white.withAlpha(dividerAlpha));

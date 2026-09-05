@@ -2,6 +2,7 @@
 #include <array>
 #include <atomic>
 #include <cstdint>
+#include <memory>
 #include <vector>
 #include "Core/DrawdioConstants.h"
 #include "Core/DspModuleType.h"
@@ -26,7 +27,7 @@ public:
 
     static constexpr int QueueCapacity = 8;
 
-    CanvasMessageQueue() noexcept;
+    CanvasMessageQueue();
     ~CanvasMessageQueue() noexcept = default;
 
     bool pushSnapshot(const uint8_t* gridData) noexcept;
@@ -43,8 +44,8 @@ public:
     uint32_t latestRevision() const noexcept { return m_latestRevision.load(std::memory_order_acquire); }
 
 private:
-    std::array<CanvasMessage, QueueCapacity> m_queue;
-    CanvasMessage m_cachedMessage;
+    std::unique_ptr<std::array<CanvasMessage, QueueCapacity>> m_queue;
+    std::unique_ptr<CanvasMessage> m_cachedMessage;
     std::atomic<uint32_t> m_latestRevision{0};
     std::atomic<int> m_writeIndex;
     std::atomic<int> m_readIndex;

@@ -85,7 +85,7 @@ namespace Mixer
 constexpr float NameLabelHeightRatio = 0.14f;
 constexpr float MeterWidthRatio = 0.12f;
 constexpr float MeterTrackGapRatio = 0.05f;
-constexpr float TrackWidthRatio = 0.08f;
+constexpr float TrackWidthRatio = 0.048f;
 constexpr float ThumbWidthRatio = 0.16f;
 constexpr float ThumbHeightRatio = 0.10f;
 constexpr float SliderHitExpandRatio = 0.04f;

@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.2.5 - Finer Drawing, 512 Canvas, Multi-Format Build
+
+### Added
+- `GridSize 256->512` (`DrawdioConstants.h:6` 262144 cells, `DirtyRowWordCount 8`, queue 256KB/slot, analyzer 513 prefixes) with `2x2` legacy upscale.
+- Brush map `4->5` (`ColorPalette.h:76` `0.375/0.75/1.5/2.5/4.0`), dot-only icon (ring removed), index `0..4` migration.
+- Undo wire `uint32_t` index + `0x44553230` header, `12MB` cap, pending `16384`; legacy `uint16_t` still loads.
+
+### Changed
+- Docs: `SchemaVersion 3->4` (`StateSerializer.h:19`), grid `512x512`, automation `4 cols/slice`, brush `5`, undo `12MB`.
+- Updaters build `VST3+Standalone(+AU macOS)` and install VST3; `docs/build.md` reflects multi-format.
+
 ## v0.2.4 - Docs Refresh, DAW Jack Scale, and MIT License
 
 ### Added

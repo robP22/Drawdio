@@ -5,26 +5,24 @@ pending image-import plan and separates current behavior from future ideas.
 
 ## Canvas
 
-- The drawable area is a 256x256 grid.
+- The drawable area is a 512x512 grid.
 - Twelve drawable colors are available: Black, White, Red, Green, Blue, Yellow,
   Brown, Purple, Grey, Pink, Orange, and Violet.
 - Transparent cells are empty and show the canvas texture.
-- Four brush sizes are available.
+- Five brush sizes are available (0.375, 0.75, 1.5, 2.5, 4.0; dot-only icon).
 - Flood fill, erasing, rebound drawing, and undo/redo are supported.
-- Undo history is capped at 64 levels / 8 MB combined (shared between undo and redo) and persists across editor minimize/maximize; importing an image or replacing the grid clears the current undo history.
-- Brush size and color persist across minimize/maximize and save/restore (`brushSizeIndex`, `selectedColour` in `EditorSessionState`).
+- Undo history is capped at 64 levels / 12 MB combined (shared between undo and redo) and persists across editor minimize/maximize; importing an image or replacing the grid clears the current undo history.
+- Brush size and color persist across minimize/maximize and save/restore (`brushSizeIndex` 0..4, `selectedColour` in `EditorSessionState`).
 
 The compiler converts color-weighted cell coverage into normalized effect
 parameters. Detailed color weights and routing behavior are in
 [`architecture.md`](./architecture.md).
 
-## Image Import
+## Image Import / Export
 
-The Import control opens a file chooser and accepts files supported by JUCE's
-image loader. The chooser currently uses a broad `*` filter rather than a
-PNG/JPEG-only filter.
+The bottom bar has two split pills: `Preset [ SAVE | IMPORT ]` and `Image [ IMPORT | EXPORT ]` (equal halves, `SplitPill`). Preset save writes a `.drawdio` to `Documents/Drawdio/Presets`; preset import reads a `.drawdio` (filter `*.drawdio`) from the same directory. Image import opens a file chooser in `Pictures/Drawdio` (fallback `Documents/Drawdio`) with filter `*.png;*.jpg;*.jpeg;*.bmp;*.gif` and accepts files supported by JUCE's image loader.
 
-The selected image is rescaled to 256x256 with high-quality resampling. Pixels
+The selected image is rescaled to 512x512 with high-quality resampling. Pixels
 with alpha below 128 become transparent. Opaque pixels are quantized to the
 Drawdio palette using the weighted color-distance helper with Floyd-Steinberg
 error diffusion and serpentine scanning, so regional color averages track the
@@ -35,6 +33,8 @@ automation envelope dirty.
 
 Image import is not an undo transaction. There is no color-count preview or
 sampling-mode selector.
+
+Image export writes the current 512x512 canvas to a 512x512 transparent PNG (`Pictures/Drawdio/DrawdioCanvas.png` default, `*.png` filter, warn-on-overwrite). Empty cells write `transparentBlack`; drawn cells write `ThemeManager::canvasPixelColour` (drawn Black `5` → `0xFF121212`). No texture or grain is baked.
 
 ## Palette and Tools
 
@@ -66,7 +66,7 @@ components. It uses cached paths and gap-aware lane placement for the current pe
 
 ## Automation
 
-Automation is compiled from 128 horizontal canvas slices (two columns per slice, weighted Y average ignoring transparent cells). Each slice produces a
+Automation is compiled from 128 horizontal canvas slices (four columns per slice, weighted Y average ignoring transparent cells). Each slice produces a
 weighted Y-position value. Playback uses DAW PPQ position when available and
 falls back to the processor's default transport values when it is not.
 

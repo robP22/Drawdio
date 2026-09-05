@@ -46,7 +46,7 @@ public:
 
     // Single-pill mode: the whole capsule gets the label-chip backfill with the
     // label text centered (no divider/value slot) — used by the bottom-bar
-    // Save/Load/Import buttons.
+    // Length pill (SplitPill handles the Preset and Image split pills).
     void setSolidBackfill(bool solid)
     {
         m_solidBackfill = solid;

@@ -10,7 +10,7 @@
 JUCE is fetched by CMake through `FetchContent` when it is not already
 available. Initial configuration therefore requires network access.
 
-The product and plugin version are Drawdio v0.2.4. The installed CMake tool
+The product and plugin version are Drawdio v0.2.5. The installed CMake tool
 version is independent; `cmake_minimum_required(VERSION 3.24)` specifies only
 the oldest supported CMake release. Any current CMake 4.x release, including
 CMake 4.4.2, satisfies this requirement.
@@ -68,8 +68,7 @@ PNG and TTF files under `Assets/` are discovered recursively during CMake config
 
 ## Release Updater
 
-The updater builds and installs the Release VST3 bundle only. It does not
-install AU or Standalone artifacts. The generated bundle is copied as a complete
+The updater builds Release VST3 + Standalone (+ AU on macOS) and installs the VST3 bundle. AU/Standalone artefacts are validated but only VST3 is installed. The generated bundle is copied as a complete
 `Drawdio.vst3` directory; the internal platform binary must not be flattened.
 
 ### macOS, Linux, and Windows Git Bash
@@ -81,8 +80,8 @@ Run the Bash helper from the repository root or any working directory:
 ```
 
 The helper detects the shell platform, configures the build when
-`build/CMakeCache.txt` is absent, always builds `Drawdio_VST3` with
-`--config Release`, validates the resulting bundle, and installs it. It does not
+`build/CMakeCache.txt` is absent, builds `Drawdio_VST3` and `Drawdio_Standalone` (plus `Drawdio_AU` on macOS) with
+`--config Release`, validates each resulting artefact, and installs the VST3. It does not
 delete the build tree for `--reconfigure`.
 
 Options:

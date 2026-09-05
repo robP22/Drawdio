@@ -6,7 +6,7 @@ Drawdio keeps persistent behavior separate from editor session context.
 
 `PresetState` contains the reusable configuration:
 
-- 256x256 canvas data
+- 512x512 canvas data
 - Six pedal slots
 - Manual routing
 - Normalized knob values
@@ -22,7 +22,7 @@ Drawdio keeps persistent behavior separate from editor session context.
 - Selected palette colour
 - Selected drawing tool
 - Selected pedal slot
-- Brush size index (0..3)
+- Brush size index (0..4)
 - Link-range edit enabled flag
 - Manual-envelope overridden flag
 
@@ -34,7 +34,7 @@ history.
 
 ## Documents
 
-The serializer stores a versioned JUCE `ValueTree` document (`StateSerializer::SchemaVersion`, currently `3`) in the host state blob and in `.drawdio` files. The historical `DRD 0x05` preset version noted in older changelogs refers to the pre-ValueTree binary format and is not the current schema version; loading migrates from `0x05` where needed.
+The serializer stores a versioned JUCE `ValueTree` document (`StateSerializer::SchemaVersion`, currently `4`) in the host state blob and in `.drawdio` files. The historical `DRD 0x05` preset version noted in older changelogs refers to the pre-ValueTree binary format and is not the current schema version; version 4 upscales legacy 256x256 (65536 B) grid blobs via `2x2` replication and remaps old brush indices `0..3 -> 1..4` (new index 0 is the 0.375 finest). Loading migrates from `0x05` where needed.
 
 The root node is `DrawdioState` with these properties:
 
@@ -51,7 +51,7 @@ the storage boundary independent from UI components.
 ## Validation
 
 Documents are fully parsed and validated before any live state is changed.
-Checks include finite floats (`inputGain`, `outputGain`, `knobValues`, `pedalGains`, `linkRangeMins/Maxs`, `manualEnvelope`), pedal ID range (`<= RESERVED_REMOVED_OCTAVER`, 26 migrates to BYPASS), duplicate-free manual routing slots, `overrideMask`/`linkFlags` bit-width (`<= (1u << TotalKnobs) - 1`), `barCount` 1..8, `sectionStartBar` 0..7, `manualMode` 0/1, `linkRange` clamping to [0,1] with at least `0.05` width, `hasManualEnvelope` 0/1, and `session` `selectedColour`/`selectedTool`/`selectedPedal`/`brushSizeIndex` (0..3) / `linkRangeEditEnabled` / `isManualEnvelopeOverridden` bounds. Invalid documents leave the current state untouched. Valid documents are
+Checks include finite floats (`inputGain`, `outputGain`, `knobValues`, `pedalGains`, `linkRangeMins/Maxs`, `manualEnvelope`), pedal ID range (`<= RESERVED_REMOVED_OCTAVER`, 26 migrates to BYPASS), duplicate-free manual routing slots, `overrideMask`/`linkFlags` bit-width (`<= (1u << TotalKnobs) - 1`), `barCount` 1..8, `sectionStartBar` 0..7, `manualMode` 0/1, `linkRange` clamping to [0,1] with at least `0.05` width, `hasManualEnvelope` 0/1, and `session` `selectedColour`/`selectedTool`/`selectedPedal`/`brushSizeIndex` (0..4) / `linkRangeEditEnabled` / `isManualEnvelopeOverridden` bounds. Invalid documents leave the current state untouched. Valid documents are
 applied as one configuration transaction and trigger one compiler update.
 
 ## Loading Rules
