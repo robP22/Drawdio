@@ -192,9 +192,8 @@ void EditorSyncController::refreshRoutingFromConfig()
     }
     if (pedalChanged)
     {
-        const auto snapshot = m_processor.getUiSnapshot();
-        m_pedalboardGrid.setViewState(snapshot);
-        m_bottomBar.setViewState(snapshot);
+        m_pedalboardGrid.setViewState(m_processor.getUiSnapshot());
+        m_bottomBar.setViewState(m_processor.getUiSnapshot());
         m_bottomBar.syncPedalNames();
         m_needsRepaint = true;
     }

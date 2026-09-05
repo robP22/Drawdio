@@ -2,6 +2,7 @@
 #include <JuceHeader.h>
 #include <functional>
 #include "UI/Theme/HeaderPill.h"
+#include "UI/Theme/SplitPill.h"
 #include "UI/Controls/MixerStrip.h"
 #include "UI/Controls/AutomationDisplay.h"
 #include "UI/Controls/SpriteKnob.h"
@@ -33,16 +34,16 @@ public:
     void setPedalPeak(int slot, float peak);
     void setManualMode(bool manual);
     std::function<void()> onPresetSave;
-    std::function<void()> onPresetLoad;
     std::function<void()> onPresetImport;
+    std::function<void()> onImageImport;
+    std::function<void()> onImageExport;
 
 private:
     const ScaledAssetProvider& m_assets;
     Actions m_actions;
     HeaderPill m_barsPill;
-    HeaderPill m_savePill;
-    HeaderPill m_loadPill;
-    HeaderPill m_importPill;
+    SplitPill m_presetPill;
+    SplitPill m_imagePill;
     std::unique_ptr<SpriteKnob> m_inputKnob;
     std::unique_ptr<SpriteKnob> m_outputKnob;
     AutomationDisplay m_automationDisplay;

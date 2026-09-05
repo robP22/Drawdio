@@ -2,6 +2,7 @@
 
 #include <array>
 #include <chrono>
+#include <memory>
 #include <thread>
 
 #include "State/ConfigManager.h"
@@ -33,9 +34,9 @@ TEST_CASE("Same-topology canvas changes update parameters without replacing payl
     const auto* original = config.getCurrentConfig();
     REQUIRE(original != nullptr);
 
-    std::array<uint8_t, TotalCells> grid{};
-    grid.fill(7);
-    config.submitCanvasSnapshot(grid);
+    auto grid = std::make_unique<std::array<uint8_t, TotalCells>>();
+    grid->fill(7);
+    config.submitCanvasSnapshot(*grid);
     REQUIRE(waitForCompiledResult(config));
 
     REQUIRE(config.getCurrentConfig() == original);

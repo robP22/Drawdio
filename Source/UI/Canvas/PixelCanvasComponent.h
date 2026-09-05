@@ -16,7 +16,7 @@ class PixelCanvasComponent : public juce::Component
 {
 public:
     static constexpr int MaxUndoLevels = 64;
-    static constexpr size_t MaxUndoBytes = 8u * 1024u * 1024u; // 8 MB across undo+redo
+    static constexpr size_t MaxUndoBytes = 12u * 1024u * 1024u; // 12 MB across undo+redo
 
     enum class PixelColor : uint8_t
     {
@@ -37,7 +37,7 @@ public:
 
     struct PixelChange
     {
-        uint16_t index;
+        uint32_t index;
         PixelColor previous;
         PixelColor current;
     };

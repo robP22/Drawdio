@@ -30,7 +30,18 @@ PedalboardGrid::PedalboardGrid(const EditorUiSnapshot& initialState,
         actions.setType = [this](int slot, DspModuleType type)
         {
             if (slot >= 0 && slot < PedalSlotCount)
+            {
                 m_pedalTypes[static_cast<size_t>(slot)] = type;
+                m_linked[static_cast<size_t>(slot)].fill(false);
+                m_linkMins[static_cast<size_t>(slot)].fill(0.0f);
+                m_linkMaxs[static_cast<size_t>(slot)].fill(1.0f);
+                if (auto* pedal = m_pedalComponents[static_cast<size_t>(slot)].get())
+                    for (int k = 0; k < KnobsPerPedal; ++k)
+                    {
+                        pedal->setKnobLinked(k, false);
+                        pedal->setKnobLinkRange(k, 0.0f, 1.0f);
+                    }
+            }
             if (m_actions.setPedalType)
                 m_actions.setPedalType(slot, type);
             rebuildCableCache();

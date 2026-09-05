@@ -73,7 +73,7 @@ private:
     std::function<void(bool)> m_onReboundMode;
     std::function<void(bool)> m_onEraser;
     uint8_t m_eraserSavedColor = 3;
-    std::array<float, 4> m_brushSizes { 0.75f, 1.5f, 2.5f, 4.0f };
+    std::array<float, 5> m_brushSizes { 0.375f, 0.75f, 1.5f, 2.5f, 4.0f };
     int m_currentBrushIndex = 0;
     float m_imageCenterX = 0.0f;
     float m_contentCenterOffset = 0.0f;

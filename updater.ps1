@@ -51,20 +51,26 @@ if ($Reconfigure -or -not (Test-Path -LiteralPath $cachePath -PathType Leaf)) {
     Invoke-CMake @('-S', $rootDir, '-B', $buildDir, '-DCMAKE_BUILD_TYPE=Release')
 }
 
-Write-Host 'Building Release VST3...'
-$buildArguments = @('--build', $buildDir, '--config', 'Release', '--target', 'Drawdio_VST3', '--parallel')
+Write-Host 'Building Release VST3 + Standalone...'
+$buildArguments = @('--build', $buildDir, '--config', 'Release', '--target', 'Drawdio_VST3', '--target', 'Drawdio_Standalone', '--parallel')
 if ($Parallel -gt 0) {
     $buildArguments += $Parallel.ToString()
 }
 Invoke-CMake $buildArguments
 
 $sourcePlugin = Join-Path $buildDir "Drawdio_artefacts\Release\VST3\$pluginName"
+$standaloneDir = Join-Path $buildDir "Drawdio_artefacts\Release\Standalone"
+$auBundle = Join-Path $buildDir "Drawdio_artefacts\Release\AU\Drawdio.component"
 if (-not (Test-Vst3Bundle $sourcePlugin)) {
     Stop-Updater "Release VST3 bundle was not produced at $sourcePlugin"
+}
+if (-not (Test-Path -LiteralPath $standaloneDir -PathType Container)) {
+    Stop-Updater "Release Standalone was not produced at $standaloneDir"
 }
 
 if ($NoInstall) {
     Write-Host "Validated: $sourcePlugin"
+    Write-Host "Validated: $standaloneDir"
     exit 0
 }
 
@@ -84,27 +90,34 @@ if ([string]::IsNullOrWhiteSpace($InstallDir)) {
 
 function Install-Vst3([string]$TargetDirectory, [string]$SourcePath) {
     $destination = Join-Path $TargetDirectory $pluginName
-    $staging = Join-Path $TargetDirectory ".Drawdio.vst3.staging.$PID"
-    $backup = Join-Path $TargetDirectory ".Drawdio.vst3.previous.$PID"
+    $tempRoot = [System.IO.Path]::GetTempPath()
+    $staging = Join-Path $tempRoot "Drawdio.vst3.staging.$PID"
+    $stagedPlugin = Join-Path $staging $pluginName
+    $backup = Join-Path $tempRoot "Drawdio.vst3.previous.$PID"
     $movedExisting = $false
 
     try {
         New-Item -ItemType Directory -Path $TargetDirectory -Force | Out-Null
+        foreach ($legacy in @(Get-ChildItem -LiteralPath $TargetDirectory -Force -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -like '.Drawdio.vst3.*' })) {
+            Remove-Item -LiteralPath $legacy.FullName -Recurse -Force -ErrorAction SilentlyContinue
+        }
         if (Test-Path -LiteralPath $staging) {
             Remove-Item -LiteralPath $staging -Recurse -Force
         }
+        if (Test-Path -LiteralPath $backup) {
+            Remove-Item -LiteralPath $backup -Recurse -Force
+        }
+        if (Test-Path -LiteralPath $stagedPlugin) {
+            Remove-Item -LiteralPath $stagedPlugin -Recurse -Force
+        }
         New-Item -ItemType Directory -Path $staging -Force | Out-Null
-        Copy-Item -LiteralPath $SourcePath -Destination (Join-Path $staging $pluginName) -Recurse -Force
+        Copy-Item -LiteralPath $SourcePath -Destination $stagedPlugin -Recurse -Force
 
-        $stagedPlugin = Join-Path $staging $pluginName
         if (-not (Test-Vst3Bundle $stagedPlugin)) {
             throw "staged VST3 bundle is incomplete"
         }
 
         if (Test-Path -LiteralPath $destination) {
-            if (Test-Path -LiteralPath $backup) {
-                Remove-Item -LiteralPath $backup -Recurse -Force
-            }
             Move-Item -LiteralPath $destination -Destination $backup
             $movedExisting = $true
         }
@@ -121,6 +134,8 @@ function Install-Vst3([string]$TargetDirectory, [string]$SourcePath) {
         }
         if ($movedExisting -and -not (Test-Path -LiteralPath $destination) -and (Test-Path -LiteralPath $backup)) {
             Move-Item -LiteralPath $backup -Destination $destination -ErrorAction SilentlyContinue
+        } elseif (Test-Path -LiteralPath $backup) {
+            Remove-Item -LiteralPath $backup -Recurse -Force -ErrorAction SilentlyContinue
         }
         Write-Warning "Installation into '$TargetDirectory' failed: $($_.Exception.Message)"
         return $false
@@ -136,6 +151,7 @@ if (-not (Install-Vst3 $InstallDir $sourcePlugin)) {
             $InstallDir = $perUserDir
             if (Install-Vst3 $InstallDir $sourcePlugin) {
                 Write-Host "Installed to $(Join-Path $InstallDir $pluginName)"
+                Write-Host "Standalone: $standaloneDir"
                 Write-Host 'Restart or rescan the DAW if it does not discover the updated plugin.'
                 exit 0
             }
@@ -145,4 +161,5 @@ if (-not (Install-Vst3 $InstallDir $sourcePlugin)) {
 }
 
 Write-Host "Installed to $(Join-Path $InstallDir $pluginName)"
+Write-Host "Standalone: $standaloneDir"
 Write-Host 'Restart or rescan the DAW if it does not discover the updated plugin.'

@@ -27,7 +27,7 @@ files store only the preset layer. See [`state-format.md`](./state-format.md).
 
 ## Compilation
 
-The encoded canvas remains a fixed 256x256 grid. Drawing submits one complete
+The encoded canvas remains a fixed 512x512 grid. Drawing submits one complete
 grid after pen-up plus a dirty-row mask. The compiler retains cached graph
 analysis and updates affected rows only.
 

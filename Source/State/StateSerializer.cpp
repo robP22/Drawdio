@@ -58,6 +58,30 @@ bool readArrayBytes(const juce::var& value, std::array<T, N>& output)
     return true;
 }
 
+static bool readGridBytes(const juce::var& value, std::array<uint8_t, TotalCells>& outGrid)
+{
+    const auto* block = value.getBinaryData();
+    if (block == nullptr)
+        return false;
+    if (block->getSize() == sizeof(uint8_t) * TotalCells)
+    {
+        std::memcpy(outGrid.data(), block->getData(), block->getSize());
+        return true;
+    }
+    constexpr size_t kOldGridSize = 256;
+    constexpr size_t kOldCells = kOldGridSize * kOldGridSize;
+    if (block->getSize() == kOldCells)
+    {
+        const auto* src = static_cast<const uint8_t*>(block->getData());
+        for (int y = 0; y < GridSize; ++y)
+            for (int x = 0; x < GridSize; ++x)
+                outGrid[static_cast<size_t>(y) * GridSize + x]
+                    = src[static_cast<size_t>(y / 2) * kOldGridSize + static_cast<size_t>(x / 2)];
+        return true;
+    }
+    return false;
+}
+
 template <typename T, size_t N>
 bool finiteArray(const std::array<T, N>& values)
 {
@@ -97,7 +121,7 @@ juce::ValueTree makePresetTree(const PresetState& state)
 bool readPresetTree(const juce::ValueTree& tree, PresetState& state)
 {
     if (!tree.isValid()
-        || !readArrayBytes(tree[kGrid], state.gridData)
+        || !readGridBytes(tree[kGrid], state.gridData)
         || !readArrayBytes(tree[kKnobs], state.knobValues)
         || !readArrayBytes(tree[kPedalGains], state.pedalGains)
         || !tree.hasProperty(kRouting)
@@ -265,7 +289,9 @@ bool StateSerializer::deserializePreset(const void* data, size_t sizeInBytes, Pr
     juce::ValueTree root;
     if (!deserializeTree(data, sizeInBytes, DocumentType::Preset, root))
         return false;
-    return readPresetTree(root.getChildWithName(kPreset), outState);
+    if (!readPresetTree(root.getChildWithName(kPreset), outState))
+        return false;
+    return true;
 }
 
 bool StateSerializer::deserializeProject(const void* data, size_t sizeInBytes, ProjectState& outState)
@@ -279,11 +305,17 @@ bool StateSerializer::deserializeProject(const void* data, size_t sizeInBytes, P
     if (!session.isValid())
         return false;
 
+    const int version = static_cast<int>(root[kVersion]);
     outState.session.selectedColour = static_cast<uint8_t>(juce::jlimit(0, 12, static_cast<int>(session[kSelectedColour])));
     outState.session.selectedTool = static_cast<uint8_t>(juce::jlimit(0, 255, static_cast<int>(session[kSelectedTool])));
     outState.session.selectedPedal = static_cast<int8_t>(juce::jlimit(-1, PedalSlotCount - 1, static_cast<int>(session[kSelectedPedal])));
-    outState.session.brushSizeIndex = static_cast<uint8_t>(juce::jlimit(0, 3, static_cast<int>(session[kBrushSizeIndex])));
+    const int rawBrush = static_cast<int>(session[kBrushSizeIndex]);
+    int brushIdx = juce::jlimit(0, 4, rawBrush);
+    if (version <= 3)
+        brushIdx = juce::jlimit(0, 4, brushIdx + 1);
+    outState.session.brushSizeIndex = static_cast<uint8_t>(brushIdx);
     outState.session.linkRangeEditEnabled = session.hasProperty(kLinkRangeEditEnabled)
         ? static_cast<int>(session[kLinkRangeEditEnabled]) != 0 : false;
+    juce::ignoreUnused(version);
     return true;
 }

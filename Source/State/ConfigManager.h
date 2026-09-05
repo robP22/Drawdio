@@ -158,6 +158,7 @@ private:
     void syncCompilerConfig();
     void retryPendingCompile();
     PresetState capturePresetState() const;
+    void capturePresetState(PresetState& outState) const;
     void applyPresetState(const PresetState& state);
     void restoreKnobValuesFromState(const PresetState& state);
     void syncLastConfig(const PedalAssetPayload* config);

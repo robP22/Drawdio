@@ -2,12 +2,14 @@
 #include <array>
 #include <chrono>
 #include <cmath>
+#include <memory>
 #include <thread>
 #include <vector>
 
 #include "Core/DrawdioConstants.h"
 #include "Core/DspModuleType.h"
 #include "State/ConfigManager.h"
+#include "State/PedalDefinition.h"
 #include "UnifiedPedalProcessor.h"
 
 namespace
@@ -148,9 +150,9 @@ TEST_CASE("Manual mode ignores canvas pixels for params", "[manualmode]")
     ConfigManager cm(dsp);
     cm.prepare(44100.0, 512);
 
-    std::array<uint8_t, TotalCells> brownGrid{};
-    brownGrid.fill(7);
-    cm.setGridData(brownGrid);
+    auto brownGrid = std::make_unique<std::array<uint8_t, TotalCells>>();
+    brownGrid->fill(7);
+    cm.setGridData(*brownGrid);
     cm.setManualMode(true);
     cm.setPedalSlot(0, DspModuleType::TREMOLO);
     REQUIRE(waitForCompiledResult(cm));
@@ -174,9 +176,9 @@ TEST_CASE("Canvas-to-manual switch retains compiled params", "[manualmode]")
     ConfigManager cm(dsp);
     cm.prepare(44100.0, 512);
 
-    std::array<uint8_t, TotalCells> brownGrid{};
-    brownGrid.fill(7);
-    cm.setGridData(brownGrid);
+    auto brownGrid = std::make_unique<std::array<uint8_t, TotalCells>>();
+    brownGrid->fill(7);
+    cm.setGridData(*brownGrid);
     cm.setPedalSlot(0, DspModuleType::TREMOLO);
     REQUIRE(waitForCompiledResult(cm));
 
@@ -213,9 +215,9 @@ TEST_CASE("Dragged knob override survives canvas-to-manual switch", "[manualmode
     ConfigManager cm(dsp);
     cm.prepare(44100.0, 512);
 
-    std::array<uint8_t, TotalCells> brownGrid{};
-    brownGrid.fill(7);
-    cm.setGridData(brownGrid);
+    auto brownGrid = std::make_unique<std::array<uint8_t, TotalCells>>();
+    brownGrid->fill(7);
+    cm.setGridData(*brownGrid);
     cm.setPedalSlot(0, DspModuleType::TREMOLO);
     REQUIRE(waitForCompiledResult(cm));
 
@@ -321,23 +323,26 @@ TEST_CASE("Importing a new image recompiles the routing", "[manualmode]")
     cm.setPedalSlot(4, DspModuleType::GLITCH_STUTTER);
     REQUIRE(waitForCompiledResult(cm));
 
-    std::array<uint8_t, TotalCells> imageA{};
-    std::array<uint8_t, TotalCells> imageB{};
+    auto imageA = std::make_unique<std::array<uint8_t, TotalCells>>();
+    auto imageB = std::make_unique<std::array<uint8_t, TotalCells>>();
+    // 3 active slots at 512 rows: bands are [0,171), [171,342), [342,512).
     // A: slot 0's band painted far left (score ~0), slot 2's band far right
-    // (high x-mean score) -> the right-biased band sorts last: {0, 4, 2}.
-    for (int y = 0; y < 40; ++y)
+    // (high x-mean score) -> the right-biased band sorts last.
+    const int bandA0End = GridSize / 3;
+    const int bandA2Start = 2 * GridSize / 3;
+    for (int y = 0; y < bandA0End; ++y)
         for (int x = 0; x < 10; ++x)
-            imageA[static_cast<size_t>(y) * GridSize + x] = 3;
-    for (int y = 86; y < 126; ++y)
-        for (int x = 206; x < GridSize; ++x)
-            imageA[static_cast<size_t>(y) * GridSize + x] = 3;
+            (*imageA)[static_cast<size_t>(y) * GridSize + x] = 3;
+    for (int y = bandA2Start; y < GridSize; ++y)
+        for (int x = GridSize - 50; x < GridSize; ++x)
+            (*imageA)[static_cast<size_t>(y) * GridSize + x] = 3;
     // B: swapped - slot 2's band far left, slot 0's band far right.
-    for (int y = 86; y < 126; ++y)
+    for (int y = bandA2Start; y < GridSize; ++y)
         for (int x = 0; x < 10; ++x)
-            imageB[static_cast<size_t>(y) * GridSize + x] = 3;
-    for (int y = 0; y < 40; ++y)
-        for (int x = 206; x < GridSize; ++x)
-            imageB[static_cast<size_t>(y) * GridSize + x] = 3;
+            (*imageB)[static_cast<size_t>(y) * GridSize + x] = 3;
+    for (int y = 0; y < bandA0End; ++y)
+        for (int x = GridSize - 50; x < GridSize; ++x)
+            (*imageB)[static_cast<size_t>(y) * GridSize + x] = 3;
 
     // Complete the A config's crossfade so its nextConfig slot frees up; the
     // plugin does this via the editor tick + running audio (deferred configs
@@ -350,12 +355,12 @@ TEST_CASE("Importing a new image recompiles the routing", "[manualmode]")
         cfg.tryApplyDeferredConfig();
     };
 
-    cm.submitCanvasSnapshot(imageA);
+    cm.submitCanvasSnapshot(*imageA);
     REQUIRE(waitForCompiledResult(cm));
     settleAudio(cm, dsp);
     const auto orderA = cm.getLastConfigSync().routingSlotOrder;
 
-    cm.submitCanvasSnapshot(imageB);
+    cm.submitCanvasSnapshot(*imageB);
     REQUIRE(waitForCompiledResult(cm));
     settleAudio(cm, dsp);
     const auto orderB = cm.getLastConfigSync().routingSlotOrder;
@@ -369,6 +374,79 @@ TEST_CASE("Importing a new image recompiles the routing", "[manualmode]")
     REQUIRE(orderB.size() == 3);
     REQUIRE(orderA != orderB);
     // Empty band scores 0 and sorts first; right-biased (high x-mean) sorts last.
-    REQUIRE(orderA == std::vector<uint8_t>({ 4, 0, 2 }));
-    REQUIRE(orderB == std::vector<uint8_t>({ 4, 2, 0 }));
+    REQUIRE(orderA == std::vector<uint8_t>({ 0, 2, 4 }));
+    REQUIRE(orderB == std::vector<uint8_t>({ 2, 4, 0 }));
+}
+
+TEST_CASE("Changing a pedal type clears its links, routing, and knob values", "[manualmode]")
+{
+    UnifiedPedalProcessor dsp;
+    dsp.prepareToPlay(44100.0, 512, 1);
+    ConfigManager cm(dsp);
+    cm.prepare(44100.0, 512);
+
+    cm.setPedalSlot(0, DspModuleType::TREMOLO);
+    REQUIRE(waitForCompiledResult(cm));
+
+    for (int k = 0; k < KnobsPerPedal; ++k)
+        cm.setKnobLink(0, k, true);
+    cm.setKnobLinkRange(0, 1, 0.2f, 0.8f);
+    cm.setManualRouting({ 0 });
+    REQUIRE(waitForCompiledResult(cm));
+    for (int k = 0; k < KnobsPerPedal; ++k)
+        REQUIRE(cm.isKnobLinked(0, k));
+    REQUIRE(cm.getManualRouting() == std::vector<uint8_t>({ 0 }));
+
+    cm.setPedalSlot(0, DspModuleType::WAVESHAPER);
+    REQUIRE(waitForCompiledResult(cm));
+
+    for (int k = 0; k < KnobsPerPedal; ++k)
+    {
+        REQUIRE_FALSE(cm.isKnobLinked(0, k));
+        REQUIRE(cm.getKnobLinkRangeMin(0, k) == 0.0f);
+        REQUIRE(cm.getKnobLinkRangeMax(0, k) == 1.0f);
+    }
+    REQUIRE(cm.getManualRouting().empty());
+    REQUIRE_FALSE(cm.isParamOverridden(0, 0));
+
+    const auto& def = PedalDefinitions::get(DspModuleType::WAVESHAPER);
+    auto knobVals = cm.getKnobValues();
+    for (int k = 0; k < KnobsPerPedal; ++k)
+        REQUIRE(std::abs(knobVals[static_cast<size_t>(k)] - def.parameters[static_cast<size_t>(k)].param.defaultValue) < 1e-4f);
+
+    cm.setPedalSlot(0, DspModuleType::BYPASS);
+    REQUIRE(waitForCompiledResult(cm));
+    for (int k = 0; k < KnobsPerPedal; ++k)
+        REQUIRE_FALSE(cm.isKnobLinked(0, k));
+}
+
+TEST_CASE("Dragged override does not survive a pedal swap plus recompile", "[manualmode]")
+{
+    UnifiedPedalProcessor dsp;
+    dsp.prepareToPlay(44100.0, 512, 1);
+    ConfigManager cm(dsp);
+    cm.prepare(44100.0, 512);
+
+    cm.setPedalSlot(0, DspModuleType::TREMOLO);
+    REQUIRE(waitForCompiledResult(cm));
+
+    cm.setKnobParameter(0, 2, 0.5f, 0.9f);
+    cm.setKnobLink(0, 2, true);
+    REQUIRE(cm.isKnobLinked(0, 2));
+    REQUIRE(cm.isParamOverridden(0, 2));
+
+    cm.setPedalSlot(0, DspModuleType::WAVESHAPER);
+    REQUIRE(waitForCompiledResult(cm));
+    REQUIRE_FALSE(cm.isKnobLinked(0, 2));
+
+    auto grid = std::make_unique<std::array<uint8_t, TotalCells>>();
+    grid->fill(7);
+    cm.submitCanvasSnapshot(*grid);
+    REQUIRE(waitForCompiledResult(cm));
+
+    REQUIRE_FALSE(cm.isKnobLinked(0, 2));
+    REQUIRE_FALSE(cm.isParamOverridden(0, 2));
+    const auto& def = PedalDefinitions::get(DspModuleType::WAVESHAPER);
+    auto knobVals = cm.getKnobValues();
+    REQUIRE(std::abs(knobVals[2] - def.parameters[2].param.defaultValue) < 1e-4f);
 }
