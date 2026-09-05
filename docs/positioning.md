@@ -19,11 +19,14 @@ scale changes everything through the same ratios.
    `getOutputJackPos()` return points in the pedalboard grid's space so the
    jack map, cables, and routing controller share one coordinate frame.
    Painting code is always local.
-3. **Pixel values only via the scaled-cap helper.** Fixed pixel sizes must not
-   scale with the window; use `EditorLayout::scaledCap(usable, ratio, designPx,
-   scale)` (e.g. bottom-bar button caps) or a height-derived ratio
-   (`EditorLayout::scaleFromHeight`). Examples: `JackHitMap` radius, DAW jack
-   height (`Cable::JackHeightRatio * DawJackScale`, top-flush via `dawJackHeight()*0.5`), bottom-bar caps, label fonts.
+3. **Pixel values prefer the scaled-cap helper.** Fixed pixel sizes must not
+    scale with the window; use `EditorLayout::scaledCap(usable, ratio, designPx,
+    scale)` (e.g. bottom-bar button caps) or a height-derived ratio
+    (`EditorLayout::scaleFromHeight`). DAW jack height follows the rule
+    (`Cable::JackHeightRatio * DawJackScale`, top-flush via `dawJackHeight()*0.5`).
+    Known exceptions documented as-is: `JackHitMap` radius uses a manual clamp,
+    cable-lane pixel constants are used directly, and `BottomControlBar::paint`
+    duplicates its caption caps as plain minima.
 4. **Sprite alignment only through `EditorLayout`.** Sprite opaque-edge scans
    (`topOpaqueRatio` / `bottomOpaqueRatio`) stay in `UI/EditorLayout.h`; a
    component scans its own sprite (e.g. `ColorPalette` scans
@@ -35,12 +38,11 @@ scale changes everything through the same ratios.
 | Setter | Meaning | Consumer computes |
 |---|---|---|
 | `ColorPalette::setImageCenterX(x)` | Canvas centre X (palette-local) | Palette texture horizontal placement |
-| `ColorPalette::setPedalBottomRatio(r)` + `setContentTop(ratio, px)` | Pedal bottom and canvas content top (semantic ratios) | Palette/canvas placement scaled from height (replaces prior `setImageBottomShift` / `setContentCenterOffset` / `setCanvasTopOffset`) |
+| `PedalboardHeader::setButtonCenterY(y)` | Header button row Y (parent sprite scan) | Header pill vertical placement |
 
 The editor owns the column layout; each component owns the formulas that map
-its own sprite and the semantic values into pixels. No other cross-component
-pixel setters exist; other layout is via `EditorLayout::calculate` and
-`EditorDesignMetrics` constants.
+its own sprite and the semantic values into pixels. Other layout is via
+`EditorLayout::calculate` and `EditorDesignMetrics` constants.
 
 ## Tune-constant index
 

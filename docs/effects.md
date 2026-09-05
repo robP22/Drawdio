@@ -20,8 +20,8 @@ and parameter wiring are verified against `Source/Effects/` and `Source/Dsp/`.
 
 Several parameters snap to evenly spaced detents (HalfTime/ShaperBox-style);
 the grid is defined per knob in `PedalDefinitions` and applied on drag, on
-compiled display, on linked/canvas automation (display and final DSP value).
-Current grids: Re-Time Time (5: 0.25/0.5/0.75/1/2x), Re-Time Bars (4:
+linked/canvas automation (display and final DSP value).
+Current grids: ReTime Time (5: 0.25/0.5/0.75/1/2x), ReTime Bars (4:
 half/1/2/4 bars), Sidechain Rate (5: 1/6, 1/4, 1/3, 1/2, 1 beat at transport
 BPM), Pitch Shifter Pitch (25: -12 to +12 semitones in 100-cent steps),
 Bitcrusher Bits (15: 2-16 bits), Convolution Reverb Damp (15: 16 IR rows),
@@ -31,27 +31,27 @@ Tremolo Shape (3: sine/triangle/square). The mix knob never snaps.
 
 | ID | Module | Display name | Knob labels | Mix index |
 |---:|---|---|---|---|
-| 1 | `WAVESHAPER_DISTORTION` | Wave Shaper | Mix / - / Drive / - | 0 |
+| 1 | `WAVESHAPER` | Waveshaper | Mix / - / Drive / - | 0 |
 | 2 | `CHORUS` | Chorus | Mix / Depth / - / Rate | 0 |
 | 3 | `MULTI_MODE_FILTER` | Multi-Mode Filter | Mode / Mix / Cutoff / - | 1 |
 | 4 | `PITCH_SHIFTER` | Pitch Shifter | Mix / - / Pitch / - | 0 |
-| 5 | `ENVELOPE_VCA_COMPRESSOR` | VCA Compressor | Attack / Mix / Thresh / Level | 1 |
+| 5 | `VCA_COMPRESSOR` | VCA Compressor | Attack / Mix / Thresh / Level | 1 |
 | 6 | `GLITCH_STUTTER` | Glitch Stutter | Intens / Mix / Random / Smooth | 1 |
-| 7 | `DIFFUSED_DELAY_NETWORK` | Diffused Reverb | Mix / Size / - / Decay | 0 |
-| 8 | `MATHEMATICAL_WAVEFOLDER` | Wave Folder | Mix / Fold / - / - | 0 |
-| 9 | `FORMANT_VOCAL_SHIFTER` | Formant Shifter | Mix / Shift / Formant / Q | 0 |
-| 10 | `RETIME` | Re-Time | Mix / Time / Bars / Shift | 0 |
-| 11 | `SIMPLE_DELAY` | Delay | Mix / Time / Feed / Damp | 0 |
+| 7 | `DIFFUSED_REVERB` | Diffused Reverb | Mix / Size / - / Decay | 0 |
+| 8 | `WAVEFOLDER` | Wavefolder | Mix / Fold / - / - | 0 |
+| 9 | `FORMANT_SHIFTER` | Formant Shifter | Mix / Shift / Formant / Q | 0 |
+| 10 | `RETIME` | ReTime | Mix / Time / Bars / Shift | 0 |
+| 11 | `DELAY` | Delay | Mix / Time / Feed / Damp | 0 |
 | 12 | `PLATE_REVERB` | Plate Reverb | Mix / Size / Decay / - | 0 |
 | 13 | `SIDECHAIN` | Sidechain | Rate / Shape / Depth / Mix | 3 |
 | 14 | `GRANULAR_DELAY` | Granular Delay | Mix / Spread / Size / Delay | 0 |
 | 15 | `COMB_RESONATOR` | Comb Resonator | Freq / Mix / - / - | 1 |
-| 16 | `SPECTRAL_FREEZE` | Time Freeze | Freeze / Mix / Offset / - | 1 |
+| 16 | `SPECTRAL_FREEZE` | Spectral Freeze | Freeze / Mix / Offset / - | 1 |
 | 17 | `FREQ_SHIFTER` | Frequency Shifter | Shift / Mix / - / - | 1 |
-| 18 | `REVERSE_BUFFER` | Reverse Buffer | Mix / - / Smooth / Density | 0 |
+| 18 | `REVERSE` | Reverse | Mix / - / Smooth / Density | 0 |
 | 19 | `GRAIN_SCRUBBER` | Grain Scrubber | Position / Mix / - / Rate | 1 |
-| 20 | `SPECTRAL_FILTER` | Resonant Filter | Width / Center / Q / Mix | 3 |
-| 21 | `CONVOLUTION_SPACE` | Convolution Space | Mix / Size / Width / Damp | 0 |
+| 20 | `SPECTRAL_FILTER` | Spectral Filter | Width / Center / Q / Mix | 3 |
+| 21 | `CONVOLUTION_REVERB` | Convolution Reverb | Mix / Size / Width / Damp | 0 |
 | 22 | `HP_LP_FILTER` | HP/LP Filter | Mix / High / Low / Reso | 0 |
 | 23 | `BITCRUSHER` | Bitcrusher | Mix / Rate / Bits / Filter | 0 |
 | 24 | `TREMOLO` | Tremolo | Mix / Rate / Depth / Shape | 0 |
@@ -63,19 +63,19 @@ old presets now load the Chorus.
 
 ## Distortion
 
-### Wave Shaper
+### Waveshaper
 
-`WAVESHAPER_DISTORTION` uses a first-order antiderivative anti-aliased
+`WAVESHAPER` uses a first-order antiderivative anti-aliased
 arctangent soft clipper. The antiderivative is evaluated between consecutive
 input samples, with a derivative fallback when the sample difference is near
 zero. Drive is read from `params[2]`; the other displayed positions are not
 wired. Input samples are sanitized and the drive bypass window avoids the
 nonlinearity at very low drive. First-order ADAA reduces aliasing but does not
-eliminate it at extreme drive levels. Also provides a tight `processBlock` inner loop (stateless override of `DspEffect::processBlock`).
+eliminate it at extreme drive levels. Also provides a tight `processBlock` inner loop (per-channel state override of `DspEffect::processBlock`).
 
-### Wave Folder
+### Wavefolder
 
-`MATHEMATICAL_WAVEFOLDER` uses a sine-fold curve with first-order ADAA. Fold is
+`WAVEFOLDER` uses a sine-fold curve with first-order ADAA. Fold is
 read from `params[1]`, with the fold multiplier capped at 4.0. Input and sample
 difference guards protect the antiderivative calculation; the secant form is stabilized via `sin(a*(x1+x2)/2)*sinc(a*dx/2)/norm` to avoid roundoff pops on quiet material at high fold. Higher fold settings
 remain intentionally colored and can generate aliasing. Also provides a tight `processBlock` inner loop.
@@ -95,16 +95,15 @@ bounded and the tail flag aggregates the peak across channels.
 
 `CHORUS` (slot 2, formerly MicroPitch Chorus) is a classic single-tap chorus:
 a fixed 30 ms center delay with a sinusoidal LFO read-position modulation.
-Depth (`params[1]`) spans 0-20 ms and Rate (`params[3]`) spans 0.05-3 Hz.
-The read position is bounded between 10 ms and 50 ms behind the write head by
-construction, so the tap can never pass through zero delay or read un-written
+Depth (`params[1]`) spans 0-3 ms and Rate (`params[3]`) spans 0.05-1.0 Hz.
+The read position stays bounded around the 30 ms center by construction, so the tap can never pass through zero delay or read un-written
 buffer territory. Per-channel LFO phases provide stereo width. The previous
 free-running detuned-tap design (which drifted through the write head on long
 runs) is replaced by this implementation.
 
-### Simple Delay
+### Delay
 
-`SIMPLE_DELAY` uses per-channel feedback delay lines with four-point cubic
+`DELAY` uses per-channel feedback delay lines with four-point cubic
 interpolation for normal buffer sizes and a linear fallback for very small
 buffers. Time, feedback, and damping are read from `params[1..3]`; mix is
 external at `params[0]`. Delay time is smoothed once per block and ramped within
@@ -112,7 +111,7 @@ the block; the first block after prepare/reset snaps directly to the compiled
 time (no load-time pitch glide). Feedback is bounded by a maximum of 0.9,
 damping, and `tanh`.
 
-### Re-Time
+### ReTime
 
 `RETIME` is a transport-synced loop player. It records a 16-second per-channel
 ring and copies the last `loopLength` samples into a dedicated freeze buffer at
@@ -152,10 +151,10 @@ H910/H3000-class), not a granular engine. Per-channel 1s delay line (allocated i
 `prepare`); the primary read advances at `speed = exp2(pitch·2−1)` (0.5x–2x,
 ±12 semitones, semitone-snapped in 25 detents) with Catmull-Rom interpolation.
 300ms initial delay. Two fixed latency windows keep the read inside the ring:
-at speed > 1 the gap-to-write-head shrinks and a 120ms equal-power raised-cosine
-crossfade to a secondary read 120ms behind triggers below 180ms (gap cycles
-180–300ms); at speed < 1 the gap grows and the mirror trigger fires above 400ms,
-jumping the read 120ms toward the write head (gap cycles 280–400ms). Latency is
+at speed > 1 the gap-to-write-head shrinks and a 40ms equal-power raised-cosine
+crossfade to a secondary read 40ms behind triggers below 60ms (gap cycles
+60–100ms); at speed < 1 the gap grows and the mirror trigger fires above the
+400ms cap, jumping the read 40ms toward the write head. Latency is
 bounded to ≤400ms in both directions; the read never laps the write head at any
 speed. Back-to-back fade density at octave shifts (~4–8 fades/s) is the accepted
 classic dual-read characteristic; mild comb during fades on dense material is
@@ -168,9 +167,9 @@ the "transparent" option). Unity pitch is a clean fixed-delay copy.
 buffer and repeats it with a trailing gate. Intensity (`params[0]`) maps
 inverted: low = one 0.5s repeat, high = five 0.05s repeats (dense stutter).
 Random (`params[2]`) pulls the capture source from a random window of the ring
-(0 = always the most recent window; stereo-coherent, one draw per capture).
+(0 = always the most recent window; one draw per channel per capture).
 Smooth (`params[3]`) maps the entry/loop-wrap/exit/gate fade length
-exponentially from ~2ms to ~80ms, clamped to a quarter of the slice length.
+exponentially from ~15ms to ~80ms, clamped to a quarter of the slice length.
 All fades read the frozen slice, so repeats replay the exact captured material;
 the exit fades cleanly to silence (no live bleed-through).
 
@@ -184,13 +183,13 @@ engine's write-head clamp keeps the full position range safe: the window can
 never wrap past the record head, which previously produced crushed/garbled
 output near the top of the Position range.
 
-### Reverse Buffer
+### Reverse
 
-`REVERSE_BUFFER` records and plays back per-channel slices in reverse. Density
+`REVERSE` records and plays back per-channel slices in reverse. Density
 controls slice duration and repeat count through `params[3]` (low = sparse:
 long slices, single playback; high = dense: short slices, multiple repeats);
 mix is external. Smooth (`params[2]`) maps the entry/repeat/exit crossfade
-length exponentially from ~2ms (percussive) to ~80ms (swell), clamped to a
+length exponentially from ~15ms (percussive) to ~80ms (swell), clamped to a
 quarter of the slice length. Entry playback transitions from the captured dry
 signal; repeat transitions re-capture the crossfade source from the last played
 sample, so every splice stays click-free.
@@ -207,7 +206,7 @@ paths clamp state magnitude and reset non-finite state.
 
 ### Formant Shifter
 
-`FORMANT_VOCAL_SHIFTER` follows the input envelope across channels and drives a
+`FORMANT_SHIFTER` follows the input envelope across channels and drives a
 TDF-II resonant biquad. Formant frequency is controlled by `params[2]`; Shift
 (`params[1]`) adds up to 2.4 kHz to the center, and Q (`params[3]`) narrows the
 bandwidth from 0.5 to 10. Bandwidth is bounded to at least 50 Hz or one fifth
@@ -215,7 +214,7 @@ of the center frequency, divided by Q, and the pole radius is capped at 0.995.
 Coefficients are recomputed per sample. Non-finite biquad output resets the
 filter state.
 
-### Time Freeze
+### Spectral Freeze
 
 `SPECTRAL_FREEZE` continuously records a 1.5-second per-channel buffer and,
 when Freeze is enabled through `params[0]`, loops a one-second window at
@@ -225,7 +224,7 @@ freezeLen` at each freeze) with a short entry/exit/offset crossfade that
 avoids clicks. The path should be treated as a time-domain freeze, not an FFT
 spectral freeze.
 
-### Resonant Filter
+### Spectral Filter
 
 `SPECTRAL_FILTER` is a TDF-II bandpass resonator. Width, Center, and Q use
 `params[0..2]`; mix is external at `params[3]`. Center spans roughly 100 Hz-
@@ -246,7 +245,7 @@ frequency shifting with a continuous phase accumulator. Shift is read from
 
 ### Diffused Reverb and Plate Reverb
 
-`DIFFUSED_DELAY_NETWORK` and `PLATE_REVERB` share `ReverbNetworkEffect`.
+`DIFFUSED_REVERB` and `PLATE_REVERB` share `ReverbNetworkEffect`.
 The network has five early-reflection taps, an eight-line feedback delay network,
 per-line damping, and a decorrelation output stage. It is not a four-comb,
 two-allpass Schroeder implementation. Diffused Reverb reads Decay from
@@ -255,16 +254,16 @@ two-allpass Schroeder implementation. Diffused Reverb reads Decay from
 The current network forms a mono input feed for the shared FDN and derives both
 outputs from the shared network result with decorrelation state. This means the
 effect does not preserve independent stereo input through the network.
-Feedback is bounded by damping, decay scaling, `tanh`, and the Householder-like
+Feedback is bounded by damping, decay scaling, and the Householder-like
 mixing matrix. The matrix is stable at the documented parameter ranges.
 
-### Convolution Space
+### Convolution Reverb
 
-`CONVOLUTION_SPACE` is a uniform partitioned convolution reverb. At prepare
+`CONVOLUTION_REVERB` is a uniform partitioned convolution reverb. At prepare
 time a seeded synthetic IR is generated (direct impulse + three early
-reflections + an exponentially-decaying diffusive tail), split into 512-sample
+reflections + an exponentially-decaying diffusive tail), split into 1024-sample
 partitions, and each partition's spectrum is FFT'd once (all prepare-time,
-~0.8s tail, 69 partitions at 44.1 kHz). The tail is a one-pole lowpassed noise
+~0.8s tail, ~35 partitions at 44.1 kHz). The tail is a one-pole lowpassed noise
 whose cutoff rolls 8 kHz to 1 kHz across the IR (a correlated, darkening wash
 rather than raw white noise, which convolved to a static-like haze); the fixed
 envelope is mild (-7 dB over the IR) so the Size knob's RT60 scale governs the
@@ -297,7 +296,7 @@ non-finite output.
 
 ### VCA Compressor
 
-`ENVELOPE_VCA_COMPRESSOR` uses a channel-linked peak envelope, attack/release
+`VCA_COMPRESSOR` uses a channel-linked peak envelope, attack/release
 one-pole smoothing, soft-knee 4:1 gain reduction, and makeup gain. Attack
 (`params[0]`, 0.5-50 ms), Threshold (`params[2]`, -45 to -5 dB), and Level
 (`params[3]`, 0.5-2.0x makeup) are user-controlled; Release is fixed at 120 ms.
@@ -319,9 +318,9 @@ when the cycle length changes and gain is clamped to [0, 1].
 
 ### Resampler
 
-`BITCRUSHER` (display name Bitcrusher) applies a two-pole pre-sample-and-hold filter, sample-rate
-reduction, bit quantization with TPDF dither, and DC blocking. Rate (`params[1]`)
-maps exponentially from the host rate toward 500 Hz, Bits (`params[2]`) selects
+`BITCRUSHER` (display name Bitcrusher) applies a DC blocker, a two-pole anti-alias lowpass, sample-rate
+reduction, then bit quantization with TPDF dither. Rate (`params[1]`)
+maps exponentially from the host rate toward 50 Hz, Bits (`params[2]`) selects
 2-16 bits, and Filter (`params[3]`) sets the anti-alias biquad cutoff. Dither
 is always enabled, scaled by the signal envelope so silent input stays silent
 (TPDF magnitude fades to zero at digital silence). `silenceInProducesSilenceOut()` is `false` only for the Bitcrusher chain.
@@ -339,8 +338,8 @@ bypass of the gain modulation.
 
 `FLANGER` uses per-channel interpolated comb delay lines with a sinusoidal LFO,
 180-degree stereo offset, and `tanh`-bounded feedback. Rate (`params[1]`,
-0.1-5 Hz), Depth (`params[2]`), and Feed (`params[3]`) sweep the delay roughly
-0.5-10 ms inside a 15 ms prepared buffer. Through-zero flanging is not
+0.05-1.5 Hz), Depth (`params[2]`), and Feed (`params[3]`) sweep the delay roughly
+1-10 ms inside a 15 ms prepared buffer. Through-zero flanging is not
 implemented.
 
 ### Drift and Unstable
@@ -357,4 +356,3 @@ remain part of the surrounding processor path.
 
 - [`architecture.md`](./architecture.md) - processing and lifecycle details
 - [`ui-controls.md`](./ui-controls.md) - user-facing control behavior
-- [`effects-audit-2026-08-29.md`](./audits/effects-audit-2026-08-29.md) - dated per-effect analysis and edge-case findings

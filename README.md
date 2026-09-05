@@ -11,25 +11,24 @@ Drawdio is a JUCE 8.0.15 VST3, AU, and Standalone audio effect. It converts draw
 
 ### Canvas and Palette
 
-The canvas is a fixed 512x512 grid (262,144 cells). Twelve drawable colors are available — Black, White, Red, Green, Blue, Yellow, Brown, Purple, Grey, Pink, Orange, Violet — plus `Transparent` for empty cells that show the canvas texture through. Serialized `0` means empty and `5` means drawn Black; both are treated as off by the DSP, while the overlay renders only non-transparent cells.
+The canvas is a fixed 512x512 grid (262,144 cells). Twelve drawable colors are available — Black, White, Red, Green, Blue, Yellow, Brown, Purple, Grey, Pink, Orange, Violet — plus `Transparent` for empty cells that show the canvas texture through. Serialized `0` means empty and `5` means drawn Black. Only empty cells are off for the DSP; drawn Black carries the strongest negative color weight and counts as painted, while the overlay renders only non-transparent cells.
 
-Five brush sizes (0.375, 0.75, 1.5, 2.5, 4.0), flood fill, erasing, and rebound drawing are available. Palette wells drawn from `colorwell.png` sit beneath each color blob at 1.5x blob diameter. Undo/redo is shared between the two stacks and capped at 64 levels / 12 MB combined; it persists across editor minimize/maximize, and importing an image or replacing the grid clears history.
+Five brush sizes (0.375, 0.75, 1.5, 2.5, 4.0), flood fill, erasing, and rebound drawing are available. Palette wells drawn from `colorwell.png` sit beneath each color blob at 1.5x blob diameter. Undo/redo is shared between the two stacks and capped at 64 levels / 12 MB combined; it persists across editor minimize/maximize, and importing an image or replacing the grid clears undo (redo entries survive).
 
-The **Import** button opens a file chooser for any image JUCE can load. The image is rescaled to 512x512, pixels with alpha below 128 become transparent, and opaque pixels are quantized to the Drawdio palette with Floyd-Steinberg error diffusion and serpentine scanning.
+The **Import** button opens a file chooser for PNG, JPG/JPEG, BMP, and GIF images. The image is rescaled to 512x512, pixels with alpha below 128 become transparent, and opaque pixels are quantized to the Drawdio palette with Floyd-Steinberg error diffusion and serpentine scanning.
 
 ### Pedals and the Board
 
-Six pedal slots in a `2 x 3` grid mirror a physical board. Each pedal shows four knobs; individual effects may leave positions unlabeled or unwired (the mix knob position varies per effect). Full catalog and knob labels are in [`docs/effects.md`](docs/effects.md). One numeric ID is reserved for a removed effect: ID 26 was Analog Octaver and migrates to Bypass on load, and ID 22 was Random Modulator in older projects and now maps to the HP/LP Filter.
+Six pedal slots in a `2 x 3` grid mirror a physical board. Each pedal allocates four knob positions; positions without a label are hidden, so only wired knobs render (the mix knob position varies per effect). Full catalog and knob labels are in [`docs/effects.md`](docs/effects.md). One numeric ID is reserved for a removed effect: ID 26 was Analog Octaver and migrates to Bypass on load. ID 22 was Random Modulator in older projects and now maps to the HP/LP Filter.
 
-- **Header pills** — `PEDALS | Reset` dual-zone pill centered above the board. `Reset` fills red on hover.
-- **Pedal selection** — click a pedal to select it; the mixer and header reflect the selection.
+- **Header pills** — two `HeaderPill` capsules centered above the board: `[ PEDALS | Reset ]` (Reset fills red on hover) and `[ MODE | Canvas/Manual ]`.
 - **Gain** — input gain, output gain, and per-pedal gain (-32 dB to +6 dB) are independent of wet/dry mix. Peak meters on each strip sample the audio thread via atomics.
-- **Knobs** — drag to adjust. Several parameters snap to detents (Re-Time Time 5, Bars 4, Sidechain Rate 5, Pitch Shifter 25, Bitcrusher 15, Convolution Reverb Damp 15, Tremolo Shape 3); snapping applies on drag, on compiled display, and on automation. The mix knob never snaps and is excluded from automation-link blending.
+- **Knobs** — drag to adjust. Several parameters snap to detents (ReTime Time 5, Bars 4, Sidechain Rate 5, Pitch Shifter 25, Bitcrusher 15, Convolution Reverb Damp 15, Tremolo Shape 3); snapping applies on drag, on linked/canvas automation display, and on the final DSP value. The mix knob never snaps and is excluded from automation-link blending.
 
 ### Routing
 
 - **Canvas mode** — active effects are ordered automatically from horizontal pixel scores (graph analysis cached per row, stable ordering for equal scores).
-- **Manual mode** — drag cables between pedal jacks (and the DAW Input/Output jacks at the board edges). Each pedal allows one incoming and one outgoing connection; conflicting connections are removed. DAW jack rendering now scales with board height (`Cable::JackHeightRatio * DawJackScale 0.9`, top-flush at all window sizes via `PedalboardGrid::dawJackHeight()`). Magnetic routing and gap-aware lane placement keep cables readable. Invalid or empty manual routing falls back to automatic routing.
+- **Manual mode** — drag cables between pedal jacks (and the DAW Input/Output jacks at the board edges). Each pedal allows one incoming and one outgoing connection; conflicting connections are removed. DAW jack rendering now scales with board height (`EditorDesignMetrics::Cable::JackHeightRatio * DawJackScale 0.9`, top-flush at all window sizes). Magnetic routing and gap-aware lane placement keep cables readable. Invalid or empty manual routing falls back to automatic routing.
 
 Switching between Canvas and Manual is immediate; manual mode seeds its parameter cache from the current compiled values and preserves overridden knobs.
 
@@ -57,7 +56,7 @@ Download builds from the [GitHub Releases page](https://github.com/robP22/Drawdi
 
 **Linux VST3:** copy `Drawdio.vst3` into `~/.vst3`.
 
-See [`docs/build.md`](docs/build.md) for source builds, platform details, and the `updater.sh` / `updater.ps1` release helpers.
+See [`docs/build.md`](docs/build.md) for source builds, platform details, and the `updater.sh` / `updater.ps1` / `updater.cmd` release helpers.
 
 ## Building from Source
 
@@ -119,7 +118,7 @@ Assets/Sprites/         Embedded PNG sprites
 Assets/Fonts/           Geist Pixel fonts (TTF, OFL.txt not embedded)
 Source/Core/            Constants, DspModuleType, CanvasAnalysis, contracts
 Source/Dsp/             Reverb network, DspEffectFactory, shared primitives
-Source/Effects/         Active DspEffect implementations (25 + BYPASS = 27 slots)
+Source/Effects/         Active DspEffect implementations (25 active + BYPASS + reserved ID 26 = 27 slots)
 Source/Compile/         Canvas queue, debounce, graph analyzer, compiler engine/thread
 Source/State/           Config, routing, automation, serialization, parameter bank
 Source/UI/Canvas/       Pixel canvas + palette
@@ -127,8 +126,8 @@ Source/UI/Pedalboard/   Pedals, cable routing, grid layout, jack hit-testing
 Source/UI/Controls/     Mixer, bottom bar, automation display
 Source/UI/Theme/        Theme header pills and look-and-feel
 Source/Resources/       ResourceManager, FontManager, ScaledAssetProvider
-Source/PluginProcessor  AudioProcessor entry point
-Source/PluginEditor     Editor entry point and UI synchronization
+Source/PluginProcessor.cpp  AudioProcessor entry point
+Source/PluginEditor.cpp     Editor entry point and UI synchronization
 ```
 
 ## Documentation
@@ -141,7 +140,6 @@ Source/PluginEditor     Editor entry point and UI synchronization
 - [`docs/resources.md`](docs/resources.md) - embedded assets and sprite layouts
 - [`docs/build.md`](docs/build.md) - build and deployment instructions
 - [`docs/positioning.md`](docs/positioning.md) - UI positioning conventions
-- [`docs/audits/`](docs/audits/) - dated technical audits
 
 ## Scope and Runtime Notes
 

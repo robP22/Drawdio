@@ -5,11 +5,20 @@
 ### Added
 - `GridSize 256->512` (`DrawdioConstants.h:6` 262144 cells, `DirtyRowWordCount 8`, queue 256KB/slot, analyzer 513 prefixes) with `2x2` legacy upscale.
 - Brush map `4->5` (`ColorPalette.h:76` `0.375/0.75/1.5/2.5/4.0`), dot-only icon (ring removed), index `0..4` migration.
-- Undo wire `uint32_t` index + `0x44553230` header, `12MB` cap, pending `16384`; legacy `uint16_t` still loads.
+- Undo wire `uint32_t` index + `0x44553230` header, `12MB` cap; legacy `uint16_t` still loads.
+- `SplitPill` dual-action capsules: preset `[ SAVE | IMPORT ]` and image `[ IMPORT | EXPORT ]` pills plus `[ LENGTH | 1 bar ]` automation pill; per-half hover/tooltips; `Image`/`Preset` captions.
+- Header `[ MODE | Canvas/Manual ]` pill alongside `[ PEDALS | Reset ]`.
+- `Presets/` cross-compatibility fixtures (`demo_preset.drawdio` v2 256-grid, `hidden.drawdio` v4 512-grid).
 
 ### Changed
 - Docs: `SchemaVersion 3->4` (`StateSerializer.h:19`), grid `512x512`, automation `4 cols/slice`, brush `5`, undo `12MB`.
 - Updaters build `VST3+Standalone(+AU macOS)` and install VST3; `docs/build.md` reflects multi-format.
+
+### Fixed
+- Stack overflow on pedal type select (`CanvasMessageQueue` heap storage; snapshot/preset/test locals heap-ified).
+- Image label gap: stack budgets two label gaps so the `Image` caption renders.
+- Pedal type swap now clears that pedal's links, ranges, routing, and knob values (plus stale-override filter).
+- Mixer slider track narrowed to 60% width.
 
 ## v0.2.4 - Docs Refresh, DAW Jack Scale, and MIT License
 
@@ -21,10 +30,10 @@
 ### Changed
 
 - README rewritten: What is Drawdio, screenshots (`images/screenshot-1.png` + `screenshot-2.png` both real), How to Use (canvas 256x256 12 colors + Transparent, 4 brushes, undo 64/8MB persists, 6 slots 2x3, 25 + BYPASS + reserved, gains, routing Canvas vs Manual, automation 128 slices bar/section Manual drawable, presets/session), Building (CMake 3.24 C++20 JUCE 8.0.15, targets, `updater.sh/ps1/cmd`), and Source Layout per `CMakeLists.txt:59-118`.
-- Docs: `64->128` automation slices (`architecture.md:173`, `ui-controls.md:69`), `SchemaVersion 2->3` (`StateSerializer.h:19`) with `hasManualEnvelope` / `manualEnvelope[128]` and 3->6 session fields (`brushSizeIndex`, `linkRangeEditEnabled`, `isManualEnvelopeOverridden`), `BottomControlBarBg` (`bottomcontrolbar.png`), and positioning `DawJackScale 0.9` top-flush (`PedalboardGrid.h:70`, `CableRenderer.cpp:102`).
-- DAW `IN`/`OUT` jacks scale with board height (`Cable::DawJackScale 0.9`) and sit top-flush at all window sizes (`PedalboardGrid::dawJackHeight()*0.5`, verified `H 585/780/975 -> 9.45/12.6/15.75`).
+- Docs: `64->128` automation slices (`architecture.md:173`, `ui-controls.md:69`), `SchemaVersion 2->3` (`StateSerializer.h:19`) with `hasManualEnvelope` / `manualEnvelope[128]` and session fields (`brushSizeIndex`, `linkRangeEditEnabled`; struct also holds `isManualEnvelopeOverridden` in memory but it is not serialized), `BottomControlBarBg` (`bottomcontrolbar.png`), and positioning `DawJackScale 0.9` top-flush (`PedalboardGrid.h:70-72`).
+- DAW `IN`/`OUT` jacks scale with board height (`Cable::DawJackScale 0.9`) and sit top-flush at all window sizes (verified `H 585/780/975 -> 9.45/12.6/15.75`).
 - Version `0.2.3->0.2.4` (`CMakeLists.txt:2,33-34`, `package.json:3`, `docs/build.md:13`).
-- `.gitignore`: `Testing/` + `nul`; public release ignores `tests/` and no longer whitelists `docs/audits/**` / `docs/archive/**` (private to `drawdio_dev`).
+- `.gitignore`: `Testing/` + `nul`; on the public `release` branch, `tests/` is ignored and `docs/audits/**` / `docs/archive/**` are not whitelisted (private to `drawdio_dev`; this branch still whitelists them).
 
 ### Fixed
 
@@ -38,11 +47,15 @@
 - Canvas minimize/maximize no longer loses undo — `setGridData(clearUndo)` now optional on rehydrate; `applyFullConfigSync` checks `hasUndoData()` before overwriting grid-undo, and `m_undoBytes` tracking fixed.
 - `floodFill` now marks `DirtyRowMask` so single-instance fill recompiles cables/chain via `CanvasGraphAnalyzer`.
 - Pedal `BYPASS`→effect type/knobs update without minimize; `refreshRoutingFromConfig` polls `m_lastPedalTypes` every tick and `setManualRouting` triggers UI notification.
-- FL mix-chain `DELETE` no longer freezes on last-instance unload — `ReleaseQueue::drainAsync` detaches deletes off loader lock via `MessageManager::callAsync`, `ConfigManager::~ConfigManager::scheduleDelete` detaches pending payloads, plus heap keep-alive `DirectX 1×1` image.
+- FL mix-chain `DELETE` no longer freezes on last-instance unload — `ReleaseQueue::drainAsync` detaches deletes off loader lock via `MessageManager::callAsync`, `ConfigManager::~ConfigManager` detaches pending payloads (after stopping the compiler thread first), plus heap keep-alive `DirectX 1×1` image.
 - Header pill is now `PEDALS | Reset` with the right slot turning destructive-red on hover.
 
 ### Changed
-- `setBufferedToImage(true)` removed from `PedalComponent` and the `ColorPalette` root (kept only on `WoodGrainBackground`); buffered staleness no longer masks `PedalComponent`/`ArcButton` type changes until peer recreate.
+- Buffered-image flags cleaned up so stale caching no longer masks `PedalComponent`/`ArcButton` type changes until peer recreate (sole remaining call is `setBufferedToImage(false)` in `ArcButton`).
+
+## v0.2.1 - Rendering and Mixer Bounds Fixes
+
+- Rendering and mixer bounds corrections (see git history).
 
 ## v0.2.2 - Canvas Mapping Rework and DSP Stability
 

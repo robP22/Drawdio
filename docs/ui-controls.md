@@ -11,23 +11,34 @@ pending image-import plan and separates current behavior from future ideas.
 - Transparent cells are empty and show the canvas texture.
 - Five brush sizes are available (0.375, 0.75, 1.5, 2.5, 4.0; dot-only icon).
 - Flood fill, erasing, rebound drawing, and undo/redo are supported.
-- Undo history is capped at 64 levels / 12 MB combined (shared between undo and redo) and persists across editor minimize/maximize; importing an image or replacing the grid clears the current undo history.
+- Undo history is capped at 64 levels / 12 MB combined (shared between undo and redo) and persists across editor minimize/maximize; importing an image or replacing the grid clears undo (redo entries survive).
 - Brush size and color persist across minimize/maximize and save/restore (`brushSizeIndex` 0..4, `selectedColour` in `EditorSessionState`).
 
 The compiler converts color-weighted cell coverage into normalized effect
 parameters. Detailed color weights and routing behavior are in
 [`architecture.md`](./architecture.md).
 
+## Header and Bottom-Bar Pills
+
+The header holds two `HeaderPill` capsules: `[ PEDALS | Reset ]` (Reset fills
+red on hover) and `[ MODE | Canvas/Manual ]`.
+
+The bottom bar holds three pills: the `LENGTH | 1 bar` automation pill plus two
+split pills — `Preset [ SAVE | IMPORT ]` and `Image [ IMPORT | EXPORT ]` (equal
+halves, `SplitPill`) — with `Automation` / `Preset` / `Image` captions above
+each.
+
 ## Image Import / Export
 
-The bottom bar has two split pills: `Preset [ SAVE | IMPORT ]` and `Image [ IMPORT | EXPORT ]` (equal halves, `SplitPill`). Preset save writes a `.drawdio` to `Documents/Drawdio/Presets`; preset import reads a `.drawdio` (filter `*.drawdio`) from the same directory. Image import opens a file chooser in `Pictures/Drawdio` (fallback `Documents/Drawdio`) with filter `*.png;*.jpg;*.jpeg;*.bmp;*.gif` and accepts files supported by JUCE's image loader.
+Preset save writes a `.drawdio` to `Documents/Drawdio/Presets`; preset import reads a `.drawdio` (filter `*.drawdio`) from the same directory. Image import opens a file chooser in `Pictures/Drawdio` (fallback `Documents/Drawdio`) with filter `*.png;*.jpg;*.jpeg;*.bmp;*.gif`.
 
 The selected image is rescaled to 512x512 with high-quality resampling. Pixels
 with alpha below 128 become transparent. Opaque pixels are quantized to the
 Drawdio palette using the weighted color-distance helper with Floyd-Steinberg
 error diffusion and serpentine scanning, so regional color averages track the
 source image rather than snapping each cell independently. Transparent cells
-neither receive nor propagate diffusion error. The result replaces the canvas,
+absorb diffused error without propagating it onward (error written into a
+transparent cell is discarded with the cell). The result replaces the canvas,
 submits a new compiler snapshot, updates the visual grid, and marks the
 automation envelope dirty.
 
@@ -45,14 +56,15 @@ choose colors procedurally rather than preserving the selected color.
 
 ## Pedals, Knobs, and Gain
 
-The board supports six physical pedal slots in a 2x3 layout. Each pedal renders
-four knobs for visual consistency, although individual effects may leave some
-knob positions unlabeled or unwired. The active labels and effect mappings are
+The board supports six physical pedal slots in a 2x3 layout. Each pedal allocates
+four knob positions; positions without a label are hidden, so only wired knobs
+render. The active labels and effect mappings are
 listed in [`effects.md`](./effects.md).
 
 Pedal gain is independent of effect wet/dry mix. Moving a manually linked knob
-creates a manual override and removes that knob's automation link. The current
-UI uses full-strength links; there is no adjustable link-strength control.
+creates a manual override and removes that knob's automation link. Links are
+full-strength (no adjustable link-strength control); each linked knob has an
+adjustable automation range with drag handles on the knob.
 
 ## Routing
 

@@ -20,10 +20,11 @@ pointers and does not lock a mutex or intentionally allocate. Host lifecycle
 calls (`prepareToPlay`, `releaseResources`, destruction) use the JUCE callback
 lock (`AudioProcessor::getCallbackLock()`). `CompilerThread::stop()` is
 serialized by `m_stopMutex` to avoid a double-join when the host races
-`releaseResources()` against instance destruction. `DrawdioProcessor` guards
-`processBlock` with a heap-allocated shutdown flag, a processing-enabled flag,
-and an in-flight counter so destruction can wait briefly for the last audio
-callback to exit.
+`start()` against instance destruction; `ConfigManager::releaseResources()`
+is intentionally a no-op (the compiler thread stops only in the destructor).
+`DrawdioProcessor` guards `processBlock` with value-member shutdown and
+processing-enabled flags plus an in-flight counter so destruction can wait
+briefly for the last audio callback to exit.
 
 ## 2. Canvas Compilation
 
@@ -34,9 +35,11 @@ pedal slots, manual routing, and existing parameter descriptors as a fixed-state
 snapshot — the compiler no longer reads mutable shared vectors.
 
 `CanvasGraphAnalyzer` caches per-row summaries (`paintedPrefix`, `xSumPrefix`,
-`weightPrefix`, `colourPrefix`) and rebuilds only dirty rows. The compiler
+`weightPrefix`, `absWeightPrefix`, `colourPrefix[13]`) and rebuilds dirty rows
+incrementally (full rebuild on first use or non-sequential revision). The compiler
 thread waits (50 ms poll) until `PenDebouncer::isIdle()` and a message is
-available. Compilation steps:
+available. Compilation steps (see both `compileCanvas` overloads in
+`Source/Compile/CompilerEngine.h`):
 
 1. Update cached graph analysis for dirty rows only.
 2. Determine active non-Bypass pedal slots.
@@ -47,9 +50,11 @@ available. Compilation steps:
 7. Preserve manually overridden knob values via `existingParams`.
 8. Produce a revisioned `PedalAssetPayload` for UI-thread preparation.
 
-Automatic routing uses stable ordering for equal scores. Manual routing supports
-one incoming and one outgoing connection per pedal and removes conflicting
-connections. Invalid or empty manual routing falls back to automatic routing.
+Automatic routing uses stable ordering for equal scores. In Manual mode each
+pedal allows one incoming and one outgoing cable connection (enforced by the
+manual connection model; conflicting connections are removed). The compiler
+itself accepts any slot order vector filtered for BYPASS, so invalid or empty
+manual routing falls back to automatic routing.
 The cable renderer uses cached Bezier paths with gap-aware lane placement for
 the current pedal layout.
 
@@ -61,8 +66,9 @@ initial all-zero grid remains visually empty while drawn Black still contributes
 to compilation. Transparent cells are not rendered in the colored overlay.
 
 The twelve drawable colors are Black, White, Red, Green, Blue, Yellow, Brown,
-Purple, Grey, Pink, Orange, and Violet. Color weights and paired-color bias are
-defined by `CanvasAnalysis.cpp`.
+Purple, Grey, Pink, Orange, and Violet. Per-color weights come from
+`colorWeight()` in `CanvasAnalysis.cpp`; the paired bias/diversity blend is
+computed in `CanvasGraphAnalyzer::pixelAccumulation`.
 
 ## 3. Configuration Lifecycle
 
@@ -104,9 +110,9 @@ and `ConfigManager::consumeCompiledResultIfAvailable` rejects results older
 than `m_canvasRevision`.
 
 When the new compilation has the same topology (`activeRoutingChain` and
-`routingSlotOrder` identical) and mode as the current payload and no crossfade
-is active, the manager takes a parameter-only fast path: it updates the
-compiled parameter bank and the last-config sync without allocating a new
+`routingSlotOrder` identical) and mode as the current payload and no next
+payload is pending, the manager takes a parameter-only fast path: it updates the
+compiled parameter bank and the last-config sync without publishing a new
 payload. Otherwise a full payload is built and crossfaded. If `m_nextConfig`
 is already occupied, the new payload is deferred (`m_deferredConfig`) and
 applied once the audio thread clears `m_nextConfig`.
@@ -128,7 +134,7 @@ path, and delegates to `UnifiedPedalProcessor::processAudioBlock`.
 2. Reads the current and next configurations atomically.
 3. Builds per-slot parameter values from descriptors, the atomic parameter cache, or the compiled parameter bank.
 4. Applies automation where linking is enabled.
-5. Smooths non-mix parameters using the prepared block-time coefficient.
+5. Smooths non-mix parameters with a per-block coefficient adapted to the actual host block size.
 6. Applies optional per-slot Drift and Unstable modulation to non-mix parameters.
 7. Processes the active chain through `DspEffect::processBlock`.
 8. Applies per-pedal wet/dry mixing (linear ramp per block) and gain.
@@ -173,12 +179,11 @@ compiled descriptor
 Automation is compiled from 128 horizontal canvas slices (four canvas columns per slice, weighted Y average ignoring transparent cells) and uses the DAW PPQ
 position when available (fallback 120 BPM / 0 PPQ). The display shows an
 eight-bar envelope and highlights the selected active section. Bar counts are
-1, 2, 4, or 8. In Manual mode the 128-slice envelope is directly drawable (left-drag paints values lerped across slices, right-drag repositions the section window) and persisted via `hasManualEnvelope` / `manualEnvelope[128]` in `PresetState` (`ProjectState.h:26-27`, `StateSerializer.cpp:33`); Canvas mode uses the compiled envelope. Knob links support an adjustable automation range with a minimum
+1, 2, 4, or 8. In Manual mode the 128-slice envelope is directly drawable (left-drag paints values lerped across slices, right-drag repositions the section window) and persisted via `hasManualEnvelope` / `manualEnvelope[128]` in `PresetState` (`ProjectState.h:26-27`, `StateSerializer.cpp:34-35`); Canvas mode uses the compiled envelope. Knob links support an adjustable automation range with a minimum
 0.05 width; moving a linked knob still creates an override and removes that link
-(and resets its range to 0..1).
+(linking a knob resets its range to 0..1).
 
-The 40 Hz smoothing coefficient is prepared from the maximum block size and
-adapted per actual host block for accurate smoothing. Automation smoothing is a
+The 40 Hz smoothing coefficient is recomputed per actual host block for accurate smoothing. Automation smoothing is a
 separate approximately 12 Hz path.
 
 ## 7. Real-Time Safety
@@ -196,8 +201,8 @@ slot is overwritten while already occupied, the displaced pointer is moved to
 leak, not lossless).
 
 `CanvasMessageQueue` is an SPSC ring with `QueueCapacity = 8` and one reserved
-empty slot, giving seven usable entries (`CanvasMessageQueue.h:27`,
-`CanvasMessageQueue.cpp:37` `nextWrite == readIndex` -> full -> `false`).
+empty slot, giving seven usable entries (`CanvasMessageQueue.h:28`,
+`CanvasMessageQueue.cpp:36-40` `nextWrite == readIndex` -> full -> `false`).
 Messages carry a revision and dirty-row mask. When full, `pushSnapshot` returns
 `false` without modifying an occupied slot; the caller retains state and retries.
 The compiler result slot (`m_slot`) is a single atomic pointer that keeps the
@@ -223,7 +228,7 @@ manager rejects results older than the latest canvas revision.
 with a five-second fallback when no configuration is available. Re-Time declares
 `kReleaseSeconds = 0.05` (ring holds 16 s of history, release fades over 50 ms);
 Simple Delay and plate/diffused reverbs declare 2.5 s; Spectral Freeze 2.0 s;
-Convolution Space 1.5 s; Wavefolder 0.8 s. During shutdown `getTailLengthSeconds`
+Convolution Reverb 1.5 s; Comb Resonator 0.8 s. During shutdown `getTailLengthSeconds`
 returns 0.
 
 `silenceInProducesSilenceOut()` returns `false` only when the active chain
@@ -251,12 +256,12 @@ compiled descriptor also retains the current chain position for DSP dispatch via
 |---|---|
 | Config-owned effects | Avoids effect-array races during publication and crossfade |
 | Block processing | Reduces virtual dispatch while keeping effect-specific inner loops |
-| ADAA instead of oversampling | Reduces nonlinear aliasing without oversampling latency; residual aliasing remains at high drive |
+| Integrated anti-aliasing | First-order antiderivative (secant) evaluation reduces nonlinear aliasing without oversampling latency; residual aliasing remains at high drive |
 | External mix ramp | Avoids zippering without adding mix state to every effect |
 | Equal-power crossfade | Maintains approximately constant power between unrelated chains |
 | Uniform four-knob pedals | Preserves the visual language; unused labels/parameters are intentional in many effects |
 | Dual-grain engine | Reduces single-grain boundary amplitude modulation; spray makes unity overlap approximate |
-| Synthetic convolution IR | Avoids external IR assets; uniform 512-sample partitions, ~0.8 s / 69 partitions at 44.1 kHz |
+| Synthetic convolution IR | Avoids external IR assets; uniform 1024-sample partitions, ~0.8 s / ~35 partitions at 44.1 kHz |
 | Soft clipper | Provides unity behavior below the knee but is not a lookahead limiter |
 | Bounded queues | Avoids blocking; a full queue drops the newest snapshot (`false`) and the UI retries; `ReleaseQueue` overflow is counted in `droppedCount` |
 
@@ -267,4 +272,3 @@ compiled descriptor also retains the current chain position for DSP dispatch via
 - [`state-format.md`](./state-format.md) - preset serialization
 - [`build.md`](./build.md) - build and deployment
 - [`resources.md`](./resources.md) - embedded assets and sprite layouts
-- [`audits/`](./audits/) - dated analysis reports

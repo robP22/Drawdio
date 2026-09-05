@@ -64,20 +64,21 @@ configurations. MIDI input and output are disabled.
 
 ## Assets
 
-PNG and TTF files under `Assets/` are discovered recursively during CMake configuration and embedded through the `DrawdioAssets` binary-data target. The recursive glob covers `Assets/Sprites/*.png` and `Assets/Fonts/*.ttf`; `BinaryData` resource names strip hyphens, so for example `GeistPixelSquare` becomes `GeistPixelSquare_ttf`. `Assets/Fonts/OFL.txt` is not embedded. Adding or removing assets requires rerunning CMake configuration before rebuilding.
+PNG and TTF files under `Assets/` are discovered recursively (glob with `CONFIGURE_DEPENDS`, so the build re-globs automatically) and embedded through the `DrawdioAssets` binary-data target. The recursive glob covers `Assets/Sprites/*.png` and `Assets/Fonts/*.ttf`; `BinaryData` resource names strip hyphens, so for example `Assets/Fonts/GeistPixel-Square.ttf` becomes `GeistPixelSquare_ttf`. `Assets/Fonts/OFL.txt` is not embedded.
 
 ## Release Updater
 
-The updater builds Release VST3 + Standalone (+ AU on macOS) and installs the VST3 bundle. AU/Standalone artefacts are validated but only VST3 is installed. The generated bundle is copied as a complete
+The updater builds Release VST3 + Standalone (+ AU on macOS) and installs the VST3 bundle. VST3 and Standalone are hard-validated; the macOS AU check is warning-only. Only VST3 is installed. The generated bundle is copied as a complete
 `Drawdio.vst3` directory; the internal platform binary must not be flattened.
 
 ### macOS, Linux, and Windows Git Bash
 
-Run the Bash helper from the repository root or any working directory:
+Run the Bash helper by path (it resolves the repo root from its own location,
+so it works from any working directory when invoked with a path):
 
 ```bash
-./updater.sh
-```
+./updater.sh            # from the repository root
+/path/to/drawdio/updater.sh --no-install
 
 The helper detects the shell platform, configures the build when
 `build/CMakeCache.txt` is absent, builds `Drawdio_VST3` and `Drawdio_Standalone` (plus `Drawdio_AU` on macOS) with
@@ -94,9 +95,9 @@ Options:
 ./updater.sh --no-install
 ```
 
-When `--parallel` is omitted, CMake uses its default or the
+When `--parallel` (alias `--jobs`) is omitted, CMake uses its default or the
 `CMAKE_BUILD_PARALLEL_LEVEL` environment variable. The script does not call
-platform-specific CPU-count commands.
+platform-specific CPU-count commands. `--help` also accepts `-h`.
 
 Default installation directories:
 
@@ -122,10 +123,10 @@ Use the native helper from PowerShell:
 ```
 
 `updater.cmd` is a Command Prompt/Explorer launcher for the same PowerShell
-helper:
+helper. Flags and the exit code pass through:
 
 ```text
-updater.cmd
+updater.cmd -NoInstall -Parallel 8
 ```
 
 The default Windows destination is `%ProgramFiles%\Common Files\VST3`, matching
@@ -158,9 +159,12 @@ it with `ctest`:
 
 ```bash
 cmake -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build --target drawdio_tests --parallel
+cmake --build build --config Release --target drawdio_tests --parallel
 ctest --test-dir build --output-on-failure
 ```
+
+(`--config Release` matters on multi-config generators such as Visual Studio,
+where the build would otherwise default to Debug.)
 
 At minimum, verify a Release build of the intended target and launch the
 Standalone target or scan the generated plugin with the host's plugin
